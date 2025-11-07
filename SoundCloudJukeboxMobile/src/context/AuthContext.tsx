@@ -102,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Fetch user profile and permissions
   const fetchUserProfile = async (userId: string, useCache = true) => {
     try {
-      // Try to load from localStorage cache first (web only)
+      // Try to load from localStorage cache first (web only) for instant display
       if (Platform.OS === 'web' && useCache) {
         const cachedProfile = localStorageHelpers.get(`auth_profile_${userId}`);
         const cachedPermissions = localStorageHelpers.get(`auth_permissions_${userId}`);
@@ -126,7 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Fetch profile from database
+      // Always fetch fresh data from database (cache is just for instant display)
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
         .select('*')
