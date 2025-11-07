@@ -159,70 +159,143 @@ const AuthScreen: React.FC = () => {
               </View>
 
               {/* Email/Password Form */}
-              <View style={styles.formSection}>
-                <View style={styles.tabContainer}>
-                  <Button
-                    mode={isLogin ? 'contained' : 'text'}
-                    onPress={() => setIsLogin(true)}
-                    style={[styles.tabButton, isLogin && styles.activeTab]}
-                    labelStyle={isLogin ? styles.activeTabLabel : styles.inactiveTabLabel}
-                  >
-                    Sign In
-                  </Button>
-                  <Button
-                    mode={!isLogin ? 'contained' : 'text'}
-                    onPress={() => setIsLogin(false)}
-                    style={[styles.tabButton, !isLogin && styles.activeTab]}
-                    labelStyle={!isLogin ? styles.activeTabLabel : styles.inactiveTabLabel}
-                  >
-                    Sign Up
-                  </Button>
-                </View>
+              {Platform.OS === 'web' ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAuth();
+                  }}
+                  style={styles.formSection}
+                >
+                  <View style={styles.tabContainer}>
+                    <Button
+                      mode={isLogin ? 'contained' : 'text'}
+                      onPress={() => setIsLogin(true)}
+                      style={[styles.tabButton, isLogin && styles.activeTab]}
+                      labelStyle={isLogin ? styles.activeTabLabel : styles.inactiveTabLabel}
+                    >
+                      Sign In
+                    </Button>
+                    <Button
+                      mode={!isLogin ? 'contained' : 'text'}
+                      onPress={() => setIsLogin(false)}
+                      style={[styles.tabButton, !isLogin && styles.activeTab]}
+                      labelStyle={!isLogin ? styles.activeTabLabel : styles.inactiveTabLabel}
+                    >
+                      Sign Up
+                    </Button>
+                  </View>
 
-                <TextInput
-                  label="Email"
-                  value={email}
-                  onChangeText={setEmail}
-                  mode="outlined"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  style={styles.input}
-                  disabled={!!loadingOAuth}
-                />
-
-                <TextInput
-                  label="Password"
-                  value={password}
-                  onChangeText={setPassword}
-                  mode="outlined"
-                  secureTextEntry
-                  style={styles.input}
-                  disabled={!!loadingOAuth}
-                />
-
-                {!isLogin && (
                   <TextInput
-                    label="Confirm Password"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
+                    label="Email"
+                    value={email}
+                    onChangeText={setEmail}
+                    mode="outlined"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    style={styles.input}
+                    disabled={!!loadingOAuth}
+                  />
+
+                  <TextInput
+                    label="Password"
+                    value={password}
+                    onChangeText={setPassword}
                     mode="outlined"
                     secureTextEntry
                     style={styles.input}
                     disabled={!!loadingOAuth}
                   />
-                )}
 
-                <Button
-                  mode="contained"
-                  onPress={handleAuth}
-                  loading={loadingAuth}
-                  disabled={loadingAuth || !!loadingOAuth}
-                  style={styles.authButton}
-                  contentStyle={styles.authButtonContent}
-                >
-                  {isLogin ? 'Sign In' : 'Create Account'}
-                </Button>
-              </View>
+                  {!isLogin && (
+                    <TextInput
+                      label="Confirm Password"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      mode="outlined"
+                      secureTextEntry
+                      style={styles.input}
+                      disabled={!!loadingOAuth}
+                    />
+                  )}
+
+                  <Button
+                    mode="contained"
+                    onPress={handleAuth}
+                    loading={loadingAuth}
+                    disabled={loadingAuth || !!loadingOAuth}
+                    style={styles.authButton}
+                    contentStyle={styles.authButtonContent}
+                  >
+                    {isLogin ? 'Sign In' : 'Create Account'}
+                  </Button>
+                </form>
+              ) : (
+                <View style={styles.formSection}>
+                  <View style={styles.tabContainer}>
+                    <Button
+                      mode={isLogin ? 'contained' : 'text'}
+                      onPress={() => setIsLogin(true)}
+                      style={[styles.tabButton, isLogin && styles.activeTab]}
+                      labelStyle={isLogin ? styles.activeTabLabel : styles.inactiveTabLabel}
+                    >
+                      Sign In
+                    </Button>
+                    <Button
+                      mode={!isLogin ? 'contained' : 'text'}
+                      onPress={() => setIsLogin(false)}
+                      style={[styles.tabButton, !isLogin && styles.activeTab]}
+                      labelStyle={!isLogin ? styles.activeTabLabel : styles.inactiveTabLabel}
+                    >
+                      Sign Up
+                    </Button>
+                  </View>
+
+                  <TextInput
+                    label="Email"
+                    value={email}
+                    onChangeText={setEmail}
+                    mode="outlined"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    style={styles.input}
+                    disabled={!!loadingOAuth}
+                  />
+
+                  <TextInput
+                    label="Password"
+                    value={password}
+                    onChangeText={setPassword}
+                    mode="outlined"
+                    secureTextEntry
+                    style={styles.input}
+                    disabled={!!loadingOAuth}
+                  />
+
+                  {!isLogin && (
+                    <TextInput
+                      label="Confirm Password"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      mode="outlined"
+                      secureTextEntry
+                      style={styles.input}
+                      disabled={!!loadingOAuth}
+                    />
+                  )}
+
+                  <Button
+                    mode="contained"
+                    onPress={handleAuth}
+                    loading={loadingAuth}
+                    disabled={loadingAuth || !!loadingOAuth}
+                    style={styles.authButton}
+                    contentStyle={styles.authButtonContent}
+                  >
+                    {isLogin ? 'Sign In' : 'Create Account'}
+                  </Button>
+                </View>
+              )}
             </Card.Content>
           </Card>
         </View>
