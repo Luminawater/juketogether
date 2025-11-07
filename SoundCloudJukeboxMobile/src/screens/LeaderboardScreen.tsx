@@ -327,22 +327,22 @@ const LeaderboardScreen: React.FC = () => {
                       <View style={styles.additionalStats}>
                         <Chip
                           icon="thumb-up"
-                          style={[styles.chip, { backgroundColor: '#e8f5e9' }]}
-                          textStyle={styles.chipText}
+                          style={[styles.chip, { backgroundColor: theme.colors.primaryContainer }]}
+                          textStyle={[styles.chipText, { color: theme.colors.onPrimaryContainer }]}
                         >
                           👍 {entry.total_likes || 0}
                         </Chip>
                         <Chip
                           icon="star"
-                          style={[styles.chip, { backgroundColor: '#fff3e0' }]}
-                          textStyle={styles.chipText}
+                          style={[styles.chip, { backgroundColor: theme.colors.tertiaryContainer }]}
+                          textStyle={[styles.chipText, { color: theme.colors.onTertiaryContainer }]}
                         >
                           ⭐ {entry.total_fantastic || 0}
                         </Chip>
                         <Chip
                           icon="thumb-down"
-                          style={[styles.chip, { backgroundColor: '#ffebee' }]}
-                          textStyle={styles.chipText}
+                          style={[styles.chip, { backgroundColor: theme.colors.errorContainer }]}
+                          textStyle={[styles.chipText, { color: theme.colors.onErrorContainer }]}
                         >
                           👎 {entry.total_dislikes || 0}
                         </Chip>

@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   Tabs,
   Tab,
+  useTheme,
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -38,6 +39,7 @@ interface User {
 const FriendsScreen: React.FC = () => {
   const navigation = useNavigation<FriendsScreenNavigationProp>();
   const { supabase, user, profile } = useAuth();
+  const theme = useTheme();
 
   const [activeTab, setActiveTab] = useState(0);
   const [friends, setFriends] = useState<User[]>([]);
@@ -179,6 +181,9 @@ const FriendsScreen: React.FC = () => {
 
       if (error) throw error;
       await loadFriendsData();
+      
+      // Celebrate following a user (room creator)! 🎉
+      // Note: Confetti would need to be added here if we add it to this screen
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to follow user');
     }
@@ -227,9 +232,9 @@ const FriendsScreen: React.FC = () => {
   const renderUserList = (users: User[]) => {
     if (users.length === 0) {
       return (
-        <Card style={styles.emptyCard}>
+        <Card style={[styles.emptyCard, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
               {activeTab === 0 && 'No friends yet'}
               {activeTab === 1 && 'Not following anyone'}
               {activeTab === 2 && 'No followers yet'}
@@ -241,7 +246,7 @@ const FriendsScreen: React.FC = () => {
     }
 
     return users.map((userItem) => (
-      <Card key={userItem.id} style={styles.userCard}>
+      <Card key={userItem.id} style={[styles.userCard, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
           <View style={styles.userHeader}>
             <Avatar.Image
@@ -251,11 +256,11 @@ const FriendsScreen: React.FC = () => {
               }}
             />
             <View style={styles.userInfo}>
-              <Title style={styles.userName}>
+              <Title style={[styles.userName, { color: theme.colors.onSurface }]}>
                 {userItem.display_name || userItem.username || `User ${userItem.id.substring(0, 8)}`}
               </Title>
               {userItem.username && (
-                <Paragraph style={styles.userUsername}>@{userItem.username}</Paragraph>
+                <Paragraph style={[styles.userUsername, { color: theme.colors.onSurfaceVariant }]}>@{userItem.username}</Paragraph>
               )}
             </View>
           </View>
@@ -278,15 +283,15 @@ const FriendsScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Title style={styles.headerTitle}>Friends</Title>
-        <Paragraph style={styles.headerSubtitle}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
+        <Title style={[styles.headerTitle, { color: theme.colors.onSurface }]}>Friends</Title>
+        <Paragraph style={[styles.headerSubtitle, { color: theme.colors.onSurfaceVariant }]}>
           Connect with other music lovers
         </Paragraph>
       </View>
 
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, { backgroundColor: theme.colors.surface }]}>
         <Button
           mode={activeTab === 0 ? 'contained' : 'outlined'}
           onPress={() => setActiveTab(0)}
@@ -333,7 +338,7 @@ const FriendsScreen: React.FC = () => {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" />
-          <Text style={styles.loadingText}>Loading...</Text>
+          <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>Loading...</Text>
         </View>
       ) : (
         <ScrollView
@@ -352,27 +357,27 @@ const FriendsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   header: {
     padding: 20,
-    backgroundColor: '#667eea',
+    paddingTop: 60,
+    paddingBottom: 16,
+    elevation: 2,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
     marginBottom: 4,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
   },
   tabContainer: {
     flexDirection: 'row',
     padding: 8,
-    backgroundColor: '#fff',
     gap: 4,
+    elevation: 1,
   },
   tabButton: {
     flex: 1,
@@ -388,22 +393,23 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    color: '#666',
   },
   scrollView: {
     flex: 1,
   },
   emptyCard: {
     margin: 16,
+    borderRadius: 16,
+    elevation: 2,
   },
   emptyText: {
     textAlign: 'center',
-    color: '#666',
     padding: 20,
   },
   userCard: {
     margin: 16,
     marginTop: 8,
+    borderRadius: 16,
     elevation: 2,
   },
   userHeader: {
@@ -415,12 +421,12 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   userName: {
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: '600',
     marginBottom: 4,
   },
   userUsername: {
     fontSize: 14,
-    color: '#666',
   },
   followButton: {
     marginTop: 12,

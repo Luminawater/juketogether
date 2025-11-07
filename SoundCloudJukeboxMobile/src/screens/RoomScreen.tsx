@@ -27,6 +27,7 @@ import {
 } from 'react-native-paper';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import ConfettiCannon from 'react-native-confetti-cannon';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { Track } from '../types';
@@ -130,6 +131,9 @@ const RoomScreen: React.FC = () => {
 
     resolveShortCode();
   }, [isShortCode, initialRoomId, supabase, navigation]);
+
+  // Confetti ref
+  const confettiRef = useRef<any>(null);
 
   // Main state
   const [activeTab, setActiveTab] = useState<'main' | 'users' | 'settings' | 'spotify' | 'chat'>('main');
@@ -253,6 +257,10 @@ const RoomScreen: React.FC = () => {
 
     const handleTrackAdded = (track: Track) => {
       setQueue(prev => [...prev, track]);
+      // Celebrate when track is added!
+      if (confettiRef.current) {
+        confettiRef.current.start();
+      }
     };
 
     const handleTrackRemoved = (trackId: string) => {
@@ -412,6 +420,11 @@ const RoomScreen: React.FC = () => {
       if (result.success) {
         // Reload reactions to get updated counts
         await loadTrackReactions();
+        
+        // Celebrate "Fantastic" reactions with confetti! 🎉
+        if (reactionType === 'fantastic' && confettiRef.current) {
+          confettiRef.current.start();
+        }
       } else {
         Alert.alert('Error', result.error || 'Failed to update reaction');
       }
@@ -471,6 +484,8 @@ const RoomScreen: React.FC = () => {
       trackInfo: queueTrack.info,
       platform: 'spotify',
     });
+    
+    // Confetti will trigger when track is actually added via handleTrackAdded
   };
 
   const queueAllTracks = () => {
@@ -1614,6 +1629,15 @@ const RoomScreen: React.FC = () => {
           onToggleMinimize={() => setPlayerMinimized(!playerMinimized)}
         />
       )}
+
+      {/* Confetti Celebrations 🎉 */}
+      <ConfettiCannon
+        ref={confettiRef}
+        count={200}
+        origin={{ x: -10, y: 0 }}
+        fadeOut={true}
+        autoStart={false}
+      />
     </View>
   );
 };

@@ -20,6 +20,7 @@ import {
   TextInput,
   RadioButton,
   DataTable,
+  useTheme,
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -59,6 +60,7 @@ interface UsageHistory {
 const AdminScreen: React.FC = () => {
   const navigation = useNavigation<AdminScreenNavigationProp>();
   const { supabase, profile, refreshProfile } = useAuth();
+  const theme = useTheme();
 
   const [activeTab, setActiveTab] = useState(0);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -253,18 +255,18 @@ const AdminScreen: React.FC = () => {
       />
 
       {loading ? (
-        <Text style={styles.loadingText}>Loading users...</Text>
+        <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>Loading users...</Text>
       ) : filteredUsers.length === 0 ? (
-        <Card style={styles.emptyCard}>
+        <Card style={[styles.emptyCard, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
-            <Text style={styles.emptyText}>No users found</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>No users found</Text>
           </Card.Content>
         </Card>
       ) : (
         filteredUsers.map((user) => (
           <Card
             key={user.id}
-            style={styles.userCard}
+            style={[styles.userCard, { backgroundColor: theme.colors.surface }]}
             onPress={() => handleUserClick(user)}
           >
             <Card.Content>
@@ -276,12 +278,12 @@ const AdminScreen: React.FC = () => {
                   }}
                 />
                 <View style={styles.userInfo}>
-                  <Text style={styles.userEmail}>{user.email}</Text>
+                  <Text style={[styles.userEmail, { color: theme.colors.onSurface }]}>{user.email}</Text>
                   {user.username && (
-                    <Text style={styles.userName}>@{user.username}</Text>
+                    <Text style={[styles.userName, { color: theme.colors.onSurfaceVariant }]}>@{user.username}</Text>
                   )}
                   {user.display_name && (
-                    <Text style={styles.userDisplayName}>{user.display_name}</Text>
+                    <Text style={[styles.userDisplayName, { color: theme.colors.onSurfaceVariant }]}>{user.display_name}</Text>
                   )}
                 </View>
               </View>
@@ -302,10 +304,10 @@ const AdminScreen: React.FC = () => {
               </View>
 
               <View style={styles.userStats}>
-                <Text style={styles.statText}>
+                <Text style={[styles.statText, { color: theme.colors.onSurfaceVariant }]}>
                   Songs played: {user.songs_played_count}
                 </Text>
-                <Text style={styles.statText}>
+                <Text style={[styles.statText, { color: theme.colors.onSurfaceVariant }]}>
                   Joined: {new Date(user.created_at).toLocaleDateString()}
                 </Text>
               </View>
@@ -317,13 +319,13 @@ const AdminScreen: React.FC = () => {
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Title style={styles.title}>Admin Panel</Title>
-        <Text style={styles.subtitle}>Manage users and system settings</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
+        <Title style={[styles.title, { color: theme.colors.onSurface }]}>Admin Panel</Title>
+        <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>Manage users and system settings</Text>
       </View>
 
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.outline }]}>
         <Button
           mode={activeTab === 0 ? 'contained' : 'outlined'}
           onPress={() => setActiveTab(0)}
@@ -345,10 +347,10 @@ const AdminScreen: React.FC = () => {
       {activeTab === 0 && renderUsersTab()}
       {activeTab === 1 && (
         <ScrollView style={styles.tabContent}>
-          <Card style={styles.settingsCard}>
+          <Card style={[styles.settingsCard, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
-              <Title>System Settings</Title>
-              <Text>Settings coming soon...</Text>
+              <Title style={{ color: theme.colors.onSurface }}>System Settings</Title>
+              <Text style={{ color: theme.colors.onSurfaceVariant }}>Settings coming soon...</Text>
             </Card.Content>
           </Card>
         </ScrollView>
@@ -452,7 +454,7 @@ const AdminScreen: React.FC = () => {
                       {loadingUserData ? (
                         <Text>Loading...</Text>
                       ) : payments.length === 0 ? (
-                        <Text style={styles.noDataText}>No payment history</Text>
+                        <Text style={[styles.noDataText, { color: theme.colors.onSurfaceVariant }]}>No payment history</Text>
                       ) : (
                         <DataTable>
                           <DataTable.Header>
@@ -485,18 +487,18 @@ const AdminScreen: React.FC = () => {
                       {loadingUserData ? (
                         <Text>Loading...</Text>
                       ) : usageHistory.length === 0 ? (
-                        <Text style={styles.noDataText}>No usage history</Text>
+                        <Text style={[styles.noDataText, { color: theme.colors.onSurfaceVariant }]}>No usage history</Text>
                       ) : (
                         <View>
                           {usageHistory.map((usage, index) => (
-                            <View key={index} style={styles.usageItem}>
-                              <Text style={styles.usageDate}>
+                            <View key={index} style={[styles.usageItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                              <Text style={[styles.usageDate, { color: theme.colors.onSurface }]}>
                                 {new Date(usage.date).toLocaleDateString()}
                               </Text>
-                              <Text style={styles.usageText}>
+                              <Text style={[styles.usageText, { color: theme.colors.onSurfaceVariant }]}>
                                 Songs played: {usage.songs_played}
                               </Text>
-                              <Text style={styles.usageText}>
+                              <Text style={[styles.usageText, { color: theme.colors.onSurfaceVariant }]}>
                                 Rooms created: {usage.rooms_created}
                               </Text>
                             </View>
@@ -522,29 +524,28 @@ const AdminScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   header: {
     padding: 20,
-    backgroundColor: '#667eea',
+    paddingTop: 60,
+    paddingBottom: 16,
+    elevation: 2,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
     marginBottom: 4,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
   },
   tabContainer: {
     flexDirection: 'row',
     padding: 16,
     gap: 8,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    elevation: 1,
   },
   tabButton: {
     flex: 1,
@@ -559,18 +560,19 @@ const styles = StyleSheet.create({
   loadingText: {
     textAlign: 'center',
     padding: 20,
-    color: '#666',
   },
   emptyCard: {
     margin: 16,
+    borderRadius: 16,
+    elevation: 2,
   },
   emptyText: {
     textAlign: 'center',
-    color: '#666',
   },
   userCard: {
     margin: 16,
     marginTop: 8,
+    borderRadius: 16,
     elevation: 2,
   },
   userHeader: {
@@ -583,16 +585,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userEmail: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
   },
   userName: {
     fontSize: 14,
-    color: '#666',
   },
   userDisplayName: {
     fontSize: 14,
-    color: '#999',
   },
   userBadges: {
     flexDirection: 'row',
@@ -612,11 +612,12 @@ const styles = StyleSheet.create({
   },
   statText: {
     fontSize: 12,
-    color: '#666',
     marginBottom: 4,
   },
   settingsCard: {
     margin: 16,
+    borderRadius: 16,
+    elevation: 2,
   },
   dialog: {
     maxHeight: '90%',
@@ -643,14 +644,12 @@ const styles = StyleSheet.create({
     marginVertical: 16,
   },
   noDataText: {
-    color: '#999',
     fontStyle: 'italic',
     textAlign: 'center',
     padding: 16,
   },
   usageItem: {
     padding: 12,
-    backgroundColor: '#f9f9f9',
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -661,7 +660,6 @@ const styles = StyleSheet.create({
   },
   usageText: {
     fontSize: 12,
-    color: '#666',
     marginBottom: 2,
   },
 });

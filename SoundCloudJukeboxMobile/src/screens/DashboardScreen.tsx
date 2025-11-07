@@ -252,34 +252,6 @@ const DashboardScreen: React.FC = () => {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header with user info */}
       <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
-        <View style={styles.userInfo}>
-          <Avatar.Image
-            size={50}
-            source={{
-              uri: user?.user_metadata?.avatar_url ||
-                   `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.email || '')}&background=667eea&color=fff`
-            }}
-          />
-          <View style={styles.userDetails}>
-            <Text style={[styles.userEmail, { color: theme.colors.onSurface }]}>{user?.email}</Text>
-            <Text style={[styles.userGreeting, { color: theme.colors.onSurfaceVariant }]}>Welcome back!</Text>
-            {profile && permissions && (
-              <View style={styles.userBadges}>
-                <UserBadge
-                  role={profile.role}
-                  tier={profile.subscription_tier}
-                  showLabel={false}
-                  size="small"
-                />
-                {permissions.max_songs !== Infinity && (
-                  <Text style={[styles.songCount, { color: theme.colors.onSurfaceVariant }]}>
-                    {permissions.songs_played}/{permissions.max_songs} songs played
-                  </Text>
-                )}
-              </View>
-            )}
-          </View>
-        </View>
         <Menu
           visible={menuVisible}
           onDismiss={() => setMenuVisible(false)}
@@ -288,6 +260,7 @@ const DashboardScreen: React.FC = () => {
               icon="menu"
               iconColor={theme.colors.onSurface}
               onPress={() => setMenuVisible(true)}
+              style={styles.menuButton}
             />
           }
         >
@@ -350,6 +323,34 @@ const DashboardScreen: React.FC = () => {
             leadingIcon="logout"
           />
         </Menu>
+        <View style={styles.userInfo}>
+          <Avatar.Image
+            size={50}
+            source={{
+              uri: user?.user_metadata?.avatar_url ||
+                   `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.email || '')}&background=667eea&color=fff`
+            }}
+          />
+          <View style={styles.userDetails}>
+            <Text style={[styles.userEmail, { color: theme.colors.onSurface }]}>{user?.email}</Text>
+            <Text style={[styles.userGreeting, { color: theme.colors.onSurfaceVariant }]}>Welcome back!</Text>
+            {profile && permissions && (
+              <View style={styles.userBadges}>
+                <UserBadge
+                  role={profile.role}
+                  tier={profile.subscription_tier}
+                  showLabel={false}
+                  size="small"
+                />
+                {permissions.max_songs !== Infinity && (
+                  <Text style={[styles.songCount, { color: theme.colors.onSurfaceVariant }]}>
+                    {permissions.songs_played}/{permissions.max_songs} songs played
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+        </View>
       </View>
 
       <ScrollView 
@@ -550,7 +551,6 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
     paddingTop: 60,
@@ -560,6 +560,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    gap: 16,
+  },
+  menuButton: {
+    margin: 0,
   },
   userInfo: {
     flexDirection: 'row',
