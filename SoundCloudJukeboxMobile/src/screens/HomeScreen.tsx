@@ -7,6 +7,7 @@ import {
   Dimensions,
   Modal,
   Image,
+  Platform,
 } from 'react-native';
 import {
   Text,
@@ -141,7 +142,7 @@ const AnimatedOrb: React.FC<{
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const theme = useTheme();
 
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -149,10 +150,16 @@ const HomeScreen: React.FC = () => {
 
   // If user is logged in, redirect to dashboard
   React.useEffect(() => {
-    if (user) {
-      navigation.replace('Dashboard');
+    // Wait for auth to finish loading before redirecting
+    if (!loading && user) {
+      // On web, ensure URL is updated to /dashboard
+      if (Platform.OS === 'web') {
+        window.location.href = '/dashboard';
+      } else {
+        navigation.replace('Dashboard');
+      }
     }
-  }, [user, navigation]);
+  }, [user, loading, navigation]);
 
   const handleLoginSignup = () => {
     navigation.navigate('Auth');

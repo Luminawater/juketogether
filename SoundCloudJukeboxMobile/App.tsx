@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavigationContainer, DarkTheme as NavigationDarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createDrawerNavigator } from '@react-navigation/drawer';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
 import { Platform } from 'react-native';
@@ -24,7 +25,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import darkTheme from './src/config/theme';
 
 // Import components
-import { HeaderMenuButton } from './src/components/HeaderMenuButton';
+import { CustomDrawerContent } from './src/components/DrawerContent';
 
 // Navigation types
 export type RootStackParamList = {
@@ -40,6 +41,7 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const Drawer = createDrawerNavigator<RootStackParamList>();
 
 // Deep linking configuration for web
 const linking = {
@@ -74,6 +76,77 @@ const CustomNavigationDarkTheme = {
     border: darkTheme.colors.outline,
     notification: darkTheme.colors.error,
   },
+};
+
+// Main authenticated stack with drawer
+const AuthenticatedStack = () => {
+  return (
+    <Drawer.Navigator
+      drawerContent={(props) => <CustomDrawerContent {...props} />}
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: darkTheme.colors.surface,
+        },
+        headerTintColor: darkTheme.colors.onSurface,
+        headerTitleStyle: {
+          fontWeight: 'bold',
+          color: darkTheme.colors.onSurface,
+        },
+        drawerStyle: {
+          backgroundColor: darkTheme.colors.surface,
+          width: 320,
+        },
+        drawerActiveTintColor: darkTheme.colors.primary,
+        drawerInactiveTintColor: darkTheme.colors.onSurfaceVariant,
+        contentStyle: {
+          backgroundColor: darkTheme.colors.background,
+        },
+      }}
+    >
+      <Drawer.Screen
+        name="Dashboard"
+        component={DashboardScreen}
+        options={{
+          title: 'SoundCloud & Spotify Jukebox',
+        }}
+      />
+      <Drawer.Screen
+        name="Discovery"
+        component={DiscoveryScreen}
+        options={{
+          title: 'Discover Rooms',
+        }}
+      />
+      <Drawer.Screen
+        name="Leaderboard"
+        component={LeaderboardScreen}
+        options={{
+          title: 'Leaderboard',
+        }}
+      />
+      <Drawer.Screen
+        name="Friends"
+        component={FriendsScreen}
+        options={{
+          title: 'Friends',
+        }}
+      />
+      <Drawer.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          title: 'Edit Profile',
+        }}
+      />
+      <Drawer.Screen
+        name="Admin"
+        component={AdminScreen}
+        options={{
+          title: 'Admin Panel',
+        }}
+      />
+    </Drawer.Navigator>
+  );
 };
 
 export default function App() {
@@ -112,59 +185,40 @@ export default function App() {
             />
             <Stack.Screen
               name="Dashboard"
-              component={DashboardScreen}
-              options={{
-                title: 'SoundCloud & Spotify Jukebox',
-                headerLeft: () => <HeaderMenuButton />
-              }}
+              component={AuthenticatedStack}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="Room"
               component={RoomScreen}
               options={({ route }) => ({
                 title: route.params.roomName || 'Music Room',
-                headerLeft: () => <HeaderMenuButton />
               })}
             />
             <Stack.Screen
               name="Admin"
-              component={AdminScreen}
-              options={{
-                title: 'Admin Panel',
-                headerLeft: () => <HeaderMenuButton />
-              }}
+              component={AuthenticatedStack}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="Discovery"
-              component={DiscoveryScreen}
-              options={{
-                title: 'Discover Rooms',
-                headerLeft: () => <HeaderMenuButton />
-              }}
+              component={AuthenticatedStack}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="Friends"
-              component={FriendsScreen}
-              options={{
-                title: 'Friends',
-                headerLeft: () => <HeaderMenuButton />
-              }}
+              component={AuthenticatedStack}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="Profile"
-              component={ProfileScreen}
-              options={{
-                title: 'Edit Profile',
-                headerLeft: () => <HeaderMenuButton />
-              }}
+              component={AuthenticatedStack}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="Leaderboard"
-              component={LeaderboardScreen}
-              options={{
-                title: 'Leaderboard',
-                headerLeft: () => <HeaderMenuButton />
-              }}
+              component={AuthenticatedStack}
+              options={{ headerShown: false }}
             />
           </Stack.Navigator>
           <StatusBar style="light" />

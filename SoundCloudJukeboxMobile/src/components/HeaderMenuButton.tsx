@@ -12,21 +12,29 @@ export const HeaderMenuButton: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const [drawerVisible, setDrawerVisible] = useState(false);
 
+  const handleOpenDrawer = () => {
+    console.log('Opening drawer...');
+    setDrawerVisible(true);
+  };
+
+  const handleCloseDrawer = () => {
+    console.log('Closing drawer...');
+    setDrawerVisible(false);
+  };
+
   return (
     <>
       <IconButton
         icon="menu"
         iconColor={theme.colors.onSurface}
-        onPress={() => setDrawerVisible(true)}
+        onPress={handleOpenDrawer}
         size={24}
       />
-      <Portal>
-        <AppDrawer
-          visible={drawerVisible}
-          onDismiss={() => setDrawerVisible(false)}
-          navigation={navigation}
-        />
-      </Portal>
+      <AppDrawer
+        visible={drawerVisible}
+        onDismiss={handleCloseDrawer}
+        navigation={navigation}
+      />
     </>
   );
 };

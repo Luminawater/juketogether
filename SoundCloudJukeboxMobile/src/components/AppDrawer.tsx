@@ -112,11 +112,7 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({ visible, onDismiss, naviga
     navigation.navigate('Home');
   };
 
-  if (!user || !profile) {
-    return null;
-  }
-
-  const isAdmin = hasRole(profile.role, 'admin');
+  const isAdmin = user && profile && hasRole(profile.role, 'admin');
   
   // Get current route name safely
   let currentRoute: string | undefined;
@@ -130,9 +126,10 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({ visible, onDismiss, naviga
     currentRoute = undefined;
   }
 
+  // Always render the Modal, but only show content if user exists
   return (
     <Modal
-      visible={visible}
+      visible={visible && !!user && !!profile}
       transparent
       animationType="none"
       onRequestClose={onDismiss}
@@ -170,24 +167,26 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({ visible, onDismiss, naviga
             contentContainerStyle={styles.drawerContentContainer}
             showsVerticalScrollIndicator={false}
           >
-            {/* User Info Header */}
-            <View style={[styles.userHeader, { borderBottomColor: theme.colors.outline }]}>
-              <Avatar.Image
-                size={64}
-                source={{
-                  uri: user.user_metadata?.avatar_url ||
-                       `https://ui-avatars.com/api/?name=${encodeURIComponent(user.email || '')}&background=667eea&color=fff`
-                }}
-              />
-              <Text style={[styles.userEmail, { color: theme.colors.onSurface }]} numberOfLines={1}>
-                {user.email}
-              </Text>
-              {profile.username && (
-                <Text style={[styles.userName, { color: theme.colors.onSurfaceVariant }]}>
-                  @{profile.username}
-                </Text>
-              )}
-            </View>
+            {user && profile && (
+              <>
+                {/* User Info Header */}
+                <View style={[styles.userHeader, { borderBottomColor: theme.colors.outline }]}>
+                  <Avatar.Image
+                    size={64}
+                    source={{
+                      uri: user.user_metadata?.avatar_url ||
+                           `https://ui-avatars.com/api/?name=${encodeURIComponent(user.email || '')}&background=667eea&color=fff`
+                    }}
+                  />
+                  <Text style={[styles.userEmail, { color: theme.colors.onSurface }]} numberOfLines={1}>
+                    {user.email}
+                  </Text>
+                  {profile.username && (
+                    <Text style={[styles.userName, { color: theme.colors.onSurfaceVariant }]}>
+                      @{profile.username}
+                    </Text>
+                  )}
+                </View>
 
             {/* Navigation Items */}
             <View style={styles.drawerSection}>
@@ -231,16 +230,18 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({ visible, onDismiss, naviga
               )}
             </View>
 
-            <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+                <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
 
-            {/* Account Section */}
-            <View style={styles.drawerSection}>
-              <DrawerItem
-                icon="🚪"
-                label="Sign Out"
-                onPress={handleSignOut}
-              />
-            </View>
+                {/* Account Section */}
+                <View style={styles.drawerSection}>
+                  <DrawerItem
+                    icon="🚪"
+                    label="Sign Out"
+                    onPress={handleSignOut}
+                  />
+                </View>
+              </>
+            )}
           </ScrollView>
         </Animated.View>
       </View>
