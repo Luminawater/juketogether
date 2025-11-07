@@ -51,6 +51,7 @@ import {
   ReactionType,
 } from '../services/trackReactionsService';
 import { getRoomUrl, getRoomShareMessage, extractMusicUrls, isValidMusicUrl } from '../utils/roomUtils';
+import RoomChat from '../components/RoomChat';
 
 type RoomScreenRouteProp = RouteProp<RootStackParamList, 'Room'>;
 type RoomScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Room'>;
@@ -96,7 +97,7 @@ const RoomScreen: React.FC = () => {
   const { roomId, roomName } = route.params;
 
   // Main state
-  const [activeTab, setActiveTab] = useState<'main' | 'users' | 'settings' | 'spotify'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'users' | 'settings' | 'spotify' | 'chat'>('main');
   const [queue, setQueue] = useState<Track[]>([]);
   const [history, setHistory] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
@@ -1620,6 +1621,25 @@ const RoomScreen: React.FC = () => {
     );
   };
 
+  const renderChatTab = () => {
+    if (!supabase) {
+      return (
+        <View style={styles.tabContent}>
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+            <Card.Content>
+              <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>
+                Chat unavailable. Please check your connection.
+              </Text>
+            </Card.Content>
+          </Card>
+        </View>
+      );
+    }
+
+    // RoomChat has its own container with flex: 1, so we don't need tabContent wrapper
+    return <RoomChat roomId={roomId} supabase={supabase} />;
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
@@ -1700,6 +1720,33 @@ const RoomScreen: React.FC = () => {
             Users
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setActiveTab('chat')}
+          style={[
+            styles.tabButton,
+            activeTab === 'chat' && {
+              backgroundColor: theme.colors.primary,
+            },
+          ]}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons
+            name="chat"
+            size={20}
+            color={activeTab === 'chat' ? theme.colors.onPrimary : theme.colors.onSurface}
+            style={styles.tabIcon}
+          />
+          <Text
+            style={[
+              styles.tabButtonText,
+              {
+                color: activeTab === 'chat' ? theme.colors.onPrimary : theme.colors.onSurface,
+              },
+            ]}
+          >
+            Chat
+          </Text>
+        </TouchableOpacity>
         {user && isSpotifyUser(user) && (
           <TouchableOpacity
             onPress={() => setActiveTab('spotify')}
@@ -1763,6 +1810,7 @@ const RoomScreen: React.FC = () => {
       {/* Tab Content */}
       {activeTab === 'main' && renderMainTab()}
       {activeTab === 'users' && renderUsersTab()}
+      {activeTab === 'chat' && renderChatTab()}
       {activeTab === 'spotify' && renderSpotifyTab()}
       {activeTab === 'settings' && renderSettingsTab()}
 

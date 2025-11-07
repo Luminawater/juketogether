@@ -213,7 +213,7 @@ const HomeScreen: React.FC = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Animated Orbs Background */}
-      <View style={styles.orbsContainer} pointerEvents="none">
+      <View style={[styles.orbsContainer, { pointerEvents: 'none' }]}>
         {orbs.map((orb, index) => (
           <AnimatedOrb key={index} {...orb} />
         ))}
@@ -332,6 +332,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     overflow: 'hidden',
+    ...(Platform.OS === 'web' ? { pointerEvents: 'none' } : {}),
   },
   orb: {
     position: 'absolute',
