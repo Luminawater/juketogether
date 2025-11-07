@@ -119,3 +119,4 @@ function clearHistory() {
 export { initHistoryManager };
 
 
+
