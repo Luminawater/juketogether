@@ -260,13 +260,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 1500);
 
     // Try to get session, but don't wait forever
+    // This will automatically check localStorage for persisted session
     supabase.auth.getSession()
       .then(({ data: { session }, error }) => {
         clearTimeout(sessionTimeout);
         
         if (error) {
           console.error('[AuthContext] Error getting session:', error);
+          // If there's an error, try to clear potentially corrupted session data
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            // Check if there's a session in localStorage that might be corrupted
+            const sessionKey = Object.keys(window.localStorage).find(key => 
+              key.includes('supabase.auth.token')
+            );
+            if (sessionKey) {
+              console.warn('[AuthContext] Found potentially corrupted session, clearing...');
+              window.localStorage.removeItem(sessionKey);
+            }
+          }
         } else {
+          if (session) {
+            console.log('[AuthContext] Session restored from localStorage');
+          } else {
+            console.log('[AuthContext] No session found in localStorage');
+          }
           setSession(session);
           setUser(session?.user ?? null);
           
@@ -291,9 +308,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         try {
+          console.log('[AuthContext] Auth state changed:', event, session ? 'has session' : 'no session');
+          
           setSession(session);
           setUser(session?.user ?? null);
+          
           if (session?.user?.id) {
+            // Session exists - ensure it's persisted in localStorage
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              // Supabase should handle this automatically, but we can verify
+              const sessionKey = Object.keys(window.localStorage).find(key => 
+                key.includes('supabase.auth.token')
+              );
+              if (!sessionKey && event === 'SIGNED_IN') {
+                console.warn('[AuthContext] Session not found in localStorage after sign in');
+              }
+            }
+            
             // Clear cache on sign out, use cache on sign in
             const useCache = event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED';
             await fetchUserProfile(session.user.id, useCache);
