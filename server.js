@@ -37,7 +37,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Import Supabase functions (with error handling)
 let supabaseFunctions = null;
 try {
-  supabaseFunctions = require('./supabase');
+  supabaseFunctions = require('./src/supabase');
 } catch (error) {
   console.warn('Supabase not configured, using in-memory storage only:', error.message);
   // Create stub functions if Supabase fails to load
@@ -55,8 +55,8 @@ try {
 let authModule = null;
 let chatModule = null;
 try {
-  authModule = require('./auth');
-  chatModule = require('./chat');
+  authModule = require('./src/auth');
+  chatModule = require('./src/chat');
 } catch (error) {
   console.warn('Auth/Chat modules not available:', error.message);
 }
@@ -72,7 +72,14 @@ const {
   loadUserVolumes,
   saveUserVolume,
   deleteUserVolume,
-  testConnection
+  testConnection,
+  loadRoomAdmins,
+  addRoomAdmin,
+  removeRoomAdmin,
+  loadFriends,
+  addFriendRequest,
+  acceptFriendRequest,
+  removeFriendRequest
 } = supabaseFunctions;
 
 // Test Supabase connection on startup
@@ -156,6 +163,26 @@ function scheduleSave(roomId) {
   }, 1000);
   
   saveQueue.set(roomId, timeout);
+}
+
+// Helper function to check if user can control playback
+async function canUserControl(roomId, userId) {
+  const room = await getRoom(roomId);
+  const roomAdmins = await loadRoomAdmins(roomId);
+  const isOwner = room.hostUserId === userId;
+  const isAdmin = roomAdmins.includes(userId);
+
+  if (isOwner || isAdmin) {
+    return true;
+  }
+
+  // Check room settings
+  let roomSettings = null;
+  if (chatModule) {
+    roomSettings = await chatModule.getRoomSettings(roomId);
+  }
+
+  return roomSettings?.allowControls !== false;
 }
 
 io.on('connection', (socket) => {
@@ -255,6 +282,36 @@ io.on('connection', (socket) => {
       users: room.users.size
     });
     
+    // Load room admins from Supabase
+    const roomAdmins = await loadRoomAdmins(roomId);
+
+    // Check if user is owner or admin
+    const isOwner = room.hostUserId === userId;
+    const isAdmin = roomAdmins.includes(userId);
+
+    // Load room settings with defaults
+    const settings = roomSettings || {
+      isPrivate: false,
+      allowControls: true,
+      admins: roomAdmins,
+    };
+
+    // Build users list with profiles
+    const usersList = [];
+    for (const roomUserId of room.users) {
+      let userProfile = null;
+      if (authModule) {
+        userProfile = await authModule.getUserProfile(roomUserId);
+      }
+      usersList.push({
+        userId: roomUserId,
+        userProfile: userProfile || { username: 'Anonymous User' },
+        isOwner: room.hostUserId === roomUserId,
+        isAdmin: roomAdmins.includes(roomUserId),
+        volume: room.userVolumes.get(roomUserId) || 50,
+      });
+    }
+
     socket.emit('room-state', {
       queue: room.queue,
       history: room.history,
@@ -262,7 +319,13 @@ io.on('connection', (socket) => {
       isPlaying: authoritativeIsPlaying,
       position: authoritativePosition,
       chatMessages,
-      roomSettings
+      roomSettings: {
+        ...settings,
+        admins: roomAdmins,
+      },
+      users: usersList,
+      isOwner,
+      isAdmin,
     });
 
     console.log(`📤 Room "${roomId}" state sent to user (synced from Supabase)`);
@@ -275,14 +338,19 @@ io.on('connection', (socket) => {
     }));
     socket.emit('user-volumes', userVolumes);
 
-    // Broadcast new user joined to others
+    // Broadcast new user joined to others (only send to others, not the new joiner)
     socket.to(roomId).emit('user-joined', {
       userId,
       userProfile: socket.userProfile,
       volume: savedVolume
     });
     
+    // Update user count for all users
     io.to(roomId).emit('user-count', room.users.size);
+    
+    // Send updated users list to all users in room
+    io.to(roomId).emit('users-list-updated', usersList);
+    
     console.log(`User ${userId} joined room ${roomId}`);
   });
 
@@ -331,6 +399,14 @@ io.on('connection', (socket) => {
   socket.on('play', async (data) => {
     const { roomId } = data;
     const room = await getRoom(roomId);
+    const userId = socket.isAuthenticated ? socket.userId : socket.id;
+    
+    // Check permissions
+    const canControl = await canUserControl(roomId, userId);
+    if (!canControl) {
+      socket.emit('error', { message: 'You do not have permission to control playback' });
+      return;
+    }
     
     room.isPlaying = true;
     scheduleSave(roomId);
@@ -343,6 +419,14 @@ io.on('connection', (socket) => {
   socket.on('pause', async (data) => {
     const { roomId } = data;
     const room = await getRoom(roomId);
+    const userId = socket.isAuthenticated ? socket.userId : socket.id;
+    
+    // Check permissions
+    const canControl = await canUserControl(roomId, userId);
+    if (!canControl) {
+      socket.emit('error', { message: 'You do not have permission to control playback' });
+      return;
+    }
     
     room.isPlaying = false;
     scheduleSave(roomId);
@@ -366,6 +450,14 @@ io.on('connection', (socket) => {
   socket.on('next-track', async (data) => {
     const { roomId } = data;
     const room = await getRoom(roomId);
+    const userId = socket.isAuthenticated ? socket.userId : socket.id;
+    
+    // Check permissions
+    const canControl = await canUserControl(roomId, userId);
+    if (!canControl) {
+      socket.emit('error', { message: 'You do not have permission to control playback' });
+      return;
+    }
     
     // Prevent multiple next-track calls from interfering
     if (room.isTransitioning) {
@@ -732,6 +824,18 @@ io.on('connection', (socket) => {
       return;
     }
 
+    const room = await getRoom(roomId);
+    const userId = socket.isAuthenticated ? socket.userId : socket.id;
+    const roomAdmins = await loadRoomAdmins(roomId);
+    const isOwner = room.hostUserId === userId;
+    const isAdmin = roomAdmins.includes(userId);
+
+    // Only owner and admins can update settings
+    if (!isOwner && !isAdmin) {
+      socket.emit('error', { message: 'Only room owner and admins can update settings' });
+      return;
+    }
+
     const updatedSettings = await chatModule.updateRoomSettings(roomId, settings);
 
     if (updatedSettings) {
@@ -739,6 +843,175 @@ io.on('connection', (socket) => {
       io.to(roomId).emit('room-settings-updated', updatedSettings);
     }
   });
+
+  // Friends endpoints
+  socket.on('get-friends', async () => {
+    if (!socket.isAuthenticated) {
+      socket.emit('error', { message: 'Authentication required' });
+      return;
+    }
+
+    const userId = socket.userId;
+    const friends = await loadFriends(userId);
+    socket.emit('friends-list', friends);
+  });
+
+  socket.on('add-friend', async (data) => {
+    const { friendId } = data;
+
+    if (!socket.isAuthenticated) {
+      socket.emit('error', { message: 'Authentication required' });
+      return;
+    }
+
+    const userId = socket.userId;
+    const success = await addFriendRequest(userId, friendId, userId);
+    
+    if (success) {
+      socket.emit('friend-request-sent', { friendId });
+      // Notify the friend
+      const friendSocket = Array.from(io.sockets.sockets.values())
+        .find(s => s.isAuthenticated && s.userId === friendId);
+      if (friendSocket) {
+        const friends = await loadFriends(friendId);
+        friendSocket.emit('friends-list', friends);
+      }
+    } else {
+      socket.emit('error', { message: 'Failed to send friend request' });
+    }
+  });
+
+  socket.on('accept-friend-request', async (data) => {
+    const { friendId } = data;
+
+    if (!socket.isAuthenticated) {
+      socket.emit('error', { message: 'Authentication required' });
+      return;
+    }
+
+    const userId = socket.userId;
+    const success = await acceptFriendRequest(userId, friendId);
+    
+    if (success) {
+      // Send updated friends list to both users
+      const friends = await loadFriends(userId);
+      socket.emit('friends-list', friends);
+      
+      const friendSocket = Array.from(io.sockets.sockets.values())
+        .find(s => s.isAuthenticated && s.userId === friendId);
+      if (friendSocket) {
+        const friendFriends = await loadFriends(friendId);
+        friendSocket.emit('friends-list', friendFriends);
+      }
+    } else {
+      socket.emit('error', { message: 'Failed to accept friend request' });
+    }
+  });
+
+  socket.on('reject-friend-request', async (data) => {
+    const { friendId } = data;
+
+    if (!socket.isAuthenticated) {
+      socket.emit('error', { message: 'Authentication required' });
+      return;
+    }
+
+    const userId = socket.userId;
+    const success = await removeFriendRequest(userId, friendId);
+    
+    if (success) {
+      const friends = await loadFriends(userId);
+      socket.emit('friends-list', friends);
+    } else {
+      socket.emit('error', { message: 'Failed to reject friend request' });
+    }
+  });
+
+  socket.on('remove-friend', async (data) => {
+    const { friendId } = data;
+
+    if (!socket.isAuthenticated) {
+      socket.emit('error', { message: 'Authentication required' });
+      return;
+    }
+
+    const userId = socket.userId;
+    const success = await removeFriendRequest(userId, friendId);
+    
+    if (success) {
+      const friends = await loadFriends(userId);
+      socket.emit('friends-list', friends);
+    } else {
+      socket.emit('error', { message: 'Failed to remove friend' });
+    }
+  });
+
+  // Room admin endpoints
+  socket.on('add-room-admin', async (data) => {
+    const { roomId, username } = data;
+
+    if (!socket.isAuthenticated) {
+      socket.emit('error', { message: 'Authentication required' });
+      return;
+    }
+
+    const room = await getRoom(roomId);
+    const userId = socket.userId;
+    const isOwner = room.hostUserId === userId;
+
+    if (!isOwner) {
+      socket.emit('error', { message: 'Only room owner can add admins' });
+      return;
+    }
+
+    // Find user by username
+    if (!authModule) {
+      socket.emit('error', { message: 'Auth module not available' });
+      return;
+    }
+
+    // This would need a function to find user by username
+    // For now, we'll assume friendId is passed instead of username
+    const adminUserId = username; // This should be userId, not username
+    const success = await addRoomAdmin(roomId, adminUserId, userId);
+
+    if (success) {
+      // Broadcast updated admins list
+      const roomAdmins = await loadRoomAdmins(roomId);
+      io.to(roomId).emit('room-admins-updated', roomAdmins);
+    } else {
+      socket.emit('error', { message: 'Failed to add admin' });
+    }
+  });
+
+  socket.on('remove-room-admin', async (data) => {
+    const { roomId, adminId } = data;
+
+    if (!socket.isAuthenticated) {
+      socket.emit('error', { message: 'Authentication required' });
+      return;
+    }
+
+    const room = await getRoom(roomId);
+    const userId = socket.userId;
+    const isOwner = room.hostUserId === userId;
+
+    if (!isOwner) {
+      socket.emit('error', { message: 'Only room owner can remove admins' });
+      return;
+    }
+
+    const success = await removeRoomAdmin(roomId, adminId);
+
+    if (success) {
+      // Broadcast updated admins list
+      const roomAdmins = await loadRoomAdmins(roomId);
+      io.to(roomId).emit('room-admins-updated', roomAdmins);
+    } else {
+      socket.emit('error', { message: 'Failed to remove admin' });
+    }
+  });
+
 });
 
 // Proxy endpoint for SoundCloud oEmbed API (to avoid CORS issues)
@@ -880,7 +1153,7 @@ app.post('/api/soundcloud-playlist', async (req, res) => {
     }
     
     // Use Python scraper
-    const scriptPath = path.join(__dirname, 'scrape_soundcloud.py');
+    const scriptPath = path.join(__dirname, 'scripts', 'scrape_soundcloud.py');
     const { stdout, stderr } = await execAsync(`python "${scriptPath}" playlist "${url}"`);
     
     if (stderr && !stderr.includes('DeprecationWarning')) {
@@ -928,7 +1201,7 @@ app.post('/api/soundcloud-profile', async (req, res) => {
     }
     
     // Use Python scraper
-    const scriptPath = path.join(__dirname, 'scrape_soundcloud.py');
+    const scriptPath = path.join(__dirname, 'scripts', 'scrape_soundcloud.py');
     const { stdout, stderr } = await execAsync(`python "${scriptPath}" profile "${url}"`);
     
     if (stderr && !stderr.includes('DeprecationWarning')) {

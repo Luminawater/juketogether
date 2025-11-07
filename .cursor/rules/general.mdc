@@ -1,0 +1,7 @@
+---
+alwaysApply: true
+---
+
+We're building a cross-platform Expo app that runs on both mobile (iOS/Android) and web. The app is located in the `SoundCloudJukeboxMobile` directory and uses React Native with Expo SDK ~54. We leverage React Navigation for routing, React Native Paper for UI components, and react-native-web for web compatibility. The app shares the same codebase across platforms, using Supabase for authentication and data management, and Socket.io for real-time features. TypeScript ensures type safety across the entire application. We use Expo's built-in web support (`expo start --web`) to run the same React Native code in browsers, while maintaining native mobile capabilities through Expo's managed workflow. GitHub handles Vercel deployments automatically, so we don't need to think about deployment. The user will be running local run commands for development.
+
+Keep files under 1500 lines. If a file approaches or exceeds 1500 lines, split it into multiple smaller files and import features/functions as needed. This improves maintainability and readability.

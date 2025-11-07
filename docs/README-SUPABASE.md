@@ -12,7 +12,7 @@ This app now uses Supabase for persistent room state storage. Rooms, queues, and
 2. **Set up Supabase database:**
    - Go to your Supabase project: https://supabase.com/dashboard
    - Open the SQL Editor
-   - Run the SQL from `supabase-setup.sql` to create the tables
+   - Run the SQL from `migrations/supabase-setup.sql` to create the tables
 
 3. **Configure environment variables:**
    - Copy `.env.example` to `.env`
@@ -49,5 +49,5 @@ This app now uses Supabase for persistent room state storage. Rooms, queues, and
 - `rooms` table: Stores room state (queue, current track, position, etc.)
 - `user_volumes` table: Stores user volume preferences per room
 
-See `supabase-setup.sql` for the full schema.
+See `migrations/supabase-setup.sql` for the full schema.
 

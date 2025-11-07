@@ -6,7 +6,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>SoundCloud & Spotify Jukebox</title>
+    <title>SoundCloud, Spotify & YouTube Jukebox</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="style.css">
@@ -17,7 +17,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>🎵 SoundCloud & Spotify Jukebox</h1>
+            <h1>🎵 SoundCloud, Spotify & YouTube Jukebox</h1>
             <div class="loading-section">
                 <p>Loading...</p>
             </div>
@@ -54,82 +54,170 @@
         </header>
 
         <div class="main-content">
-            <div class="player-section">
-                <div id="soundcloud-widget" class="soundcloud-widget"></div>
-                <div class="player-controls">
-                    <button id="play-pause-btn" class="control-btn">
-                        <span class="material-icons">play_arrow</span>
-                        Play
-                    </button>
-                    <button id="restart-btn" class="control-btn">
-                        <span class="material-icons">replay</span>
-                        Restart
-                    </button>
-                    <button id="next-btn" class="control-btn">
-                        <span class="material-icons">skip_next</span>
-                        Next
-                    </button>
-                    <button id="sync-btn" class="control-btn sync-btn">
-                        <span class="material-icons">sync</span>
-                        Sync
-                    </button>
-                </div>
-                <div class="volume-control-section">
-                    <div class="volume-control">
-                        <label for="volume-slider">
-                            <span class="material-icons" style="font-size: 20px;">volume_up</span>
-                            Volume Preference
-                        </label>
-                        <div class="volume-slider-container">
-                            <input type="range" id="volume-slider" min="0" max="100" value="50" class="volume-slider">
-                            <span id="volume-value" class="volume-value">50%</span>
-                        </div>
-                        <p style="font-size: 0.75em; color: rgba(255, 255, 255, 0.5); margin-top: 5px;">
-                            Volume control active • Works on mobile and desktop
-                        </p>
+            <!-- Tabs Navigation -->
+            <div class="tabs-navigation">
+                <button class="tab-btn active" data-tab="main">
+                    <span class="material-icons">music_note</span>
+                    Main
+                </button>
+                <button class="tab-btn" data-tab="users">
+                    <span class="material-icons">people</span>
+                    Users
+                </button>
+                <button class="tab-btn" data-tab="settings" id="settings-tab-btn" style="display: none;">
+                    <span class="material-icons">settings</span>
+                    Settings
+                </button>
+            </div>
+
+            <!-- Main Tab Content -->
+            <div class="tab-content active" id="main-tab">
+                <div class="player-section">
+                    <div id="soundcloud-widget" class="soundcloud-widget"></div>
+                    <div class="player-controls">
+                        <button id="play-pause-btn" class="control-btn">
+                            <span class="material-icons">play_arrow</span>
+                            Play
+                        </button>
+                        <button id="restart-btn" class="control-btn">
+                            <span class="material-icons">replay</span>
+                            Restart
+                        </button>
+                        <button id="next-btn" class="control-btn">
+                            <span class="material-icons">skip_next</span>
+                            Next
+                        </button>
+                        <button id="sync-btn" class="control-btn sync-btn">
+                            <span class="material-icons">sync</span>
+                            Sync
+                        </button>
                     </div>
-                    <div class="other-users-volumes" id="other-users-volumes">
-                        <div class="other-volumes-label">Other users' volumes:</div>
-                        <div class="other-volumes-list" id="other-volumes-list">
-                            <p class="no-other-users">No other users</p>
+                    <div class="volume-control-section">
+                        <div class="volume-control">
+                            <label for="volume-slider">
+                                <span class="material-icons" style="font-size: 20px;">volume_up</span>
+                                Volume Preference
+                            </label>
+                            <div class="volume-slider-container">
+                                <input type="range" id="volume-slider" min="0" max="100" value="50" class="volume-slider">
+                                <span id="volume-value" class="volume-value">50%</span>
+                            </div>
+                            <p style="font-size: 0.75em; color: rgba(255, 255, 255, 0.5); margin-top: 5px;">
+                                Volume control active • Works on mobile and desktop
+                            </p>
+                        </div>
+                        <div class="other-users-volumes" id="other-users-volumes">
+                            <div class="other-volumes-label">Other users' volumes:</div>
+                            <div class="other-volumes-list" id="other-volumes-list">
+                                <p class="no-other-users">No other users</p>
+                            </div>
                         </div>
                     </div>
+                    <div class="current-track" id="current-track">
+                        <p>No track playing</p>
+                    </div>
                 </div>
-                <div class="current-track" id="current-track">
-                    <p>No track playing</p>
+
+                <div class="queue-section">
+                    <h2>Queue</h2>
+                    <div class="add-track-form">
+                        <input 
+                            type="text" 
+                            id="track-url-input" 
+                            placeholder="Paste SoundCloud, Spotify, or YouTube URL(s) - supports multiple URLs..."
+                            autocomplete="off"
+                        >
+                        <button id="add-track-btn">
+                            <span class="material-icons">add</span>
+                            Add to Queue
+                        </button>
+                    </div>
+                    <div id="queue-list" class="queue-list">
+                        <p class="empty-queue">Queue is empty. Add a track to get started!</p>
+                    </div>
+                </div>
+
+                <div class="history-section">
+                    <div class="history-header">
+                        <h2>History</h2>
+                        <button id="clear-history-btn" class="clear-history-btn" title="Clear history">
+                            <span class="material-icons">delete_outline</span>
+                            Clear
+                        </button>
+                    </div>
+                    <p class="history-description">Previously played tracks - click to replay</p>
+                    <div id="history-list" class="history-list">
+                        <p class="empty-history">No tracks played yet</p>
+                    </div>
                 </div>
             </div>
 
-            <div class="queue-section">
-                <h2>Queue</h2>
-                <div class="add-track-form">
-                    <input 
-                        type="text" 
-                        id="track-url-input" 
-                        placeholder="Paste SoundCloud or Spotify URL(s), playlist, or profile - supports multiple URLs..."
-                        autocomplete="off"
-                    >
-                    <button id="add-track-btn">
-                        <span class="material-icons">add</span>
-                        Add to Queue
-                    </button>
+            <!-- Users Tab Content -->
+            <div class="tab-content" id="users-tab">
+                <div class="users-section">
+                    <h2>Users in Room</h2>
+                    <div id="users-list" class="users-list">
+                        <p class="empty-users">Loading users...</p>
+                    </div>
                 </div>
-                <div id="queue-list" class="queue-list">
-                    <p class="empty-queue">Queue is empty. Add a track to get started!</p>
+                <div class="friends-section">
+                    <h2>Friends</h2>
+                    <div class="friends-tabs">
+                        <button class="friends-tab-btn active" data-friends-tab="list">My Friends</button>
+                        <button class="friends-tab-btn" data-friends-tab="requests">Requests</button>
+                    </div>
+                    <div class="friends-tab-content active" id="friends-list-tab">
+                        <div id="friends-list" class="friends-list">
+                            <p class="empty-friends">No friends yet</p>
+                        </div>
+                    </div>
+                    <div class="friends-tab-content" id="friends-requests-tab">
+                        <div id="friend-requests-list" class="friends-list">
+                            <p class="empty-requests">No pending requests</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="history-section">
-                <div class="history-header">
-                    <h2>History</h2>
-                    <button id="clear-history-btn" class="clear-history-btn" title="Clear history">
-                        <span class="material-icons">delete_outline</span>
-                        Clear
-                    </button>
-                </div>
-                <p class="history-description">Previously played tracks - click to replay</p>
-                <div id="history-list" class="history-list">
-                    <p class="empty-history">No tracks played yet</p>
+            <!-- Settings Tab Content -->
+            <div class="tab-content" id="settings-tab">
+                <div class="settings-section">
+                    <h2>Room Settings</h2>
+                    <div class="settings-form">
+                        <div class="setting-item">
+                            <label>
+                                <input type="checkbox" id="room-private-toggle">
+                                Private Room
+                            </label>
+                            <p class="setting-description">Only users with the room link can join</p>
+                        </div>
+                        <div class="setting-item">
+                            <label>
+                                <input type="checkbox" id="allow-controls-toggle" checked>
+                                Allow Users to Control Playback
+                            </label>
+                            <p class="setting-description">If disabled, only room owner and admins can control playback</p>
+                        </div>
+                        <div class="setting-item">
+                            <h3>Room Admins</h3>
+                            <div class="admins-list" id="admins-list">
+                                <p class="empty-admins">No admins added yet</p>
+                            </div>
+                            <div class="add-admin-form">
+                                <input type="text" id="add-admin-input" placeholder="Enter username to add as admin">
+                                <button id="add-admin-btn">
+                                    <span class="material-icons">add</span>
+                                    Add Admin
+                                </button>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <button id="save-settings-btn" class="save-settings-btn">
+                                <span class="material-icons">save</span>
+                                Save Settings
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

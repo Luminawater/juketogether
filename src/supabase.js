@@ -455,12 +455,147 @@ async function testConnection() {
   }
 }
 
+// Load room admins
+async function loadRoomAdmins(roomId) {
+  if (!supabaseConfig) {
+    return [];
+  }
+  
+  try {
+    const data = await restRequest('GET', 'room_admins', null, { room_id: roomId });
+    return Array.isArray(data) ? data.map(a => a.user_id) : [];
+  } catch (error) {
+    console.error('Error loading room admins:', error);
+    return [];
+  }
+}
+
+// Add room admin
+async function addRoomAdmin(roomId, userId, addedBy) {
+  if (!supabaseConfig) {
+    return false;
+  }
+  
+  try {
+    const adminData = {
+      room_id: roomId,
+      user_id: userId,
+      added_by: addedBy,
+      added_at: new Date().toISOString()
+    };
+    await restRequest('POST', 'room_admins', adminData);
+    return true;
+  } catch (error) {
+    console.error('Error adding room admin:', error);
+    return false;
+  }
+}
+
+// Remove room admin
+async function removeRoomAdmin(roomId, userId) {
+  if (!supabaseConfig) {
+    return false;
+  }
+  
+  try {
+    await restRequest('DELETE', 'room_admins', null, { room_id: roomId, user_id: userId });
+    return true;
+  } catch (error) {
+    console.error('Error removing room admin:', error);
+    return false;
+  }
+}
+
+// Load friends for a user
+async function loadFriends(userId) {
+  if (!supabaseConfig) {
+    return [];
+  }
+  
+  try {
+    const data = await restRequest('GET', 'friends', null, { 
+      $or: [{ user_id: userId }, { friend_id: userId }] 
+    });
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error loading friends:', error);
+    return [];
+  }
+}
+
+// Add friend request
+async function addFriendRequest(userId, friendId, requestedBy) {
+  if (!supabaseConfig) {
+    return false;
+  }
+  
+  try {
+    const friendData = {
+      user_id: userId,
+      friend_id: friendId,
+      status: 'pending',
+      requested_by: requestedBy,
+      created_at: new Date().toISOString()
+    };
+    await restRequest('POST', 'friends', friendData);
+    return true;
+  } catch (error) {
+    console.error('Error adding friend request:', error);
+    return false;
+  }
+}
+
+// Accept friend request
+async function acceptFriendRequest(userId, friendId) {
+  if (!supabaseConfig) {
+    return false;
+  }
+  
+  try {
+    await restRequest('PATCH', 'friends', { status: 'accepted' }, { 
+      user_id: friendId, 
+      friend_id: userId 
+    });
+    return true;
+  } catch (error) {
+    console.error('Error accepting friend request:', error);
+    return false;
+  }
+}
+
+// Reject/Remove friend request
+async function removeFriendRequest(userId, friendId) {
+  if (!supabaseConfig) {
+    return false;
+  }
+  
+  try {
+    await restRequest('DELETE', 'friends', null, { 
+      $or: [
+        { user_id: userId, friend_id: friendId },
+        { user_id: friendId, friend_id: userId }
+      ]
+    });
+    return true;
+  } catch (error) {
+    console.error('Error removing friend request:', error);
+    return false;
+  }
+}
+
 module.exports = {
   loadRoomState,
   saveRoomState,
   loadUserVolumes,
   saveUserVolume,
   deleteUserVolume,
-  testConnection
+  testConnection,
+  loadRoomAdmins,
+  addRoomAdmin,
+  removeRoomAdmin,
+  loadFriends,
+  addFriendRequest,
+  acceptFriendRequest,
+  removeFriendRequest
 };
 

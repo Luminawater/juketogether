@@ -10,6 +10,9 @@ function detectPlatform(url) {
     if (url.includes('spotify.com') || url.includes('spotify:')) {
         return 'spotify';
     }
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        return 'youtube';
+    }
     return 'soundcloud';
 }
 
@@ -21,6 +24,7 @@ function initSocketManager(deps) {
     const historyManager = deps.historyManager;
     const soundCloudManager = deps.soundCloudManager;
     const spotifyManager = deps.spotifyManager;
+    const youtubeManager = deps.youtubeManager;
     const volumeController = deps.volumeController;
     const updateCurrentTrackDisplay = deps.updateCurrentTrackDisplay;
     const showError = deps.showError;
@@ -193,6 +197,33 @@ function initSocketManager(deps) {
                     console.error('Failed to initialize Spotify player:', error);
                 });
             }
+        } else if (currentPlatform === 'youtube') {
+            youtubeManager.expectingPlayCommand = false;
+
+            if (youtubeManager.player && youtubeManager.widgetReady()) {
+                try {
+                    youtubeManager.playTrack();
+                    console.log('YouTube play command executed');
+                } catch (error) {
+                    console.warn('YouTube play failed:', error);
+                    setTimeout(() => {
+                        if (youtubeManager.player && youtubeManager.widgetReady()) {
+                            try {
+                                youtubeManager.playTrack();
+                                console.log('YouTube play succeeded after retry');
+                            } catch (err) {
+                                console.error('YouTube play failed after retry:', err);
+                            }
+                        }
+                    }, 500);
+                }
+            } else {
+                console.warn('YouTube player not ready when play command received');
+                youtubeManager.pendingPlayCommand = true;
+                youtubeManager.initializePlayer().catch(error => {
+                    console.error('Failed to initialize YouTube player:', error);
+                });
+            }
         } else {
             // SoundCloud play logic (existing)
             soundCloudManager.expectingPlayCommand = false; // We received the play command we were expecting
@@ -278,6 +309,13 @@ function initSocketManager(deps) {
                 spotifyManager.currentRoomIsPlaying = false;
                 spotifyManager.updatePlayPauseButton(false);
             }
+        } else if (currentPlatform === 'youtube') {
+            if (youtubeManager.player && youtubeManager.widgetReady()) {
+                youtubeManager.player.pauseVideo();
+                youtubeManager.isCurrentlyPlaying = false;
+                youtubeManager.currentRoomIsPlaying = false;
+                youtubeManager.updatePlayPauseButton(false);
+            }
         } else {
             if (soundCloudManager.widget) {
                 soundCloudManager.widget.pause();
@@ -329,6 +367,27 @@ function initSocketManager(deps) {
                     console.error('Spotify seek failed:', error);
                     spotifyManager.isSyncing = false;
                 });
+            }
+        } else if (currentPlatform === 'youtube') {
+            if (youtubeManager.player && !youtubeManager.isSyncing) {
+                console.log('Restarting YouTube track to position 0, keepPlaying:', keepPlaying);
+                youtubeManager.isSyncing = true;
+                // YouTube player uses seconds, not milliseconds
+                const positionSeconds = Math.floor(position / 1000);
+                youtubeManager.player.seekTo(positionSeconds, true);
+
+                if (keepPlaying && !youtubeManager.isCurrentlyPlaying) {
+                    setTimeout(() => {
+                        if (youtubeManager.player) {
+                            youtubeManager.playTrack();
+                        }
+                        youtubeManager.isSyncing = false;
+                    }, 500);
+                } else {
+                    setTimeout(() => {
+                        youtubeManager.isSyncing = false;
+                    }, 500);
+                }
             }
         } else {
             if (soundCloudManager.widget && !soundCloudManager.isSyncing) {
@@ -385,6 +444,17 @@ function initSocketManager(deps) {
                     console.error('Spotify seek failed:', error);
                     spotifyManager.isSyncing = false;
                 });
+            }
+        } else if (currentPlatform === 'youtube') {
+            if (youtubeManager.player && !youtubeManager.isSyncing) {
+                youtubeManager.isSyncing = true;
+                console.log('Syncing YouTube position to:', position, 'ms');
+                // YouTube player uses seconds, not milliseconds
+                const positionSeconds = Math.floor(position / 1000);
+                youtubeManager.player.seekTo(positionSeconds, true);
+                setTimeout(() => {
+                    youtubeManager.isSyncing = false;
+                }, 1000);
             }
         } else {
             if (soundCloudManager.widget && !soundCloudManager.isSyncing) {
@@ -476,6 +546,33 @@ function initSocketManager(deps) {
                 console.error('Failed to initialize Spotify player for track change:', error);
                 showError('Failed to initialize Spotify player. Please refresh the page.');
             });
+        } else if (platform === 'youtube') {
+            // Handle YouTube track change
+            youtubeManager.isSyncing = false;
+            youtubeManager.isCurrentlyPlaying = false;
+            youtubeManager.isInitialLoad = false;
+            youtubeManager.initialLoadComplete = true;
+            youtubeManager.widgetReady = false;
+            youtubeManager.pendingPlayCommand = false;
+            youtubeManager.expectingPlayCommand = true;
+
+            // Clear position sync interval to prevent interference during track change
+            if (youtubeManager.positionSyncInterval) {
+                clearInterval(youtubeManager.positionSyncInterval);
+                youtubeManager.positionSyncInterval = null;
+            }
+
+            // Ensure player is initialized before loading track
+            youtubeManager.initializePlayer().then(() => {
+                // Load new YouTube track
+                youtubeManager.loadTrack(track.url, track.info, () => {
+                    // Don't play locally - wait for server to broadcast 'play-track' event
+                    console.log('YouTube track loaded, waiting for server play command...');
+                });
+            }).catch(error => {
+                console.error('Failed to initialize YouTube player for track change:', error);
+                showError('Failed to initialize YouTube player. Please refresh the page.');
+            });
         } else {
             // Handle SoundCloud track change (existing logic)
             soundCloudManager.isSyncing = false;
@@ -561,6 +658,17 @@ function initSocketManager(deps) {
                     console.error('Spotify sync failed:', error);
                     spotifyManager.isSyncing = false;
                 });
+            }
+        } else if (currentPlatform === 'youtube') {
+            if (youtubeManager.player && !youtubeManager.isSyncing) {
+                youtubeManager.isSyncing = true;
+                console.log('Syncing YouTube to position:', position);
+                // YouTube player uses seconds, not milliseconds
+                const positionSeconds = Math.floor(position / 1000);
+                youtubeManager.player.seekTo(positionSeconds, true);
+                setTimeout(() => {
+                    youtubeManager.isSyncing = false;
+                }, 1500);
             }
         } else {
             if (soundCloudManager.widget && !soundCloudManager.isSyncing) {

@@ -1,9 +1,0 @@
-{
-  "kiloCode": {
-    "workspaceConfig": "./.kilocode/kilo-code-config.json",
-    "qdrantUrl": "http://localhost:6333",
-    "collections": {
-      "soundcloud-jukebox": "soundcloud-jukebox_index"
-    }
-  }
-}

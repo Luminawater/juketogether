@@ -19,6 +19,7 @@ import { initQueueManager } from './js/modules/queue-manager.js';
 import { initHistoryManager } from './js/modules/history-manager.js';
 import { initSoundCloudManager } from './js/modules/soundcloud-manager.js';
 import { initSpotifyManager } from './js/modules/spotify-manager.js';
+import { initYouTubeManager } from './js/modules/youtube-manager.js';
 import { initSocketManager } from './js/modules/socket-manager.js';
 import { showError, showSuccess } from './js/modules/ui-utils.js';
 
@@ -32,6 +33,9 @@ function detectPlatform(url) {
 
     if (url.includes('spotify.com') || url.includes('spotify:')) {
         return 'spotify';
+    }
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        return 'youtube';
     }
     return 'soundcloud';
 }
@@ -227,6 +231,80 @@ function processRoomState(state) {
                 console.error('Failed to initialize Spotify player:', error);
                 showError('Failed to initialize Spotify player. Please refresh the page.');
             });
+        } else if (platform === 'youtube') {
+            // Handle YouTube track initialization
+            youtubeManager.isInitialLoad = true;
+            youtubeManager.initialLoadComplete = false;
+            youtubeManager.isSyncing = false;
+
+            // Clear position sync interval to prevent interference
+            if (youtubeManager.positionSyncInterval) {
+                clearInterval(youtubeManager.positionSyncInterval);
+                youtubeManager.positionSyncInterval = null;
+            }
+
+            // Initialize player and load track
+            youtubeManager.initializePlayer().then(() => {
+                youtubeManager.loadTrack(state.currentTrack.url, state.currentTrack.info, () => {
+                    // After track loads, sync to position from Supabase (source of truth)
+                    // Only sync if position is significant (> 1 second) to avoid unnecessary seeks
+                    if (state.position > 1000 && youtubeManager.player) {
+                        // Wait a bit to ensure player is fully ready
+                        setTimeout(() => {
+                            if (youtubeManager.player && !youtubeManager.isSyncing) {
+                                youtubeManager.isSyncing = true;
+                                // YouTube player uses seconds, not milliseconds
+                                const positionSeconds = Math.floor(state.position / 1000);
+                                youtubeManager.player.seekTo(positionSeconds, true);
+                                console.log('Synced to authoritative position from Supabase:', state.position, 'ms');
+
+                                // Sync play state after seeking
+                                if (state.isPlaying) {
+                                    setTimeout(() => {
+                                        if (youtubeManager.player) {
+                                            youtubeManager.playTrack();
+                                        }
+                                        // Allow position syncs after initial load is complete
+                                        setTimeout(() => {
+                                            youtubeManager.isInitialLoad = false;
+                                            youtubeManager.initialLoadComplete = true;
+                                            youtubeManager.isSyncing = false;
+                                        }, 2000); // 2 second grace period after initial load
+                                    }, 500);
+                                } else {
+                                    // Not playing, just mark initial load complete
+                                    setTimeout(() => {
+                                        youtubeManager.isInitialLoad = false;
+                                        youtubeManager.initialLoadComplete = true;
+                                        youtubeManager.isSyncing = false;
+                                    }, 2000);
+                                }
+                            }
+                        }, 2000);
+                    } else if (state.isPlaying) {
+                        // If no position or position is small, just play from start
+                        setTimeout(() => {
+                            if (youtubeManager.player) {
+                                youtubeManager.playTrack();
+                            }
+                            // Allow position syncs after initial load is complete
+                            setTimeout(() => {
+                                youtubeManager.isInitialLoad = false;
+                                youtubeManager.initialLoadComplete = true;
+                            }, 2000); // 2 second grace period after initial load
+                        }, 500);
+                    } else {
+                        // Not playing, just mark initial load complete
+                        setTimeout(() => {
+                            youtubeManager.isInitialLoad = false;
+                            youtubeManager.initialLoadComplete = true;
+                        }, 2000);
+                    }
+                });
+            }).catch(error => {
+                console.error('Failed to initialize YouTube player:', error);
+                showError('Failed to initialize YouTube player. Please refresh the page.');
+            });
         } else {
             // Handle SoundCloud track (existing logic)
             // Mark as initial load - prevent position syncs from affecting others
@@ -378,6 +456,16 @@ async function initApp() {
         }
     });
 
+    // Initialize YouTube manager
+    const youtubeManager = initYouTubeManager({
+        updateCurrentTrackDisplay: (title, url) => {
+            currentTrackDiv.innerHTML = `
+                <p><strong>Now Playing:</strong> ${title}</p>
+                <p style="font-size: 0.9em; margin-top: 5px;"><a href="${url}" target="_blank">View on YouTube</a></p>
+            `;
+        }
+    });
+
     // Initialize room manager
     const roomManager = initRoomManager({
         socket: null, // Will be set after socket initialization
@@ -394,6 +482,7 @@ async function initApp() {
         historyManager: historyManager,
         soundCloudManager: soundCloudManager,
         spotifyManager: spotifyManager,
+        youtubeManager: youtubeManager,
         volumeController: volumeController,
         updateCurrentTrackDisplay: soundCloudManager.updateCurrentTrackDisplay,
         showError: showError,
@@ -423,15 +512,17 @@ async function initApp() {
             return;
         }
 
-        // Extract all URLs from the pasted text (both SoundCloud and Spotify)
+        // Extract all URLs from the pasted text (SoundCloud, Spotify, and YouTube)
         const soundCloudUrls = soundCloudManager.extractSoundCloudUrls(text);
         const spotifyUrls = spotifyManager.extractSpotifyUrls(text);
-        const allUrls = [...soundCloudUrls, ...spotifyUrls];
+        const youtubeUrls = youtubeManager.extractYouTubeUrls(text);
+        const allUrls = [...soundCloudUrls, ...spotifyUrls, ...youtubeUrls];
 
         if (allUrls.length === 0) {
             // If no URLs found, try to treat the whole input as a single URL
             const normalizedSoundCloudUrl = soundCloudManager.normalizeSoundCloudUrl(text);
             const normalizedSpotifyUrl = spotifyManager.normalizeSpotifyUrl(text);
+            const normalizedYouTubeUrl = youtubeManager.normalizeYouTubeUrl(text);
 
             if (normalizedSoundCloudUrl && soundCloudManager.isValidSoundCloudUrl(normalizedSoundCloudUrl)) {
                 soundCloudManager.addTrack(normalizedSoundCloudUrl);
@@ -439,8 +530,11 @@ async function initApp() {
             } else if (normalizedSpotifyUrl && spotifyManager.isValidSpotifyUrl(normalizedSpotifyUrl)) {
                 spotifyManager.addTrack(normalizedSpotifyUrl);
                 trackUrlInput.value = '';
+            } else if (normalizedYouTubeUrl && youtubeManager.isValidYouTubeUrl(normalizedYouTubeUrl)) {
+                youtubeManager.addTrack(normalizedYouTubeUrl);
+                trackUrlInput.value = '';
             } else {
-                showError('No valid SoundCloud or Spotify URLs found. Please paste a URL from either platform.');
+                showError('No valid SoundCloud, Spotify, or YouTube URLs found. Please paste a URL from one of these platforms.');
             }
             return;
         }
@@ -452,12 +546,16 @@ async function initApp() {
         allUrls.forEach(url => {
             const normalizedSoundCloudUrl = soundCloudManager.normalizeSoundCloudUrl(url);
             const normalizedSpotifyUrl = spotifyManager.normalizeSpotifyUrl(url);
+            const normalizedYouTubeUrl = youtubeManager.normalizeYouTubeUrl(url);
 
             if (normalizedSoundCloudUrl && soundCloudManager.isValidSoundCloudUrl(normalizedSoundCloudUrl)) {
                 soundCloudManager.addTrack(normalizedSoundCloudUrl);
                 addedCount++;
             } else if (normalizedSpotifyUrl && spotifyManager.isValidSpotifyUrl(normalizedSpotifyUrl)) {
                 spotifyManager.addTrack(normalizedSpotifyUrl);
+                addedCount++;
+            } else if (normalizedYouTubeUrl && youtubeManager.isValidYouTubeUrl(normalizedYouTubeUrl)) {
+                youtubeManager.addTrack(normalizedYouTubeUrl);
                 addedCount++;
             } else {
                 invalidCount++;
@@ -501,8 +599,18 @@ async function initApp() {
         }
 
         // Determine which manager to use based on current platform
-        const currentManager = socketManager.currentPlatform === 'spotify' ? spotifyManager : soundCloudManager;
-        const widget = socketManager.currentPlatform === 'spotify' ? currentManager.player : currentManager.widget;
+        let currentManager;
+        if (socketManager.currentPlatform === 'spotify') {
+            currentManager = spotifyManager;
+        } else if (socketManager.currentPlatform === 'youtube') {
+            currentManager = youtubeManager;
+        } else {
+            currentManager = soundCloudManager;
+        }
+
+        const widget = socketManager.currentPlatform === 'spotify' ? currentManager.player : 
+                      socketManager.currentPlatform === 'youtube' ? currentManager.player : 
+                      currentManager.widget;
 
         if (widget) {
             // Toggle based on current playing state
@@ -510,6 +618,8 @@ async function initApp() {
                 // Pause locally first for immediate feedback
                 if (socketManager.currentPlatform === 'spotify') {
                     currentManager.player.pause();
+                } else if (socketManager.currentPlatform === 'youtube') {
+                    currentManager.player.pauseVideo();
                 } else {
                     currentManager.widget.pause();
                 }
@@ -520,6 +630,8 @@ async function initApp() {
             } else {
                 // Play locally first for immediate feedback
                 if (socketManager.currentPlatform === 'spotify') {
+                    currentManager.playTrack();
+                } else if (socketManager.currentPlatform === 'youtube') {
                     currentManager.playTrack();
                 } else {
                     currentManager.widget.play();
@@ -541,8 +653,18 @@ async function initApp() {
             }
 
             // Determine which manager to use based on current platform
-            const currentManager = socketManager.currentPlatform === 'spotify' ? spotifyManager : soundCloudManager;
-            const widget = socketManager.currentPlatform === 'spotify' ? currentManager.player : currentManager.widget;
+            let currentManager;
+            if (socketManager.currentPlatform === 'spotify') {
+                currentManager = spotifyManager;
+            } else if (socketManager.currentPlatform === 'youtube') {
+                currentManager = youtubeManager;
+            } else {
+                currentManager = soundCloudManager;
+            }
+
+            const widget = socketManager.currentPlatform === 'spotify' ? currentManager.player : 
+                          socketManager.currentPlatform === 'youtube' ? currentManager.player : 
+                          currentManager.widget;
 
             if (widget) {
                 // Seek to position 0 and broadcast to all users
@@ -567,8 +689,18 @@ async function initApp() {
     // Sync button - sync all users to current position
     syncBtn.addEventListener('click', () => {
         // Determine which manager to use based on current platform
-        const currentManager = socketManager.currentPlatform === 'spotify' ? spotifyManager : soundCloudManager;
-        const widget = socketManager.currentPlatform === 'spotify' ? currentManager.player : currentManager.widget;
+        let currentManager;
+        if (socketManager.currentPlatform === 'spotify') {
+            currentManager = spotifyManager;
+        } else if (socketManager.currentPlatform === 'youtube') {
+            currentManager = youtubeManager;
+        } else {
+            currentManager = soundCloudManager;
+        }
+
+        const widget = socketManager.currentPlatform === 'spotify' ? currentManager.player : 
+                      socketManager.currentPlatform === 'youtube' ? currentManager.player : 
+                      currentManager.widget;
 
         if (widget) {
             if (socketManager.currentPlatform === 'spotify') {
@@ -590,6 +722,29 @@ async function initApp() {
                         }
                     }
                 });
+            } else if (socketManager.currentPlatform === 'youtube') {
+                // For YouTube, get current time in milliseconds
+                try {
+                    const currentTime = currentManager.player.getCurrentTime();
+                    if (currentTime !== null && currentTime !== undefined) {
+                        const positionMs = Math.floor(currentTime * 1000); // Convert seconds to milliseconds
+                        // Emit sync request to server
+                        socketManager.socket.emit('sync-all-users', {
+                            roomId: roomManager.roomId,
+                            position: positionMs
+                        });
+                        console.log('YouTube sync requested at position:', positionMs);
+
+                        // Update session sync status
+                        if (!isUserSyncedToSession) {
+                            isUserSyncedToSession = true;
+                            updateSessionStatusIndicator(true);
+                            showSuccess('Synced to music session!');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error getting YouTube position:', error);
+                }
             } else {
                 // SoundCloud logic
                 currentManager.widget.getPosition((position) => {
