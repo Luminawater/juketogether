@@ -19,6 +19,7 @@ import {
   Menu,
   Divider,
   TextInput,
+  useTheme,
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -66,6 +67,7 @@ const formatPlaytime = (seconds: number): string => {
 const DiscoveryScreen: React.FC = () => {
   const navigation = useNavigation<DiscoveryScreenNavigationProp>();
   const { supabase, user, profile } = useAuth();
+  const theme = useTheme();
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [filteredRooms, setFilteredRooms] = useState<Room[]>([]);
@@ -296,10 +298,10 @@ const DiscoveryScreen: React.FC = () => {
     minUsersNum > 0;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Title style={styles.headerTitle}>Discover Rooms</Title>
-        <Paragraph style={styles.headerSubtitle}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
+        <Title style={[styles.headerTitle, { color: theme.colors.onSurface }]}>Discover Rooms</Title>
+        <Paragraph style={[styles.headerSubtitle, { color: theme.colors.onSurfaceVariant }]}>
           Explore public music rooms
         </Paragraph>
       </View>
@@ -333,12 +335,12 @@ const DiscoveryScreen: React.FC = () => {
       </View>
 
       {showFilters && (
-        <Card style={styles.filterCard}>
+        <Card style={[styles.filterCard, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
-            <Title style={styles.filterTitle}>Filter Rooms</Title>
+            <Title style={[styles.filterTitle, { color: theme.colors.onSurface }]}>Filter Rooms</Title>
             
             <View style={styles.filterRow}>
-              <Text style={styles.filterLabel}>Country:</Text>
+              <Text style={[styles.filterLabel, { color: theme.colors.onSurface }]}>Country:</Text>
               <Menu
                 visible={countryMenuVisible}
                 onDismiss={() => setCountryMenuVisible(false)}
@@ -402,8 +404,8 @@ const DiscoveryScreen: React.FC = () => {
             </View>
 
             {hasActiveFilters && (
-              <View style={styles.activeFiltersContainer}>
-                <Text style={styles.activeFiltersLabel}>Active filters:</Text>
+              <View style={[styles.activeFiltersContainer, { borderTopColor: theme.colors.outline }]}>
+                <Text style={[styles.activeFiltersLabel, { color: theme.colors.onSurfaceVariant }]}>Active filters:</Text>
                 <View style={styles.chipContainer}>
                   {selectedCountry !== 'All Countries' && (
                     <Chip
@@ -451,12 +453,12 @@ const DiscoveryScreen: React.FC = () => {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" />
-          <Text style={styles.loadingText}>Loading rooms...</Text>
+          <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>Loading rooms...</Text>
         </View>
       ) : filteredRooms.length === 0 ? (
-        <Card style={styles.emptyCard}>
+        <Card style={[styles.emptyCard, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
               {searchQuery || hasActiveFilters
                 ? 'No rooms found matching your filters'
                 : 'No public rooms available'}
@@ -473,7 +475,7 @@ const DiscoveryScreen: React.FC = () => {
           {filteredRooms.map((room) => (
             <Card
               key={room.id}
-              style={styles.roomCard}
+              style={[styles.roomCard, { backgroundColor: theme.colors.surface }]}
               onPress={() => handleJoinRoom(room)}
             >
               <Card.Content>
@@ -481,12 +483,12 @@ const DiscoveryScreen: React.FC = () => {
                   <Avatar.Icon
                     size={50}
                     icon="music-note"
-                    style={styles.roomAvatar}
+                    style={[styles.roomAvatar, { backgroundColor: theme.colors.primary }]}
                   />
                   <View style={styles.roomInfo}>
-                    <Title style={styles.roomTitle}>{room.name}</Title>
+                    <Title style={[styles.roomTitle, { color: theme.colors.onSurface }]}>{room.name}</Title>
                     {room.description && (
-                      <Paragraph style={styles.roomDescription} numberOfLines={2}>
+                      <Paragraph style={[styles.roomDescription, { color: theme.colors.onSurfaceVariant }]} numberOfLines={2}>
                         {room.description}
                       </Paragraph>
                     )}
@@ -518,7 +520,7 @@ const DiscoveryScreen: React.FC = () => {
                   <Chip icon="public" style={styles.publicChip}>
                     Public
                   </Chip>
-                  <Text style={styles.roomDate}>
+                  <Text style={[styles.roomDate, { color: theme.colors.onSurfaceVariant }]}>
                     {new Date(room.created_at).toLocaleDateString()}
                   </Text>
                 </View>
@@ -542,21 +544,21 @@ const DiscoveryScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   header: {
     padding: 20,
-    backgroundColor: '#667eea',
+    paddingTop: 60,
+    paddingBottom: 16,
+    elevation: 2,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
     marginBottom: 4,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
   },
   searchbar: {
     margin: 16,
@@ -578,9 +580,12 @@ const styles = StyleSheet.create({
     margin: 16,
     marginTop: 0,
     marginBottom: 8,
+    borderRadius: 16,
+    elevation: 2,
   },
   filterTitle: {
-    fontSize: 18,
+    fontSize: 20,
+    fontWeight: 'bold',
     marginBottom: 12,
   },
   filterRow: {
@@ -604,13 +609,11 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
   },
   activeFiltersLabel: {
     fontSize: 12,
     fontWeight: '500',
     marginBottom: 8,
-    color: '#666',
   },
   chipContainer: {
     flexDirection: 'row',
@@ -628,14 +631,14 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    color: '#666',
   },
   emptyCard: {
     margin: 16,
+    borderRadius: 16,
+    elevation: 2,
   },
   emptyText: {
     textAlign: 'center',
-    color: '#666',
     padding: 20,
   },
   scrollView: {
@@ -644,6 +647,7 @@ const styles = StyleSheet.create({
   roomCard: {
     margin: 16,
     marginTop: 8,
+    borderRadius: 16,
     elevation: 2,
   },
   roomHeader: {
@@ -651,19 +655,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   roomAvatar: {
-    backgroundColor: '#667eea',
+    // backgroundColor will be set dynamically
   },
   roomInfo: {
     flex: 1,
     marginLeft: 12,
   },
   roomTitle: {
-    fontSize: 18,
+    fontSize: 20,
+    fontWeight: '600',
     marginBottom: 4,
   },
   roomDescription: {
     fontSize: 14,
-    color: '#666',
+    lineHeight: 20,
   },
   roomStats: {
     flexDirection: 'row',
@@ -687,7 +692,6 @@ const styles = StyleSheet.create({
   },
   roomDate: {
     fontSize: 12,
-    color: '#999',
   },
   joinButton: {
     marginTop: 8,
