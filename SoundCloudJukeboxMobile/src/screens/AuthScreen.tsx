@@ -63,11 +63,6 @@ const AuthScreen: React.FC = () => {
 
       if (error) {
         Alert.alert('Error', error.message);
-      } else if (!isLogin) {
-        Alert.alert(
-          'Success',
-          'Account created! Please check your email to verify your account.'
-        );
       }
       // Navigation will be handled by auth state change
     } catch (error) {

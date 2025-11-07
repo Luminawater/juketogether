@@ -131,8 +131,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Handle OAuth callback errors on web
+    // Handle OAuth callback on web
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      // Check for OAuth callback in URL hash (Supabase uses hash for tokens)
+      const hash = window.location.hash;
+      const hasAuthParams = hash.includes('access_token') || hash.includes('error');
+      
+      if (hasAuthParams) {
+        // Clean up URL after processing
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+      
+      // Handle OAuth errors in query params
       const urlParams = new URLSearchParams(window.location.search);
       const error = urlParams.get('error');
       const errorDescription = urlParams.get('error_description');
@@ -202,7 +213,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithProvider = async (provider: 'spotify' | 'google' | 'github') => {
     const redirectUrl = Platform.OS === 'web' && typeof window !== 'undefined'
-      ? `${window.location.origin}${window.location.pathname}`
+      ? `${window.location.origin}/auth`
       : undefined;
     
     const { error } = await supabase.auth.signInWithOAuth({
