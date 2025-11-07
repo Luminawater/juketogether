@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import {
   Text,
   Avatar,
   Divider,
   useTheme,
 } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { DrawerContentScrollView, DrawerItem } from '@react-navigation/drawer';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -66,70 +67,112 @@ export const CustomDrawerContent: React.FC<any> = (props) => {
       {/* Navigation Items */}
       <DrawerItem
         label="Dashboard"
-        icon={({ color, size }) => <Text style={{ fontSize: size, color }}>🏠</Text>}
+        icon={({ color, size }) => (
+          <MaterialCommunityIcons name="home" size={size} color={color} />
+        )}
         active={currentRoute === 'Dashboard'}
         onPress={() => handleNavigate('Dashboard')}
         labelStyle={[
           styles.drawerItemLabel,
           currentRoute === 'Dashboard' && { color: theme.colors.primary, fontWeight: '600' },
         ]}
-        style={currentRoute === 'Dashboard' && { backgroundColor: theme.colors.primaryContainer }}
+        style={[
+          styles.drawerItem,
+          currentRoute === 'Dashboard' && { backgroundColor: theme.colors.primaryContainer },
+        ]}
+        activeBackgroundColor={theme.colors.primaryContainer}
+        inactiveBackgroundColor="transparent"
       />
       <DrawerItem
         label="Discover Rooms"
-        icon={({ color, size }) => <Text style={{ fontSize: size, color }}>🔍</Text>}
+        icon={({ color, size }) => (
+          <MaterialCommunityIcons name="compass-outline" size={size} color={color} />
+        )}
         active={currentRoute === 'Discovery'}
         onPress={() => handleNavigate('Discovery')}
         labelStyle={[
           styles.drawerItemLabel,
           currentRoute === 'Discovery' && { color: theme.colors.primary, fontWeight: '600' },
         ]}
-        style={currentRoute === 'Discovery' && { backgroundColor: theme.colors.primaryContainer }}
+        style={[
+          styles.drawerItem,
+          currentRoute === 'Discovery' && { backgroundColor: theme.colors.primaryContainer },
+        ]}
+        activeBackgroundColor={theme.colors.primaryContainer}
+        inactiveBackgroundColor="transparent"
       />
       <DrawerItem
         label="Leaderboard"
-        icon={({ color, size }) => <Text style={{ fontSize: size, color }}>🏆</Text>}
+        icon={({ color, size }) => (
+          <MaterialCommunityIcons name="trophy" size={size} color={color} />
+        )}
         active={currentRoute === 'Leaderboard'}
         onPress={() => handleNavigate('Leaderboard')}
         labelStyle={[
           styles.drawerItemLabel,
           currentRoute === 'Leaderboard' && { color: theme.colors.primary, fontWeight: '600' },
         ]}
-        style={currentRoute === 'Leaderboard' && { backgroundColor: theme.colors.primaryContainer }}
+        style={[
+          styles.drawerItem,
+          currentRoute === 'Leaderboard' && { backgroundColor: theme.colors.primaryContainer },
+        ]}
+        activeBackgroundColor={theme.colors.primaryContainer}
+        inactiveBackgroundColor="transparent"
       />
       <DrawerItem
         label="Friends"
-        icon={({ color, size }) => <Text style={{ fontSize: size, color }}>👥</Text>}
+        icon={({ color, size }) => (
+          <MaterialCommunityIcons name="account-group" size={size} color={color} />
+        )}
         active={currentRoute === 'Friends'}
         onPress={() => handleNavigate('Friends')}
         labelStyle={[
           styles.drawerItemLabel,
           currentRoute === 'Friends' && { color: theme.colors.primary, fontWeight: '600' },
         ]}
-        style={currentRoute === 'Friends' && { backgroundColor: theme.colors.primaryContainer }}
+        style={[
+          styles.drawerItem,
+          currentRoute === 'Friends' && { backgroundColor: theme.colors.primaryContainer },
+        ]}
+        activeBackgroundColor={theme.colors.primaryContainer}
+        inactiveBackgroundColor="transparent"
       />
       <DrawerItem
         label="Edit Profile"
-        icon={({ color, size }) => <Text style={{ fontSize: size, color }}>✏️</Text>}
+        icon={({ color, size }) => (
+          <MaterialCommunityIcons name="account-edit" size={size} color={color} />
+        )}
         active={currentRoute === 'Profile'}
         onPress={() => handleNavigate('Profile')}
         labelStyle={[
           styles.drawerItemLabel,
           currentRoute === 'Profile' && { color: theme.colors.primary, fontWeight: '600' },
         ]}
-        style={currentRoute === 'Profile' && { backgroundColor: theme.colors.primaryContainer }}
+        style={[
+          styles.drawerItem,
+          currentRoute === 'Profile' && { backgroundColor: theme.colors.primaryContainer },
+        ]}
+        activeBackgroundColor={theme.colors.primaryContainer}
+        inactiveBackgroundColor="transparent"
       />
       {isAdmin && (
         <DrawerItem
           label="Admin Panel"
-          icon={({ color, size }) => <Text style={{ fontSize: size, color }}>🛡️</Text>}
+          icon={({ color, size }) => (
+            <MaterialCommunityIcons name="shield-account" size={size} color={color} />
+          )}
           active={currentRoute === 'Admin'}
           onPress={() => handleNavigate('Admin')}
           labelStyle={[
             styles.drawerItemLabel,
             currentRoute === 'Admin' && { color: theme.colors.primary, fontWeight: '600' },
           ]}
-          style={currentRoute === 'Admin' && { backgroundColor: theme.colors.primaryContainer }}
+          style={[
+            styles.drawerItem,
+            currentRoute === 'Admin' && { backgroundColor: theme.colors.primaryContainer },
+          ]}
+          activeBackgroundColor={theme.colors.primaryContainer}
+          inactiveBackgroundColor="transparent"
         />
       )}
 
@@ -137,9 +180,13 @@ export const CustomDrawerContent: React.FC<any> = (props) => {
 
       <DrawerItem
         label="Sign Out"
-        icon={({ color, size }) => <Text style={{ fontSize: size, color }}>🚪</Text>}
+        icon={({ color, size }) => (
+          <MaterialCommunityIcons name="logout" size={size} color={color} />
+        )}
         onPress={handleSignOut}
-        labelStyle={styles.drawerItemLabel}
+        labelStyle={[styles.drawerItemLabel, { color: theme.colors.error }]}
+        style={styles.drawerItem}
+        inactiveBackgroundColor="transparent"
       />
     </DrawerContentScrollView>
   );
@@ -152,6 +199,7 @@ const styles = StyleSheet.create({
   userHeader: {
     padding: 24,
     paddingTop: 60,
+    paddingBottom: 24,
     borderBottomWidth: 1,
     alignItems: 'center',
   },
@@ -166,12 +214,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'center',
   },
+  drawerItem: {
+    borderRadius: 12,
+    marginHorizontal: 8,
+    marginVertical: 2,
+  },
   drawerItemLabel: {
     fontSize: 16,
+    marginLeft: -8,
   },
   divider: {
-    marginVertical: 8,
+    marginVertical: 12,
     marginHorizontal: 16,
+    height: 1,
   },
 });
 

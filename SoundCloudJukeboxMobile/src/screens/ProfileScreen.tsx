@@ -25,6 +25,8 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
+import { UserBadge } from '../components/UserBadge';
+import { getRemainingSongs } from '../utils/permissions';
 
 type ProfileScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Profile'>;
 
@@ -55,13 +57,24 @@ const COUNTRIES = [
   'Other',
 ];
 
+interface UserAnalytics {
+  total_rooms_created: number;
+  total_listeners_all_rooms: number;
+  peak_listeners_all_rooms: number;
+  total_tracks_played_all_rooms: number;
+  total_play_time_all_rooms_seconds: number;
+  total_rooms_joined: number;
+  total_sessions_hosted: number;
+}
+
 const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
-  const { user, profile, refreshProfile, supabase } = useAuth();
+  const { user, profile, permissions, refreshProfile, supabase } = useAuth();
   const theme = useTheme();
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [analytics, setAnalytics] = useState<UserAnalytics | null>(null);
 
   // Form state
   const [username, setUsername] = useState('');
@@ -84,6 +97,30 @@ const ProfileScreen: React.FC = () => {
       setShowInDiscovery(profile.show_in_discovery !== false);
     }
   }, [profile]);
+
+  useEffect(() => {
+    loadUserAnalytics();
+  }, [user?.id]);
+
+  const loadUserAnalytics = async () => {
+    if (!user?.id) {
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('user_analytics')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!error && data) {
+        setAnalytics(data as UserAnalytics);
+      }
+    } catch (error) {
+      console.error('Error loading user analytics:', error);
+    }
+  };
 
   const handleSave = async () => {
     if (!user?.id) {
@@ -160,6 +197,15 @@ const ProfileScreen: React.FC = () => {
     return 'U';
   };
 
+  const formatPlayTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -175,6 +221,48 @@ const ProfileScreen: React.FC = () => {
       keyboardVerticalOffset={100}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Welcome Header Section */}
+        <View style={[styles.welcomeHeader, { backgroundColor: theme.colors.surface }]}>
+          <View style={styles.welcomeUserInfo}>
+            <Avatar.Text
+              size={60}
+              label={getInitials()}
+              style={{ backgroundColor: theme.colors.primary }}
+            />
+            {avatarUrl ? (
+              <Avatar.Image
+                size={60}
+                source={{ uri: avatarUrl }}
+                style={styles.avatarOverlay}
+              />
+            ) : null}
+            <View style={styles.welcomeDetails}>
+              <Text style={[styles.welcomeEmail, { color: theme.colors.onSurface }]}>
+                {user?.email || 'User'}
+              </Text>
+              <Text style={[styles.welcomeGreeting, { color: theme.colors.onSurfaceVariant }]}>
+                Welcome back!
+              </Text>
+              {profile && permissions && (
+                <View style={styles.welcomeBadges}>
+                  <UserBadge
+                    role={profile.role}
+                    tier={profile.subscription_tier}
+                    showLabel={false}
+                    size="small"
+                  />
+                  {permissions.max_songs !== Infinity && (
+                    <Text style={[styles.welcomeSongCount, { color: theme.colors.onSurfaceVariant }]}>
+                      {permissions.songs_played}/{permissions.max_songs} songs played
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+
+        {/* Profile Header Section */}
         <View style={styles.header}>
           <Avatar.Text
             size={80}
@@ -202,7 +290,82 @@ const ProfileScreen: React.FC = () => {
           )}
         </View>
 
-        <Card style={styles.card}>
+        {/* Statistics Card */}
+        {(permissions || analytics) && (
+          <Card style={[styles.card, { marginHorizontal: 20, marginBottom: 20 }]}>
+            <Card.Content>
+              <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+                Statistics
+              </Title>
+              <Divider style={styles.divider} />
+              
+              <View style={styles.statsGrid}>
+                {permissions && (
+                  <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                    <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                      {permissions.songs_played}
+                      {permissions.max_songs !== Infinity && `/${permissions.max_songs}`}
+                    </Text>
+                    <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+                      Songs Played
+                    </Text>
+                    {permissions.max_songs !== Infinity && (
+                      <Text style={[styles.statSubtext, { color: theme.colors.onSurfaceVariant }]}>
+                        {getRemainingSongs(permissions) === Infinity 
+                          ? 'Unlimited remaining' 
+                          : `${getRemainingSongs(permissions)} remaining`}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                {analytics && (
+                  <>
+                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                      <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                        {analytics.total_rooms_created || 0}
+                      </Text>
+                      <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+                        Rooms Created
+                      </Text>
+                    </View>
+
+                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                      <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                        {analytics.total_listeners_all_rooms || 0}
+                      </Text>
+                      <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+                        Total Listeners
+                      </Text>
+                    </View>
+
+                    {analytics.total_play_time_all_rooms_seconds > 0 && (
+                      <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                        <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                          {formatPlayTime(analytics.total_play_time_all_rooms_seconds)}
+                        </Text>
+                        <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+                          Total Play Time
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                      <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                        {analytics.total_rooms_joined || 0}
+                      </Text>
+                      <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+                        Rooms Joined
+                      </Text>
+                    </View>
+                  </>
+                )}
+              </View>
+            </Card.Content>
+          </Card>
+        )}
+
+        <Card style={[styles.card, { marginHorizontal: 20 }]}>
           <Card.Content>
             <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
               Profile Information
@@ -302,7 +465,7 @@ const ProfileScreen: React.FC = () => {
           </Card.Content>
         </Card>
 
-        <Card style={styles.card}>
+        <Card style={[styles.card, { marginHorizontal: 20 }]}>
           <Card.Content>
             <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
               Privacy Settings
@@ -346,7 +509,7 @@ const ProfileScreen: React.FC = () => {
         </Card>
 
         {profile && (
-          <Card style={styles.card}>
+          <Card style={[styles.card, { marginHorizontal: 20 }]}>
             <Card.Content>
               <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
                 Account Information
@@ -388,7 +551,7 @@ const ProfileScreen: React.FC = () => {
           </Card>
         )}
 
-        <View style={styles.buttonContainer}>
+        <View style={[styles.buttonContainer, { marginHorizontal: 20 }]}>
           <Button
             mode="contained"
             onPress={handleSave}
@@ -418,15 +581,54 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
     paddingBottom: 40,
+  },
+  welcomeHeader: {
+    padding: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  welcomeUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  welcomeDetails: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  welcomeEmail: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  welcomeGreeting: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  welcomeBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  welcomeSongCount: {
+    fontSize: 12,
   },
   header: {
     alignItems: 'center',
     marginBottom: 30,
     marginTop: 20,
+    paddingHorizontal: 20,
   },
   avatar: {
+    position: 'absolute',
+  },
+  avatarOverlay: {
     position: 'absolute',
   },
   headerTitle: {
@@ -523,6 +725,34 @@ const styles = StyleSheet.create({
   },
   privacyDescription: {
     fontSize: 12,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginTop: 8,
+  },
+  statItem: {
+    flex: 1,
+    minWidth: '45%',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  statSubtext: {
+    fontSize: 10,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });
 

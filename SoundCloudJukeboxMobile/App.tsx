@@ -98,6 +98,16 @@ const AuthenticatedStack = () => {
         },
         drawerActiveTintColor: darkTheme.colors.primary,
         drawerInactiveTintColor: darkTheme.colors.onSurfaceVariant,
+        drawerActiveBackgroundColor: darkTheme.colors.primaryContainer,
+        drawerItemStyle: {
+          borderRadius: 12,
+          marginHorizontal: 8,
+          marginVertical: 2,
+        },
+        drawerLabelStyle: {
+          marginLeft: -8,
+          fontSize: 16,
+        },
         contentStyle: {
           backgroundColor: darkTheme.colors.background,
         },
