@@ -380,26 +380,44 @@ const DashboardScreen: React.FC = () => {
 
         <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>My Rooms</Text>
         {rooms.length === 0 ? (
-          <Card style={styles.emptyCard}>
-            <Card.Content>
-              <Text style={styles.emptyText}>You haven't created any rooms yet.</Text>
-              <Text style={styles.emptySubtext}>Create your first room above to get started!</Text>
+          <Card style={[styles.emptyCard, { backgroundColor: theme.colors.surface }]}>
+            <Card.Content style={styles.emptyCardContent}>
+              <Text style={[styles.emptyText, { color: theme.colors.onSurface }]}>
+                You haven't created any rooms yet.
+              </Text>
+              <Text style={[styles.emptySubtext, { color: theme.colors.onSurfaceVariant }]}>
+                Create your first room to get started!
+              </Text>
             </Card.Content>
           </Card>
         ) : (
           rooms.map((room) => (
-            <Card key={room.id} style={styles.roomCard}>
-              <Card.Content>
+            <Card 
+              key={room.id} 
+              style={[styles.roomCard, { backgroundColor: theme.colors.surface }]}
+              elevation={2}
+            >
+              <Card.Content style={styles.roomCardContent}>
                 <View style={styles.roomHeader}>
                   <View style={styles.roomInfo}>
-                    <Title style={styles.roomTitle}>{room.name}</Title>
+                    <Title style={[styles.roomTitle, { color: theme.colors.onSurface }]}>
+                      {room.name}
+                    </Title>
                     {room.description && (
-                      <Paragraph style={styles.roomDescription}>{room.description}</Paragraph>
+                      <Paragraph style={[styles.roomDescription, { color: theme.colors.onSurfaceVariant }]}>
+                        {room.description}
+                      </Paragraph>
                     )}
                   </View>
                   <View style={styles.roomMeta}>
-                    <Text style={styles.roomType}>{room.type}</Text>
-                    <Text style={styles.roomDate}>{formatDate(room.created_at)}</Text>
+                    <View style={[styles.roomTypeBadge, { backgroundColor: theme.colors.primaryContainer }]}>
+                      <Text style={[styles.roomType, { color: theme.colors.onPrimaryContainer }]}>
+                        {room.type}
+                      </Text>
+                    </View>
+                    <Text style={[styles.roomDate, { color: theme.colors.onSurfaceVariant }]}>
+                      {formatDate(room.created_at)}
+                    </Text>
                   </View>
                 </View>
                 <View style={styles.roomActions}>
@@ -407,12 +425,16 @@ const DashboardScreen: React.FC = () => {
                     mode="contained"
                     onPress={() => joinRoom(room.id, room.name)}
                     style={styles.joinButton}
+                    contentStyle={styles.roomButtonContent}
                   >
-                    Join Room
+                    Join
                   </Button>
                   <Button
                     mode="outlined"
                     onPress={() => Share.share({ message: getRoomUrl(room.id) })}
+                    style={styles.shareButton}
+                    contentStyle={styles.roomButtonContent}
+                    icon="share-variant"
                   >
                     Share
                   </Button>
@@ -423,17 +445,15 @@ const DashboardScreen: React.FC = () => {
         )}
       </ScrollView>
 
-      {/* FAB for joining rooms */}
-      <FAB
-        icon="account-plus"
-        style={styles.fab}
-        onPress={() => setJoinDialogVisible(true)}
-      />
 
       {/* Create Room Dialog */}
       <Portal>
-        <Dialog visible={createDialogVisible} onDismiss={() => setCreateDialogVisible(false)}>
-          <Dialog.Title>Quick Create Room</Dialog.Title>
+        <Dialog 
+          visible={createDialogVisible} 
+          onDismiss={() => setCreateDialogVisible(false)}
+          style={{ borderRadius: 20 }}
+        >
+          <Dialog.Title>Create New Room</Dialog.Title>
           <Dialog.Content>
             <TextInput
               label="Room Name"
@@ -441,18 +461,56 @@ const DashboardScreen: React.FC = () => {
               onChangeText={setRoomName}
               mode="outlined"
               style={styles.dialogInput}
+              autoFocus
             />
+            <TextInput
+              label="Description (optional)"
+              value={roomDescription}
+              onChangeText={setRoomDescription}
+              mode="outlined"
+              multiline
+              numberOfLines={3}
+              style={styles.dialogInput}
+            />
+            <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>Room Type:</Text>
+            <RadioButton.Group 
+              onValueChange={value => setRoomType(value as 'public' | 'private')} 
+              value={roomType}
+            >
+              <View style={styles.radioOption}>
+                <RadioButton value="public" />
+                <Text style={{ color: theme.colors.onSurface }}>Public - Anyone with the link can join</Text>
+              </View>
+              <View style={styles.radioOption}>
+                <RadioButton value="private" />
+                <Text style={{ color: theme.colors.onSurface }}>Private - Only invited users can join</Text>
+              </View>
+            </RadioButton.Group>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setCreateDialogVisible(false)}>Cancel</Button>
-            <Button onPress={createRoom}>Create</Button>
+            <Button onPress={() => {
+              setCreateDialogVisible(false);
+              setRoomName('');
+              setRoomDescription('');
+              setRoomType('public');
+            }}>
+              Cancel
+            </Button>
+            <Button onPress={createRoom} mode="contained">Create</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
 
       {/* Join Room Dialog */}
       <Portal>
-        <Dialog visible={joinDialogVisible} onDismiss={() => setJoinDialogVisible(false)}>
+        <Dialog 
+          visible={joinDialogVisible} 
+          onDismiss={() => {
+            setJoinDialogVisible(false);
+            setJoinRoomId('');
+          }}
+          style={{ borderRadius: 20 }}
+        >
           <Dialog.Title>Join Room</Dialog.Title>
           <Dialog.Content>
             <TextInput
@@ -463,11 +521,17 @@ const DashboardScreen: React.FC = () => {
               placeholder="Enter 5-character code or room ID/URL"
               autoCapitalize="characters"
               style={styles.dialogInput}
+              autoFocus
             />
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setJoinDialogVisible(false)}>Cancel</Button>
-            <Button onPress={joinRoomById}>Join</Button>
+            <Button onPress={() => {
+              setJoinDialogVisible(false);
+              setJoinRoomId('');
+            }}>
+              Cancel
+            </Button>
+            <Button onPress={joinRoomById} mode="contained">Join</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -478,7 +542,6 @@ const DashboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   loadingContainer: {
     flex: 1,
@@ -489,9 +552,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#667eea',
-    paddingTop: 50,
+    padding: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   userInfo: {
     flexDirection: 'row',
@@ -499,121 +567,151 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userDetails: {
-    marginLeft: 12,
+    marginLeft: 16,
+    flex: 1,
   },
   userEmail: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: 'white',
+    fontWeight: '600',
+    marginBottom: 4,
   },
   userGreeting: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
+    marginBottom: 8,
   },
   userBadges: {
-    marginTop: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   songCount: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
   },
   content: {
     flex: 1,
-    padding: 16,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  actionsSection: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 32,
+  },
+  primaryActionButton: {
+    flex: 1,
+    borderRadius: 12,
+    elevation: 0,
+  },
+  primaryActionContent: {
+    paddingVertical: 8,
+  },
+  secondaryActionButton: {
+    flex: 1,
+    borderRadius: 12,
+  },
+  secondaryActionContent: {
+    paddingVertical: 8,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    marginTop: 16,
-  },
-  createCard: {
-    marginBottom: 24,
-  },
-  input: {
-    marginBottom: 16,
-  },
-  radioLabel: {
-    fontSize: 16,
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  radioOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  createButton: {
-    marginTop: 16,
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 20,
+    letterSpacing: -0.5,
   },
   emptyCard: {
-    padding: 24,
+    borderRadius: 16,
+    elevation: 2,
+  },
+  emptyCardContent: {
+    padding: 40,
     alignItems: 'center',
   },
   emptyText: {
     fontSize: 18,
+    fontWeight: '600',
     textAlign: 'center',
     marginBottom: 8,
   },
   emptySubtext: {
+    fontSize: 14,
     textAlign: 'center',
-    color: '#666',
   },
   roomCard: {
-    marginBottom: 12,
+    marginBottom: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  roomCardContent: {
+    padding: 20,
   },
   roomHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 16,
+    gap: 16,
   },
   roomInfo: {
     flex: 1,
   },
   roomTitle: {
-    fontSize: 18,
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   roomDescription: {
     fontSize: 14,
-    color: '#666',
+    lineHeight: 20,
   },
   roomMeta: {
     alignItems: 'flex-end',
+    gap: 8,
+  },
+  roomTypeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   roomType: {
-    fontSize: 12,
-    backgroundColor: '#667eea',
-    color: 'white',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+    fontSize: 11,
+    fontWeight: '600',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   roomDate: {
     fontSize: 12,
-    color: '#666',
-    marginTop: 4,
   },
   roomActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
+    gap: 12,
+    marginTop: 4,
   },
   joinButton: {
     flex: 1,
+    borderRadius: 12,
+    elevation: 0,
   },
-  fab: {
-    position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#667eea',
+  shareButton: {
+    flex: 1,
+    borderRadius: 12,
+  },
+  roomButtonContent: {
+    paddingVertical: 6,
   },
   dialogInput: {
-    marginBottom: 0,
+    marginBottom: 16,
+  },
+  radioLabel: {
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  radioOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
 });
 
