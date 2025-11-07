@@ -50,7 +50,7 @@ import {
   TrackReactionCounts,
   ReactionType,
 } from '../services/trackReactionsService';
-import { getRoomUrl, getRoomShareMessage } from '../utils/roomUtils';
+import { getRoomUrl, getRoomShareMessage, extractMusicUrls, isValidMusicUrl } from '../utils/roomUtils';
 
 type RoomScreenRouteProp = RouteProp<RootStackParamList, 'Room'>;
 type RoomScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Room'>;
