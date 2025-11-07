@@ -39,7 +39,8 @@ if (process.env.VERCEL) {
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// Static files are now served by Vercel from web-build directory
+// app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Import and set up routes (simplified for Vercel)
 // For full functionality, you'll need to include all your routes here
@@ -50,10 +51,8 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', vercel: true });
 });
 
-// Serve index.html for root route
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
-});
+// Root route is now handled by Vercel static build (Expo web app)
+// app.get('/', ...) removed - Vercel serves index.html from web-build
 
 // For Vercel, export the app (not the server)
 // The server.listen() is handled by Vercel

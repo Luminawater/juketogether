@@ -1673,20 +1673,8 @@ function generateRoomId() {
   return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
 }
 
-// Room page route
-app.get('/room/:id', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'room.html'));
-});
-
-// Dashboard route
-app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
-});
-
-// Auth route
-app.get('/auth', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'auth.html'));
-});
+// HTML routes removed - now using Expo web app
+// Room, dashboard, and auth are handled by React Navigation in the Expo app
 
 // Status endpoint to check Supabase connection
 app.get('/api/status', async (req, res) => {
@@ -1708,10 +1696,9 @@ app.get('/api/status', async (req, res) => {
   }
 });
 
-// Serve index.html for root route
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// Root route removed - Expo web app handles routing
+// For local development, serve the Expo web build if available
+// For Vercel, static build serves the Expo app
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
