@@ -118,3 +118,4 @@ function clearHistory() {
 // Export functions
 export { initHistoryManager };
 
+

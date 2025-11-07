@@ -53,3 +53,4 @@ function initSupabaseStatus() {
 // Export initialization function
 export { initSupabaseStatus };
 
+
