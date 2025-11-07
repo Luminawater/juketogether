@@ -135,42 +135,89 @@ const DiscoveryScreen: React.FC = () => {
 
       if (roomsError) throw roomsError;
 
-      // Get stats for each room
-      const roomsWithStats = await Promise.all(
-        (roomsData || []).map(async (room) => {
-          const settings = roomSettings?.find(rs => rs.room_id === room.id);
-          
-          // Get follower count for host
-          let followerCount = 0;
-          if (room.host_user_id) {
-            const { data: followsData } = await supabase
-              .from('user_follows')
-              .select('follower_id', { count: 'exact', head: true })
-              .eq('following_id', room.host_user_id);
-            followerCount = followsData?.length || 0;
-          }
+      // Get all host user IDs
+      const hostUserIds = [...new Set((roomsData || [])
+        .map(r => r.host_user_id)
+        .filter(Boolean))] as string[];
 
-          // Get user count
-          const { data: volumesData } = await supabase
-            .from('user_volumes')
-            .select('user_id', { count: 'exact', head: true })
-            .eq('room_id', room.id);
-          const userCount = volumesData?.length || 0;
+      // Get user profiles to check privacy settings
+      const userProfilesMap = new Map<string, any>();
+      if (hostUserIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('user_profiles')
+          .select('id, show_in_discovery')
+          .in('id', hostUserIds);
+        
+        if (profilesData) {
+          profilesData.forEach((p) => {
+            userProfilesMap.set(p.id, p);
+          });
+        }
+      }
 
-          return {
-            id: room.id,
-            name: settings?.name || `Room ${room.id.substring(0, 8)}`,
-            description: settings?.description,
-            type: 'public' as const,
-            created_by: room.host_user_id || '',
-            created_at: settings?.created_at || room.updated_at || '',
-            country: settings?.country || undefined,
-            follower_count: followerCount,
-            total_playtime_seconds: settings?.total_playtime_seconds || 0,
-            user_count: userCount,
-          };
-        })
-      );
+      // Filter out rooms where host has show_in_discovery = false
+      const filteredRoomsData = (roomsData || []).filter((room) => {
+        if (!room.host_user_id) return true; // Include rooms without host
+        const profile = userProfilesMap.get(room.host_user_id);
+        return profile?.show_in_discovery !== false; // Include if null/undefined/true
+      });
+
+      // Update host user IDs after filtering
+      const filteredHostUserIds = [...new Set(filteredRoomsData
+        .map(r => r.host_user_id)
+        .filter(Boolean))] as string[];
+
+      // Batch get follower counts for all hosts
+      const followerCountsMap = new Map<string, number>();
+      if (filteredHostUserIds.length > 0) {
+        const { data: followsData } = await supabase
+          .from('user_follows')
+          .select('following_id')
+          .in('following_id', filteredHostUserIds);
+        
+        if (followsData) {
+          followsData.forEach((f) => {
+            const count = followerCountsMap.get(f.following_id) || 0;
+            followerCountsMap.set(f.following_id, count + 1);
+          });
+        }
+      }
+
+      // Batch get user counts for all rooms
+      const { data: volumesData } = await supabase
+        .from('user_volumes')
+        .select('room_id')
+        .in('room_id', roomIds);
+      
+      const userCountsMap = new Map<string, number>();
+      if (volumesData) {
+        volumesData.forEach((v) => {
+          const count = userCountsMap.get(v.room_id) || 0;
+          userCountsMap.set(v.room_id, count + 1);
+        });
+      }
+
+      // Combine with settings and stats (using filtered rooms)
+      const roomsWithStats: Room[] = filteredRoomsData.map((room) => {
+        const settings = roomSettings?.find(rs => rs.room_id === room.id);
+        const followerCount = room.host_user_id 
+          ? (followerCountsMap.get(room.host_user_id) || 0)
+          : 0;
+        const userCount = userCountsMap.get(room.id) || 0;
+
+        return {
+          id: room.id,
+          name: settings?.name || `Room ${room.id.substring(0, 8)}`,
+          description: settings?.description,
+          type: 'public' as const,
+          created_by: room.host_user_id || '',
+          created_at: settings?.created_at || room.updated_at || '',
+          country: settings?.country || undefined,
+          follower_count: followerCount,
+          total_playtime_seconds: settings?.total_playtime_seconds || 0,
+          user_count: userCount,
+        };
+      });
 
       setRooms(roomsWithStats);
       setFilteredRooms(roomsWithStats);

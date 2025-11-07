@@ -19,6 +19,7 @@ import {
   Divider,
   ActivityIndicator,
   Menu,
+  Switch,
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -69,6 +70,8 @@ const ProfileScreen: React.FC = () => {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [country, setCountry] = useState('');
   const [countryMenuVisible, setCountryMenuVisible] = useState(false);
+  const [showInLeaderboard, setShowInLeaderboard] = useState(true);
+  const [showInDiscovery, setShowInDiscovery] = useState(true);
 
   useEffect(() => {
     if (profile) {
@@ -77,6 +80,8 @@ const ProfileScreen: React.FC = () => {
       setDjName(profile.dj_name || '');
       setAvatarUrl(profile.avatar_url || '');
       setCountry(profile.country || '');
+      setShowInLeaderboard(profile.show_in_leaderboard !== false);
+      setShowInDiscovery(profile.show_in_discovery !== false);
     }
   }, [profile]);
 
@@ -107,6 +112,8 @@ const ProfileScreen: React.FC = () => {
         dj_name: djName.trim() || null,
         avatar_url: avatarUrl.trim() || null,
         country: country.trim() || null,
+        show_in_leaderboard: showInLeaderboard,
+        show_in_discovery: showInDiscovery,
         updated_at: new Date().toISOString(),
       };
 
@@ -295,6 +302,49 @@ const ProfileScreen: React.FC = () => {
           </Card.Content>
         </Card>
 
+        <Card style={styles.card}>
+          <Card.Content>
+            <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+              Privacy Settings
+            </Title>
+            <Divider style={styles.divider} />
+
+            <View style={styles.privacyRow}>
+              <View style={styles.privacyInfo}>
+                <Text style={[styles.privacyLabel, { color: theme.colors.onSurface }]}>
+                  Show in Leaderboard
+                </Text>
+                <Paragraph style={[styles.privacyDescription, { color: theme.colors.onSurfaceVariant }]}>
+                  Allow your profile to appear in the leaderboard rankings
+                </Paragraph>
+              </View>
+              <Switch
+                value={showInLeaderboard}
+                onValueChange={setShowInLeaderboard}
+                disabled={saving}
+              />
+            </View>
+
+            <Divider style={styles.divider} />
+
+            <View style={styles.privacyRow}>
+              <View style={styles.privacyInfo}>
+                <Text style={[styles.privacyLabel, { color: theme.colors.onSurface }]}>
+                  Show in Discovery
+                </Text>
+                <Paragraph style={[styles.privacyDescription, { color: theme.colors.onSurfaceVariant }]}>
+                  Allow your rooms to appear in the discovery feed
+                </Paragraph>
+              </View>
+              <Switch
+                value={showInDiscovery}
+                onValueChange={setShowInDiscovery}
+                disabled={saving}
+              />
+            </View>
+          </Card.Content>
+        </Card>
+
         {profile && (
           <Card style={styles.card}>
             <Card.Content>
@@ -455,6 +505,24 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     marginBottom: 8,
+  },
+  privacyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  privacyInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  privacyLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  privacyDescription: {
+    fontSize: 12,
   },
 });
 

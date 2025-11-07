@@ -5,6 +5,7 @@ import {
   ScrollView,
   Alert,
   Platform,
+  Share,
 } from 'react-native';
 import {
   Text,
@@ -22,6 +23,7 @@ import {
   Portal,
   Dialog,
   Paragraph,
+  IconButton,
 } from 'react-native-paper';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -525,6 +527,35 @@ const RoomScreen: React.FC = () => {
       },
     });
     Alert.alert('Success', 'Settings saved!');
+  };
+
+  const shareRoom = async () => {
+    try {
+      // Generate shareable link - using roomId that can be pasted into the app
+      // For web/mobile apps, we can use a simple format or full URL
+      const shareMessage = `Join my music room "${roomName}"!\n\nRoom ID: ${roomId}\n\nPaste this Room ID in the app to join, or use this link: https://juketogether.vercel.app/room/${roomId}`;
+      
+      const result = await Share.share({
+        message: shareMessage,
+        title: `Join ${roomName}`,
+      });
+
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          // Shared with activity type of result.activityType
+          console.log('Shared via:', result.activityType);
+        } else {
+          // Shared
+          console.log('Room shared successfully');
+        }
+      } else if (result.action === Share.dismissedAction) {
+        // Dismissed
+        console.log('Share dismissed');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', 'Failed to share room link');
+      console.error('Error sharing room:', error);
+    }
   };
 
   const renderMainTab = () => (
@@ -1295,9 +1326,18 @@ const RoomScreen: React.FC = () => {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.roomTitle}>{roomName}</Text>
-          <View style={styles.connectionStatus}>
-            <View style={[styles.statusDot, { backgroundColor: connected ? '#4caf50' : '#f44336' }]} />
-            <Text style={styles.statusText}>{connected ? 'Connected' : 'Connecting...'}</Text>
+          <View style={styles.headerRight}>
+            <IconButton
+              icon="share-variant"
+              iconColor="#fff"
+              size={24}
+              onPress={shareRoom}
+              style={styles.shareButton}
+            />
+            <View style={styles.connectionStatus}>
+              <View style={[styles.statusDot, { backgroundColor: connected ? '#4caf50' : '#f44336' }]} />
+              <Text style={styles.statusText}>{connected ? 'Connected' : 'Connecting...'}</Text>
+            </View>
           </View>
         </View>
         <Text style={styles.roomId}>Room ID: {roomId} • {userCount} users</Text>
@@ -1386,6 +1426,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
     flex: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shareButton: {
+    margin: 0,
   },
   connectionStatus: {
     flexDirection: 'row',

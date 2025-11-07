@@ -43,9 +43,19 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({ visible, onDismiss }) => {
         onPress={() => handleNavigate('Dashboard')}
       />
       <DrawerItem
-        label="Rooms"
-        icon="music-note"
-        onPress={() => handleNavigate('Dashboard')}
+        label="Discovery"
+        icon="compass"
+        onPress={() => handleNavigate('Discovery')}
+      />
+      <DrawerItem
+        label="Leaderboard"
+        icon="trophy"
+        onPress={() => handleNavigate('Leaderboard')}
+      />
+      <DrawerItem
+        label="Friends"
+        icon="account-group"
+        onPress={() => handleNavigate('Friends')}
       />
       {isAdmin && (
         <DrawerItem

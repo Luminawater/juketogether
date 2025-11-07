@@ -54,9 +54,11 @@ try {
 // Import authentication and chat modules
 let authModule = null;
 let chatModule = null;
+let supabase = null;
 try {
   authModule = require('./src/auth');
   chatModule = require('./src/chat');
+  supabase = authModule.supabase;
 } catch (error) {
   console.warn('Auth/Chat modules not available:', error.message);
 }
@@ -79,7 +81,10 @@ const {
   loadFriends,
   addFriendRequest,
   acceptFriendRequest,
-  removeFriendRequest
+  removeFriendRequest,
+  trackUserJoin,
+  trackUserLeave,
+  trackTrackPlay
 } = supabaseFunctions;
 
 // Test Supabase connection on startup
@@ -290,9 +295,19 @@ io.on('connection', (socket) => {
     const isAdmin = roomAdmins.includes(userId);
 
     // Load room settings with defaults
-    const settings = roomSettings || {
+    const settings = roomSettings ? {
+      isPrivate: roomSettings.is_private || false,
+      allowControls: roomSettings.allow_controls !== false,
+      allowQueue: roomSettings.allow_queue !== false,
+      djMode: roomSettings.dj_mode || false,
+      djPlayers: roomSettings.dj_players || 0,
+      admins: roomAdmins,
+    } : {
       isPrivate: false,
       allowControls: true,
+      allowQueue: true,
+      djMode: false,
+      djPlayers: 0,
       admins: roomAdmins,
     };
 
@@ -351,6 +366,13 @@ io.on('connection', (socket) => {
     // Send updated users list to all users in room
     io.to(roomId).emit('users-list-updated', usersList);
     
+    // Track user join for analytics
+    if (trackUserJoin) {
+      trackUserJoin(roomId, room.hostUserId, userId).catch(err => {
+        console.error('Error tracking user join:', err);
+      });
+    }
+    
     console.log(`User ${userId} joined room ${roomId}`);
   });
 
@@ -359,6 +381,26 @@ io.on('connection', (socket) => {
     const room = await getRoom(roomId);
 
     const userId = socket.isAuthenticated ? socket.userId : socket.id;
+    
+    // Check if user can queue tracks
+    const roomAdmins = await loadRoomAdmins(roomId);
+    const isOwner = room.hostUserId === userId;
+    const isAdmin = roomAdmins.includes(userId);
+    
+    // Load room settings
+    let roomSettings = null;
+    if (chatModule) {
+      roomSettings = await chatModule.getRoomSettings(roomId);
+    }
+    
+    // Check allowQueue permission (owners and admins can always queue)
+    const canQueue = isOwner || isAdmin || (roomSettings?.allow_queue !== false);
+    
+    if (!canQueue) {
+      socket.emit('error', { message: 'You do not have permission to add tracks to the queue' });
+      return;
+    }
+    
     const track = {
       id: Date.now().toString(),
       url: trackUrl,
@@ -478,6 +520,15 @@ io.on('connection', (socket) => {
       if (room.history.length > 100) {
         room.history = room.history.slice(0, 100);
       }
+      
+      // Track track play for analytics
+      if (trackTrackPlay) {
+        const trackUserId = room.currentTrack.addedBy || userId;
+        trackTrackPlay(roomId, room.hostUserId, trackUserId, room.currentTrack).catch(err => {
+          console.error('Error tracking track play:', err);
+        });
+      }
+      
       console.log(`Moved track to history in room ${roomId}:`, room.currentTrack.url);
     }
     
@@ -738,6 +789,14 @@ io.on('connection', (socket) => {
       });
 
       io.to(roomId).emit('user-count', room.users.size);
+      
+      // Track user leave for analytics
+      if (trackUserLeave) {
+        trackUserLeave(roomId, userId).catch(err => {
+          console.error('Error tracking user leave:', err);
+        });
+      }
+      
       console.log(`User ${userId} left room ${roomId}`);
     }
 
@@ -764,6 +823,13 @@ io.on('connection', (socket) => {
         });
 
         io.to(roomId).emit('user-count', room.users.size);
+        
+        // Track user leave for analytics
+        if (trackUserLeave) {
+          trackUserLeave(roomId, userId).catch(err => {
+            console.error('Error tracking user leave on disconnect:', err);
+          });
+        }
 
         // Clean up empty rooms after 5 minutes
         if (room.users.size === 0) {
@@ -836,11 +902,29 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const updatedSettings = await chatModule.updateRoomSettings(roomId, settings);
+    // Convert camelCase to snake_case for database
+    const dbSettings = {
+      is_private: settings.isPrivate,
+      allow_controls: settings.allowControls,
+      allow_queue: settings.allowQueue,
+      dj_mode: settings.djMode,
+      dj_players: settings.djPlayers,
+    };
+
+    const updatedSettings = await chatModule.updateRoomSettings(roomId, dbSettings);
 
     if (updatedSettings) {
+      // Convert snake_case back to camelCase for client
+      const clientSettings = {
+        isPrivate: updatedSettings.is_private || false,
+        allowControls: updatedSettings.allow_controls !== false,
+        allowQueue: updatedSettings.allow_queue !== false,
+        djMode: updatedSettings.dj_mode || false,
+        djPlayers: updatedSettings.dj_players || 0,
+        admins: roomAdmins,
+      };
       // Broadcast updated settings to all users in room
-      io.to(roomId).emit('room-settings-updated', updatedSettings);
+      io.to(roomId).emit('room-settings-updated', clientSettings);
     }
   });
 
@@ -970,9 +1054,14 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // This would need a function to find user by username
-    // For now, we'll assume friendId is passed instead of username
-    const adminUserId = username; // This should be userId, not username
+    // Find user by username
+    const userProfile = await authModule.findUserByUsername(username);
+    if (!userProfile) {
+      socket.emit('error', { message: 'User not found' });
+      return;
+    }
+
+    const adminUserId = userProfile.id;
     const success = await addRoomAdmin(roomId, adminUserId, userId);
 
     if (success) {
@@ -1342,6 +1431,208 @@ app.post('/api/spotify-metadata', async (req, res) => {
   } catch (error) {
     console.error('Error proxying Spotify API request:', error);
     res.status(500).json({ error: 'Failed to fetch Spotify data', details: error.message });
+  }
+});
+
+// Get user's Spotify access token from Supabase session
+// This endpoint extracts the Spotify token from the user's Supabase session
+app.get('/api/spotify/user-token', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization required' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+
+    // Verify the Supabase token and get user
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
+
+    // Check if user signed in with Spotify
+    const isSpotifyUser = user.app_metadata?.provider === 'spotify' || 
+                         user.identities?.some(identity => identity.provider === 'spotify');
+    
+    if (!isSpotifyUser) {
+      return res.status(403).json({ error: 'User is not signed in with Spotify' });
+    }
+
+    // Get the session to access provider_token
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      // Try to get provider token from user metadata or identities
+      // Note: Supabase may store provider tokens in different places
+      const providerToken = user.user_metadata?.spotify_access_token ||
+                            user.identities?.find(i => i.provider === 'spotify')?.identity_data?.access_token;
+      
+      if (!providerToken) {
+        return res.status(401).json({ 
+          error: 'Spotify access token not available. Please reconnect your Spotify account.',
+          requiresReauth: true
+        });
+      }
+      
+      return res.json({ access_token: providerToken });
+    }
+
+    // Provider token might be in session
+    const providerToken = session.provider_token || 
+                         session.user?.user_metadata?.spotify_access_token;
+    
+    if (!providerToken) {
+      return res.status(401).json({ 
+        error: 'Spotify access token not available. Please reconnect your Spotify account.',
+        requiresReauth: true
+      });
+    }
+
+    res.json({ access_token: providerToken });
+  } catch (error) {
+    console.error('Error getting Spotify user token:', error);
+    res.status(500).json({ error: 'Failed to get Spotify token', details: error.message });
+  }
+});
+
+// Get user's Spotify playlists
+app.get('/api/spotify/playlists', async (req, res) => {
+  if (!fetch) {
+    return res.status(500).json({ error: 'Fetch not available' });
+  }
+
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization required' });
+    }
+
+    const supabaseToken = authHeader.split(' ')[1];
+    
+    // First, get the user's Spotify access token
+    const tokenResponse = await fetch(`${req.protocol}://${req.get('host')}/api/spotify/user-token`, {
+      headers: {
+        'Authorization': `Bearer ${supabaseToken}`
+      }
+    });
+
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.json().catch(() => ({}));
+      return res.status(tokenResponse.status).json(errorData);
+    }
+
+    const { access_token } = await tokenResponse.json();
+
+    if (!access_token) {
+      return res.status(401).json({ error: 'No Spotify access token available' });
+    }
+
+    // Fetch user's playlists from Spotify API
+    let allPlaylists = [];
+    let nextUrl = 'https://api.spotify.com/v1/me/playlists?limit=50';
+
+    while (nextUrl) {
+      const response = await fetch(nextUrl, {
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          return res.status(401).json({ 
+            error: 'Spotify access token expired. Please reconnect your Spotify account.',
+            requiresReauth: true
+          });
+        }
+        throw new Error(`Spotify API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      allPlaylists = allPlaylists.concat(data.items || []);
+      nextUrl = data.next;
+    }
+
+    res.json({ playlists: allPlaylists });
+  } catch (error) {
+    console.error('Error fetching Spotify playlists:', error);
+    res.status(500).json({ error: 'Failed to fetch playlists', details: error.message });
+  }
+});
+
+// Get tracks from a Spotify playlist
+app.get('/api/spotify/playlists/:playlistId/tracks', async (req, res) => {
+  if (!fetch) {
+    return res.status(500).json({ error: 'Fetch not available' });
+  }
+
+  try {
+    const { playlistId } = req.params;
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization required' });
+    }
+
+    const supabaseToken = authHeader.split(' ')[1];
+    
+    // First, get the user's Spotify access token
+    const tokenResponse = await fetch(`${req.protocol}://${req.get('host')}/api/spotify/user-token`, {
+      headers: {
+        'Authorization': `Bearer ${supabaseToken}`
+      }
+    });
+
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.json().catch(() => ({}));
+      return res.status(tokenResponse.status).json(errorData);
+    }
+
+    const { access_token } = await tokenResponse.json();
+
+    if (!access_token) {
+      return res.status(401).json({ error: 'No Spotify access token available' });
+    }
+
+    // Fetch playlist tracks from Spotify API
+    let allTracks = [];
+    let nextUrl = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50`;
+
+    while (nextUrl) {
+      const response = await fetch(nextUrl, {
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          return res.status(401).json({ 
+            error: 'Spotify access token expired. Please reconnect your Spotify account.',
+            requiresReauth: true
+          });
+        }
+        throw new Error(`Spotify API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const tracks = (data.items || []).map((item: any) => item.track).filter((track: any) => track !== null);
+      allTracks = allTracks.concat(tracks);
+      nextUrl = data.next;
+    }
+
+    res.json({ tracks: allTracks });
+  } catch (error) {
+    console.error('Error fetching playlist tracks:', error);
+    res.status(500).json({ error: 'Failed to fetch playlist tracks', details: error.message });
   }
 });
 

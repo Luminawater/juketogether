@@ -13,6 +13,7 @@ import AdminScreen from './src/screens/AdminScreen';
 import DiscoveryScreen from './src/screens/DiscoveryScreen';
 import FriendsScreen from './src/screens/FriendsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import LeaderboardScreen from './src/screens/LeaderboardScreen';
 
 // Import context
 import { AuthProvider } from './src/context/AuthContext';
@@ -30,6 +31,7 @@ export type RootStackParamList = {
   Discovery: undefined;
   Friends: undefined;
   Profile: undefined;
+  Leaderboard: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -120,6 +122,13 @@ export default function App() {
               component={ProfileScreen}
               options={{
                 title: 'Edit Profile'
+              }}
+            />
+            <Stack.Screen
+              name="Leaderboard"
+              component={LeaderboardScreen}
+              options={{
+                title: 'Leaderboard'
               }}
             />
           </Stack.Navigator>

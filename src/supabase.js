@@ -513,10 +513,23 @@ async function loadFriends(userId) {
   }
   
   try {
-    const data = await restRequest('GET', 'friends', null, { 
-      $or: [{ user_id: userId }, { friend_id: userId }] 
-    });
-    return Array.isArray(data) ? data : [];
+    // PostgREST doesn't support $or in query params, need to make two requests
+    // or use a different approach. For now, fetch all and filter client-side
+    // In production, you'd want a database function or RPC endpoint
+    const data1 = await restRequest('GET', 'friends', null, { user_id: userId });
+    const data2 = await restRequest('GET', 'friends', null, { friend_id: userId });
+    
+    const allFriends = [
+      ...(Array.isArray(data1) ? data1 : (data1 ? [data1] : [])),
+      ...(Array.isArray(data2) ? data2 : (data2 ? [data2] : []))
+    ];
+    
+    // Remove duplicates based on id
+    const uniqueFriends = Array.from(
+      new Map(allFriends.map(f => [f.id || `${f.user_id}-${f.friend_id}`, f])).values()
+    );
+    
+    return uniqueFriends;
   } catch (error) {
     console.error('Error loading friends:', error);
     return [];
@@ -583,6 +596,193 @@ async function removeFriendRequest(userId, friendId) {
   }
 }
 
+// Track user joining a room
+async function trackUserJoin(roomId, hostUserId, userId) {
+  if (!supabaseConfig) {
+    return true;
+  }
+  
+  try {
+    // Create session record
+    const sessionData = {
+      room_id: roomId,
+      host_user_id: hostUserId || null,
+      user_id: userId || null,
+      was_host: userId === hostUserId,
+      joined_at: new Date().toISOString()
+    };
+    
+    await restRequest('POST', 'room_sessions', sessionData);
+    
+    // Update room analytics using RPC function
+    const response = await fetch(`${supabaseConfig.restUrl}/rpc/update_room_analytics_on_join`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseConfig.key,
+        'Authorization': `Bearer ${supabaseConfig.key}`
+      },
+      body: JSON.stringify({
+        p_room_id: roomId,
+        p_host_user_id: hostUserId || null,
+        p_user_id: userId || null
+      })
+    });
+    
+    if (!response.ok) {
+      console.warn('Failed to update room analytics on join:', await response.text());
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error tracking user join:', error);
+    return false;
+  }
+}
+
+// Track user leaving a room
+async function trackUserLeave(roomId, userId) {
+  if (!supabaseConfig) {
+    return true;
+  }
+  
+  try {
+    // Update session and analytics using RPC function
+    const response = await fetch(`${supabaseConfig.restUrl}/rpc/update_room_analytics_on_leave`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseConfig.key,
+        'Authorization': `Bearer ${supabaseConfig.key}`
+      },
+      body: JSON.stringify({
+        p_room_id: roomId,
+        p_user_id: userId || null
+      })
+    });
+    
+    if (!response.ok) {
+      console.warn('Failed to update room analytics on leave:', await response.text());
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error tracking user leave:', error);
+    return false;
+  }
+}
+
+// Track track play
+async function trackTrackPlay(roomId, hostUserId, userId, track) {
+  if (!supabaseConfig) {
+    return true;
+  }
+  
+  try {
+    // Determine platform
+    let platform = 'soundcloud';
+    if (track.url?.includes('spotify')) {
+      platform = 'spotify';
+    } else if (track.url?.includes('youtube') || track.url?.includes('youtu.be')) {
+      platform = 'youtube';
+    }
+    
+    // Extract track info
+    const trackTitle = track.info?.fullTitle || track.info?.title || 'Unknown Track';
+    const trackArtist = track.info?.artist || null;
+    
+    // Update analytics using RPC function
+    const response = await fetch(`${supabaseConfig.restUrl}/rpc/update_analytics_on_track_play`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseConfig.key,
+        'Authorization': `Bearer ${supabaseConfig.key}`
+      },
+      body: JSON.stringify({
+        p_room_id: roomId,
+        p_host_user_id: hostUserId || null,
+        p_user_id: userId || null,
+        p_track_id: track.id || track.url,
+        p_track_url: track.url || '',
+        p_track_title: trackTitle,
+        p_track_artist: trackArtist,
+        p_platform: platform,
+        p_duration_seconds: null // Could be extracted from track info if available
+      })
+    });
+    
+    if (!response.ok) {
+      console.warn('Failed to update analytics on track play:', await response.text());
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error tracking track play:', error);
+    return false;
+  }
+}
+
+// Get leaderboard data
+async function getLeaderboard(type = 'total_listeners', limit = 100) {
+  if (!supabaseConfig) {
+    return [];
+  }
+  
+  try {
+    let viewName = 'leaderboard_total_listeners';
+    switch (type) {
+      case 'peak_listeners':
+        viewName = 'leaderboard_peak_listeners';
+        break;
+      case 'rooms_created':
+        viewName = 'leaderboard_rooms_created';
+        break;
+      case 'tracks_played':
+        viewName = 'leaderboard_tracks_played';
+        break;
+      default:
+        viewName = 'leaderboard_total_listeners';
+    }
+    
+    const data = await restRequest('GET', viewName, null, {});
+    return Array.isArray(data) ? data : (data ? [data] : []);
+  } catch (error) {
+    console.error('Error getting leaderboard:', error);
+    return [];
+  }
+}
+
+// Get room analytics
+async function getRoomAnalytics(roomId) {
+  if (!supabaseConfig) {
+    return null;
+  }
+  
+  try {
+    const data = await restRequest('GET', 'room_analytics', null, { room_id: roomId });
+    return Array.isArray(data) ? (data.length > 0 ? data[0] : null) : data;
+  } catch (error) {
+    console.error('Error getting room analytics:', error);
+    return null;
+  }
+}
+
+// Get user analytics
+async function getUserAnalytics(userId) {
+  if (!supabaseConfig) {
+    return null;
+  }
+  
+  try {
+    const data = await restRequest('GET', 'user_analytics', null, { user_id: userId });
+    return Array.isArray(data) ? (data.length > 0 ? data[0] : null) : data;
+  } catch (error) {
+    console.error('Error getting user analytics:', error);
+    return null;
+  }
+}
+
 module.exports = {
   loadRoomState,
   saveRoomState,
@@ -596,6 +796,12 @@ module.exports = {
   loadFriends,
   addFriendRequest,
   acceptFriendRequest,
-  removeFriendRequest
+  removeFriendRequest,
+  trackUserJoin,
+  trackUserLeave,
+  trackTrackPlay,
+  getLeaderboard,
+  getRoomAnalytics,
+  getUserAnalytics
 };
 

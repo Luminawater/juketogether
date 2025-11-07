@@ -116,10 +116,32 @@ async function ensureUserProfile(userId, userMetadata) {
   }
 }
 
+// Find user by username
+async function findUserByUsername(username) {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('id, username, display_name')
+      .eq('username', username)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      console.error('Error finding user by username:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in findUserByUsername:', error);
+    return null;
+  }
+}
+
 module.exports = {
   supabase,
   authenticateSocket,
   getUserProfile,
   updateUserProfile,
-  ensureUserProfile
+  ensureUserProfile,
+  findUserByUsername
 };

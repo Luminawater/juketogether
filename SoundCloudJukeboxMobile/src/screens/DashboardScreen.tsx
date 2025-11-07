@@ -248,6 +248,14 @@ const DashboardScreen: React.FC = () => {
           <Menu.Item
             onPress={() => {
               setMenuVisible(false);
+              navigation.navigate('Leaderboard');
+            }}
+            title="Leaderboard"
+            leadingIcon="trophy"
+          />
+          <Menu.Item
+            onPress={() => {
+              setMenuVisible(false);
               navigation.navigate('Friends');
             }}
             title="Friends"
