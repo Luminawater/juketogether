@@ -44,6 +44,9 @@ const AnimatedOrb: React.FC<{
   const opacity = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
+    // Native driver is not supported on web
+    const useNativeDriver = Platform.OS !== 'web';
+    
     const animate = () => {
       Animated.parallel([
         Animated.loop(
@@ -52,12 +55,12 @@ const AnimatedOrb: React.FC<{
               toValue: 1,
               duration: duration,
               delay: delay,
-              useNativeDriver: true,
+              useNativeDriver: useNativeDriver,
             }),
             Animated.timing(translateX, {
               toValue: 0,
               duration: duration,
-              useNativeDriver: true,
+              useNativeDriver: useNativeDriver,
             }),
           ])
         ),
@@ -67,12 +70,12 @@ const AnimatedOrb: React.FC<{
               toValue: 1,
               duration: duration * 1.3,
               delay: delay,
-              useNativeDriver: true,
+              useNativeDriver: useNativeDriver,
             }),
             Animated.timing(translateY, {
               toValue: 0,
               duration: duration * 1.3,
-              useNativeDriver: true,
+              useNativeDriver: useNativeDriver,
             }),
           ])
         ),
@@ -82,12 +85,12 @@ const AnimatedOrb: React.FC<{
               toValue: 0.6,
               duration: duration * 0.8,
               delay: delay,
-              useNativeDriver: true,
+              useNativeDriver: useNativeDriver,
             }),
             Animated.timing(opacity, {
               toValue: 0.3,
               duration: duration * 0.8,
-              useNativeDriver: true,
+              useNativeDriver: useNativeDriver,
             }),
           ])
         ),
@@ -208,7 +211,7 @@ const HomeScreen: React.FC = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Animated Orbs Background */}
-      <View style={styles.orbsContainer} pointerEvents="none">
+      <View style={[styles.orbsContainer, { pointerEvents: 'none' }]}>
         {orbs.map((orb, index) => (
           <AnimatedOrb key={index} {...orb} />
         ))}

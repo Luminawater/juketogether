@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
@@ -74,6 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
   const [loading, setLoading] = useState(true);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch user profile and permissions
   const fetchUserProfile = async (userId: string) => {
@@ -167,32 +168,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user?.id) {
-        await fetchUserProfile(session.user.id);
-      }
+    // Get initial session with error handling and timeout
+    const sessionPromise = supabase.auth.getSession()
+      .then(async ({ data: { session }, error }) => {
+        if (error) {
+          console.error('[AuthContext] Error getting session:', error);
+        }
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user?.id) {
+          await fetchUserProfile(session.user.id);
+        }
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error('[AuthContext] Failed to get session:', error);
+        setLoading(false);
+      });
+
+    // Safety timeout to ensure loading always resolves (5 seconds)
+    timeoutRef.current = setTimeout(() => {
+      console.warn('[AuthContext] Session check timeout, setting loading to false');
       setLoading(false);
+    }, 5000);
+
+    // Clear timeout when session promise resolves
+    sessionPromise.finally(() => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user?.id) {
-          await fetchUserProfile(session.user.id);
-        } else {
-          setProfile(null);
-          setPermissions(null);
+        try {
+          setSession(session);
+          setUser(session?.user ?? null);
+          if (session?.user?.id) {
+            await fetchUserProfile(session.user.id);
+          } else {
+            setProfile(null);
+            setPermissions(null);
+          }
+        } catch (error) {
+          console.error('[AuthContext] Error in auth state change:', error);
+        } finally {
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signUp = async (email: string, password: string) => {

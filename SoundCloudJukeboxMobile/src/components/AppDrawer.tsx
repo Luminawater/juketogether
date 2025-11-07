@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   ScrollView,
+  Platform,
 } from 'react-native';
 import {
   Text,
@@ -260,10 +261,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: DRAWER_WIDTH,
     elevation: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    // Web-compatible shadow
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '2px 0px 8px rgba(0, 0, 0, 0.25)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 2, height: 0 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+    }),
   },
   drawerContent: {
     flex: 1,

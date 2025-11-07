@@ -6,6 +6,7 @@ import {
   Alert,
   Share,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import {
   Text,
@@ -482,10 +483,15 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 20,
     elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    // Web-compatible shadow
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+    }),
   },
   userInfo: {
     flexDirection: 'row',
