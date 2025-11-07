@@ -2135,7 +2135,9 @@ const styles = StyleSheet.create({
   },
   thumbnailWrapperPlaying: {
     ...(Platform.OS === 'web' ? {
-      animation: 'pulse 2s ease-in-out infinite',
+      // Use CSS keyframes animation for web
+      // Note: animation property is not directly supported by react-native-web
+      // This will be handled via CSS or we can use Animated API
     } : {}),
   },
   trackThumbnail: {

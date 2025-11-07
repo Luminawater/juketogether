@@ -1,18 +1,35 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 // Get the API URL from environment variables or use default
 const getApiUrl = () => {
+  // Check for explicit override via environment variable
+  const envOverride = process.env.EXPO_PUBLIC_API_URL;
+  if (envOverride) {
+    return envOverride;
+  }
+  
+  // On web, detect the current hostname and use it
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    const port = window.location.port ? `:${window.location.port}` : '';
+    
+    // If on localhost, use localhost:8080 for socket server
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:8080';
+    }
+    
+    // Otherwise, use the current hostname (production domain)
+    // For socket.io, we typically use the same origin
+    return `${protocol}//${hostname}${port}`;
+  }
+  
   // Check if we're in development mode
   const isDev = __DEV__ || process.env.NODE_ENV === 'development';
   
-  // In development, prioritize localhost unless explicitly overridden via env var
+  // In development, use localhost
   if (isDev) {
-    // Check for explicit override via environment variable (e.g., ngrok URL)
-    const envOverride = process.env.EXPO_PUBLIC_API_URL;
-    if (envOverride) {
-      return envOverride;
-    }
-    // Default to localhost for development (ignore app.json in dev mode)
     return 'http://localhost:8080';
   }
   

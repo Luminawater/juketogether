@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -31,11 +31,25 @@ const AuthScreen: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loadingAuth, setLoadingAuth] = useState(false);
   const [loadingOAuth, setLoadingOAuth] = useState<string | null>(null);
+  const hasNavigatedRef = useRef(false);
 
-  // Navigate to dashboard when user is authenticated
+  // Reset navigation ref when user logs out
   useEffect(() => {
-    if (user && !loading) {
-      navigation.replace('Dashboard');
+    if (!user) {
+      hasNavigatedRef.current = false;
+    }
+  }, [user]);
+
+  // Navigate to dashboard when user is authenticated (only once)
+  useEffect(() => {
+    if (user && !loading && !hasNavigatedRef.current) {
+      hasNavigatedRef.current = true;
+      if (Platform.OS === 'web') {
+        // Use window.location for web to avoid double navigation and deep linking issues
+        window.location.href = '/dashboard';
+      } else {
+        navigation.replace('Dashboard');
+      }
     }
   }, [user, loading, navigation]);
 
@@ -166,6 +180,7 @@ const AuthScreen: React.FC = () => {
                     handleAuth();
                   }}
                   style={styles.formSection}
+                  noValidate
                 >
                   <View style={styles.tabContainer}>
                     <Button
@@ -195,6 +210,7 @@ const AuthScreen: React.FC = () => {
                     autoCapitalize="none"
                     style={styles.input}
                     disabled={!!loadingOAuth}
+                    autoComplete="email"
                   />
 
                   <TextInput
@@ -205,6 +221,7 @@ const AuthScreen: React.FC = () => {
                     secureTextEntry
                     style={styles.input}
                     disabled={!!loadingOAuth}
+                    autoComplete={isLogin ? 'current-password' : 'new-password'}
                   />
 
                   {!isLogin && (
@@ -216,6 +233,7 @@ const AuthScreen: React.FC = () => {
                       secureTextEntry
                       style={styles.input}
                       disabled={!!loadingOAuth}
+                      autoComplete="new-password"
                     />
                   )}
 
@@ -226,6 +244,7 @@ const AuthScreen: React.FC = () => {
                     disabled={loadingAuth || !!loadingOAuth}
                     style={styles.authButton}
                     contentStyle={styles.authButtonContent}
+                    type="submit"
                   >
                     {isLogin ? 'Sign In' : 'Create Account'}
                   </Button>
