@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Text, Chip } from 'react-native-paper';
+import { Text, Chip, useTheme } from 'react-native-paper';
 import { UserRole, SubscriptionTier } from '../types';
 import {
   getRoleDisplayName,
@@ -22,13 +22,14 @@ export const UserBadge: React.FC<UserBadgeProps> = ({
   showLabel = true,
   size = 'medium',
 }) => {
+  const theme = useTheme();
   const chipSize = size === 'small' ? 12 : 14;
   const chipStyle = size === 'small' ? styles.smallChip : styles.chip;
 
   return (
     <View style={styles.container}>
       {showLabel && (
-        <Text style={styles.label}>
+        <Text style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>
           {getRoleDisplayName(role)} • {getTierDisplayName(tier)}
         </Text>
       )}
@@ -58,7 +59,6 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    color: '#666',
   },
   badges: {
     flexDirection: 'row',

@@ -587,15 +587,15 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    elevation: 4,
+    elevation: 6,
     // Web-compatible shadow
     ...(Platform.OS === 'web' ? {
-      boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.2)',
     } : {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
     }),
   },
   welcomeUserInfo: {
@@ -656,7 +656,16 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 20,
-    elevation: 2,
+    elevation: 4,
+    borderRadius: 16,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.15)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 6,
+    }),
   },
   sectionTitle: {
     fontSize: 20,

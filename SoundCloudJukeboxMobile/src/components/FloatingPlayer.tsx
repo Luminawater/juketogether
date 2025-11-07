@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Animated, PanResponder, Dimensions } from 'react-native';
-import { Card, Button, Text, IconButton } from 'react-native-paper';
+import { View, StyleSheet, Animated, PanResponder, Dimensions, Platform } from 'react-native';
+import { Card, Button, Text, IconButton, useTheme } from 'react-native-paper';
 import { Track } from '../types';
 
 interface FloatingPlayerProps {
@@ -24,6 +24,7 @@ export const FloatingPlayer: React.FC<FloatingPlayerProps> = ({
   minimized = false,
   onToggleMinimize,
 }) => {
+  const theme = useTheme();
   const [pan] = useState(new Animated.ValueXY());
   const [position, setPosition] = useState({ x: SCREEN_WIDTH - 80, y: SCREEN_HEIGHT - 200 });
 
@@ -66,10 +67,10 @@ export const FloatingPlayer: React.FC<FloatingPlayerProps> = ({
         ]}
         {...panResponder.panHandlers}
       >
-        <Card style={styles.minimizedCard}>
+        <Card style={[styles.minimizedCard, { backgroundColor: theme.colors.surface }]}>
           <Card.Content style={styles.minimizedContent}>
             <View style={styles.minimizedTrackInfo}>
-              <Text numberOfLines={1} style={styles.minimizedTrackTitle}>
+              <Text numberOfLines={1} style={[styles.minimizedTrackTitle, { color: theme.colors.onSurface }]}>
                 {currentTrack.info.fullTitle}
               </Text>
             </View>
@@ -78,12 +79,14 @@ export const FloatingPlayer: React.FC<FloatingPlayerProps> = ({
                 icon={isPlaying ? 'pause' : 'play'}
                 size={24}
                 onPress={onPlayPause}
+                iconColor={theme.colors.primary}
               />
               {onToggleMinimize && (
                 <IconButton
                   icon="chevron-up"
                   size={24}
                   onPress={onToggleMinimize}
+                  iconColor={theme.colors.onSurface}
                 />
               )}
               {onClose && (
@@ -91,6 +94,7 @@ export const FloatingPlayer: React.FC<FloatingPlayerProps> = ({
                   icon="close"
                   size={24}
                   onPress={onClose}
+                  iconColor={theme.colors.onSurface}
                 />
               )}
             </View>
@@ -112,16 +116,17 @@ export const FloatingPlayer: React.FC<FloatingPlayerProps> = ({
       ]}
       {...panResponder.panHandlers}
     >
-      <Card style={styles.card}>
+      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
           <View style={styles.header}>
-            <Text style={styles.title}>Now Playing</Text>
+            <Text style={[styles.title, { color: theme.colors.onSurface }]}>Now Playing</Text>
             <View style={styles.headerButtons}>
               {onToggleMinimize && (
                 <IconButton
                   icon="chevron-down"
                   size={20}
                   onPress={onToggleMinimize}
+                  iconColor={theme.colors.onSurface}
                 />
               )}
               {onClose && (
@@ -129,16 +134,17 @@ export const FloatingPlayer: React.FC<FloatingPlayerProps> = ({
                   icon="close"
                   size={20}
                   onPress={onClose}
+                  iconColor={theme.colors.onSurface}
                 />
               )}
             </View>
           </View>
 
           <View style={styles.trackInfo}>
-            <Text style={styles.trackTitle} numberOfLines={2}>
+            <Text style={[styles.trackTitle, { color: theme.colors.onSurface }]} numberOfLines={2}>
               {currentTrack.info.fullTitle}
             </Text>
-            <Text style={styles.trackPlatform}>
+            <Text style={[styles.trackPlatform, { color: theme.colors.onSurfaceVariant }]}>
               {currentTrack.platform === 'spotify' ? '🎵 Spotify' : '🎵 SoundCloud'}
             </Text>
           </View>
@@ -173,20 +179,32 @@ const styles = StyleSheet.create({
     width: 300,
     zIndex: 1000,
     elevation: 10,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.3)',
+    } : {}),
   },
   minimizedContainer: {
     position: 'absolute',
     width: 250,
     zIndex: 1000,
     elevation: 10,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.3)',
+    } : {}),
   },
   card: {
     elevation: 8,
-    backgroundColor: '#fff',
+    borderRadius: 16,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.3)',
+    } : {}),
   },
   minimizedCard: {
     elevation: 8,
-    backgroundColor: '#fff',
+    borderRadius: 12,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.3)',
+    } : {}),
   },
   header: {
     flexDirection: 'row',
@@ -211,7 +229,6 @@ const styles = StyleSheet.create({
   },
   trackPlatform: {
     fontSize: 12,
-    color: '#666',
   },
   controls: {
     flexDirection: 'row',

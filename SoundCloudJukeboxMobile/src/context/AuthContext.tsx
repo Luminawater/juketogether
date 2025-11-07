@@ -8,23 +8,36 @@ import { UserProfile, UserPermissions } from '../types';
 // Web-compatible storage adapter
 const getStorage = () => {
   if (Platform.OS === 'web') {
-    // Use localStorage for web
+    // Use localStorage for web with proper error handling
     return {
       getItem: (key: string) => {
-        if (typeof window !== 'undefined') {
-          return Promise.resolve(window.localStorage.getItem(key));
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            const value = window.localStorage.getItem(key);
+            return Promise.resolve(value);
+          }
+        } catch (error) {
+          console.error('[Storage] Error getting item:', error);
         }
         return Promise.resolve(null);
       },
       setItem: (key: string, value: string) => {
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem(key, value);
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.setItem(key, value);
+          }
+        } catch (error) {
+          console.error('[Storage] Error setting item:', error);
         }
         return Promise.resolve();
       },
       removeItem: (key: string) => {
-        if (typeof window !== 'undefined') {
-          window.localStorage.removeItem(key);
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.removeItem(key);
+          }
+        } catch (error) {
+          console.error('[Storage] Error removing item:', error);
         }
         return Promise.resolve();
       },
@@ -169,36 +182,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Get initial session with error handling and timeout
-    const sessionPromise = supabase.auth.getSession()
-      .then(async ({ data: { session }, error }) => {
-        if (error) {
-          console.error('[AuthContext] Error getting session:', error);
-        }
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user?.id) {
-          await fetchUserProfile(session.user.id);
-        }
+    let loadingResolved = false;
+    
+    const resolveLoading = () => {
+      if (!loadingResolved) {
+        loadingResolved = true;
         setLoading(false);
-      })
-      .catch((error) => {
-        console.error('[AuthContext] Failed to get session:', error);
-        setLoading(false);
-      });
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+      }
+    };
 
-    // Safety timeout to ensure loading always resolves (5 seconds)
+    // Safety timeout to ensure loading always resolves (2 seconds)
     timeoutRef.current = setTimeout(() => {
       console.warn('[AuthContext] Session check timeout, setting loading to false');
-      setLoading(false);
-    }, 5000);
+      resolveLoading();
+    }, 2000);
 
-    // Clear timeout when session promise resolves
-    sessionPromise.finally(() => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-    });
+    // Get session with immediate timeout protection
+    const sessionTimeout = setTimeout(() => {
+      console.warn('[AuthContext] getSession() is taking too long, resolving loading');
+      resolveLoading();
+    }, 1500);
+
+    // Try to get session, but don't wait forever
+    supabase.auth.getSession()
+      .then(({ data: { session }, error }) => {
+        clearTimeout(sessionTimeout);
+        
+        if (error) {
+          console.error('[AuthContext] Error getting session:', error);
+        } else {
+          setSession(session);
+          setUser(session?.user ?? null);
+          
+          // Fetch profile in background, don't block loading
+          if (session?.user?.id) {
+            fetchUserProfile(session.user.id).catch((err) => {
+              console.error('[AuthContext] Error fetching profile:', err);
+            });
+          }
+        }
+        
+        resolveLoading();
+      })
+      .catch((error) => {
+        clearTimeout(sessionTimeout);
+        console.error('[AuthContext] Failed to get session:', error);
+        resolveLoading();
+      });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(

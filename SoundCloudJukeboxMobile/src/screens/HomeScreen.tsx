@@ -5,9 +5,9 @@ import {
   Alert,
   Animated,
   Dimensions,
-  Modal,
   Image,
   Platform,
+  Modal,
 } from 'react-native';
 import {
   Text,
@@ -15,6 +15,8 @@ import {
   Button,
   TextInput,
   useTheme,
+  Dialog,
+  Portal,
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -270,18 +272,18 @@ const HomeScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Join Room Modal */}
-      <Modal
-        visible={showJoinModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowJoinModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-            <Title style={[styles.modalTitle, { color: theme.colors.onSurface }]}>
-              Join a Music Room
-            </Title>
+      {/* Join Room Dialog */}
+      <Portal>
+        <Dialog
+          visible={showJoinModal}
+          onDismiss={() => {
+            setShowJoinModal(false);
+            setRoomId('');
+          }}
+          style={{ borderRadius: 20 }}
+        >
+          <Dialog.Title>Join a Music Room</Dialog.Title>
+          <Dialog.Content>
             <Text style={[styles.modalDescription, { color: theme.colors.onSurfaceVariant }]}>
               Enter a 5-character room code, room ID or paste an invitation link
             </Text>
@@ -295,28 +297,25 @@ const HomeScreen: React.FC = () => {
               autoCapitalize="characters"
               autoFocus
             />
-            <View style={styles.modalButtons}>
-              <Button
-                mode="outlined"
-                onPress={() => {
-                  setShowJoinModal(false);
-                  setRoomId('');
-                }}
-                style={styles.modalButton}
-              >
-                Cancel
-              </Button>
-              <Button
-                mode="contained"
-                onPress={handleJoinRoomSubmit}
-                style={styles.modalButton}
-              >
-                Join
-              </Button>
-            </View>
-          </View>
-        </View>
-      </Modal>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button
+              onPress={() => {
+                setShowJoinModal(false);
+                setRoomId('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleJoinRoomSubmit}
+            >
+              Join
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 };
@@ -382,6 +381,14 @@ const styles = StyleSheet.create({
   button: {
     borderRadius: 12,
     elevation: 4,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+    }),
   },
   joinButton: {
     borderWidth: 2,
@@ -395,7 +402,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -403,9 +410,17 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '100%',
     maxWidth: 400,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 24,
-    elevation: 8,
+    elevation: 12,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.4)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.3,
+      shadowRadius: 16,
+    }),
   },
   modalTitle: {
     fontSize: 24,

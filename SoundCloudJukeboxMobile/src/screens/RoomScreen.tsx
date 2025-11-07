@@ -6,6 +6,7 @@ import {
   Alert,
   Platform,
   Share,
+  Dimensions,
 } from 'react-native';
 import {
   Text,
@@ -80,13 +81,41 @@ interface RoomSettings {
   admins: string[];
 }
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const IS_MOBILE = SCREEN_WIDTH < 768;
+
 const RoomScreen: React.FC = () => {
   const route = useRoute<RoomScreenRouteProp>();
   const navigation = useNavigation<RoomScreenNavigationProp>();
-  const { user, session, supabase } = useAuth();
+  const { user, session, supabase, loading: authLoading } = useAuth();
   const theme = useTheme();
 
   const { roomId, roomName } = route.params;
+
+  // Redirect to auth if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      if (Platform.OS === 'web') {
+        window.location.href = '/auth';
+      } else {
+        navigation.replace('Auth' as never);
+      }
+    }
+  }, [user, authLoading, navigation]);
+
+  // Don't render if not authenticated
+  if (authLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+        <Text style={{ marginTop: 16, color: theme.colors.onBackground }}>Loading...</Text>
+      </View>
+    );
+  }
+
+  if (!user) {
+    return null; // Will redirect via useEffect
+  }
 
   // Main state
   const [activeTab, setActiveTab] = useState<'main' | 'users' | 'settings' | 'spotify'>('main');
@@ -628,11 +657,11 @@ const RoomScreen: React.FC = () => {
   };
 
   const renderMainTab = () => (
-    <ScrollView style={styles.tabContent}>
+    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       {/* Current Track */}
-      <Card style={styles.card}>
+      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
-          <Title>Now Playing</Title>
+          <Title style={{ color: theme.colors.onSurface }}>Now Playing</Title>
           {currentTrack ? (
             <>
               <View style={styles.trackInfo}>
@@ -641,8 +670,8 @@ const RoomScreen: React.FC = () => {
                   source={{ uri: currentTrack.info?.thumbnail || 'https://via.placeholder.com/60' }}
                 />
                 <View style={styles.trackDetails}>
-                  <Text style={styles.trackTitle}>{currentTrack.info?.fullTitle || 'Unknown Track'}</Text>
-                  <Text style={styles.trackPlatform}>
+                  <Text style={[styles.trackTitle, { color: theme.colors.onSurface }]}>{currentTrack.info?.fullTitle || 'Unknown Track'}</Text>
+                  <Text style={[styles.trackPlatform, { color: theme.colors.onSurfaceVariant }]}>
                     {currentTrack.url?.includes('spotify') ? '🎵 Spotify' : 
                      currentTrack.url?.includes('youtube') ? '🎥 YouTube' : 
                      '🎵 SoundCloud'}
@@ -652,56 +681,56 @@ const RoomScreen: React.FC = () => {
 
               {/* Track Reactions */}
               {user && (
-                <View style={styles.reactionsContainer}>
+                <View style={[styles.reactionsContainer, { borderColor: theme.colors.outline }]}>
                   <View style={styles.reactionButtonGroup}>
                     <IconButton
                       icon="thumb-up"
-                      iconColor={trackReactions.userReaction === 'like' ? '#4caf50' : '#666'}
-                      size={28}
+                      iconColor={trackReactions.userReaction === 'like' ? '#4caf50' : theme.colors.onSurfaceVariant}
+                      size={IS_MOBILE ? 24 : 28}
                       onPress={() => handleReaction('like')}
                       disabled={loadingReaction}
                       style={[
                         styles.reactionButton,
-                        trackReactions.userReaction === 'like' && styles.reactionButtonActive
+                        trackReactions.userReaction === 'like' && [styles.reactionButtonActive, { backgroundColor: theme.colors.primaryContainer }]
                       ]}
                     />
-                    <Text style={styles.reactionCount}>{trackReactions.likes}</Text>
+                    <Text style={[styles.reactionCount, { color: theme.colors.onSurfaceVariant }]}>{trackReactions.likes}</Text>
                   </View>
 
                   <View style={styles.reactionButtonGroup}>
                     <IconButton
                       icon="thumb-down"
-                      iconColor={trackReactions.userReaction === 'dislike' ? '#f44336' : '#666'}
-                      size={28}
+                      iconColor={trackReactions.userReaction === 'dislike' ? '#f44336' : theme.colors.onSurfaceVariant}
+                      size={IS_MOBILE ? 24 : 28}
                       onPress={() => handleReaction('dislike')}
                       disabled={loadingReaction}
                       style={[
                         styles.reactionButton,
-                        trackReactions.userReaction === 'dislike' && styles.reactionButtonActive
+                        trackReactions.userReaction === 'dislike' && [styles.reactionButtonActive, { backgroundColor: theme.colors.errorContainer }]
                       ]}
                     />
-                    <Text style={styles.reactionCount}>{trackReactions.dislikes}</Text>
+                    <Text style={[styles.reactionCount, { color: theme.colors.onSurfaceVariant }]}>{trackReactions.dislikes}</Text>
                   </View>
 
                   <View style={styles.reactionButtonGroup}>
                     <IconButton
                       icon="star"
-                      iconColor={trackReactions.userReaction === 'fantastic' ? '#ff9800' : '#666'}
-                      size={28}
+                      iconColor={trackReactions.userReaction === 'fantastic' ? '#ff9800' : theme.colors.onSurfaceVariant}
+                      size={IS_MOBILE ? 24 : 28}
                       onPress={() => handleReaction('fantastic')}
                       disabled={loadingReaction}
                       style={[
                         styles.reactionButton,
-                        trackReactions.userReaction === 'fantastic' && styles.reactionButtonActive
+                        trackReactions.userReaction === 'fantastic' && [styles.reactionButtonActive, { backgroundColor: theme.colors.tertiaryContainer }]
                       ]}
                     />
-                    <Text style={styles.reactionCount}>{trackReactions.fantastic}</Text>
+                    <Text style={[styles.reactionCount, { color: theme.colors.onSurfaceVariant }]}>{trackReactions.fantastic}</Text>
                   </View>
                 </View>
               )}
             </>
           ) : (
-            <Text style={styles.noTrack}>No track playing</Text>
+            <Text style={[styles.noTrack, { color: theme.colors.onSurfaceVariant }]}>No track playing</Text>
           )}
 
           {/* Playback Controls */}
@@ -734,7 +763,7 @@ const RoomScreen: React.FC = () => {
             </Button>
           </View>
           {!canControl && (
-            <Text style={styles.permissionNotice}>
+            <Text style={[styles.permissionNotice, { color: theme.colors.error }]}>
               ⚠️ Only room owner and admins can control playback
             </Text>
           )}
@@ -742,16 +771,16 @@ const RoomScreen: React.FC = () => {
       </Card>
 
       {/* Add Track */}
-      <Card style={styles.card}>
+      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
-          <Title>Add Track</Title>
+          <Title style={{ color: theme.colors.onSurface }}>Add Track</Title>
           {!user && (
-            <Text style={styles.anonymousNotice}>
+            <Text style={[styles.anonymousNotice, { color: theme.colors.tertiary }]}>
               💡 Sign up to add tracks to the queue
             </Text>
           )}
           {user && !isOwner && !isAdmin && !roomSettings.allowQueue && (
-            <Text style={styles.permissionNotice}>
+            <Text style={[styles.permissionNotice, { color: theme.colors.error }]}>
               ⚠️ Only room owner and admins can add tracks to the queue
             </Text>
           )}
@@ -778,11 +807,11 @@ const RoomScreen: React.FC = () => {
       </Card>
 
       {/* Queue */}
-      <Card style={styles.card}>
+      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
-          <Title>Queue ({queue.length})</Title>
+          <Title style={{ color: theme.colors.onSurface }}>Queue ({queue.length})</Title>
           {queue.length === 0 ? (
-            <Text style={styles.emptyQueue}>Queue is empty. Add a track to get started!</Text>
+            <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>Queue is empty. Add a track to get started!</Text>
           ) : (
             <ScrollView style={styles.queueList}>
               {queue.map((track, index) => (
@@ -805,11 +834,11 @@ const RoomScreen: React.FC = () => {
       </Card>
 
       {/* History */}
-      <Card style={styles.card}>
+      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
-          <Title>History ({history.length})</Title>
+          <Title style={{ color: theme.colors.onSurface }}>History ({history.length})</Title>
           {history.length === 0 ? (
-            <Text style={styles.emptyQueue}>No tracks played yet</Text>
+            <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>No tracks played yet</Text>
           ) : (
             <ScrollView style={styles.queueList}>
               {history.slice(0, 10).map((track) => (
@@ -839,11 +868,11 @@ const RoomScreen: React.FC = () => {
   );
 
   const renderUsersTab = () => (
-    <ScrollView style={styles.tabContent}>
+    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       {/* Users in Room */}
-      <Card style={styles.card}>
+      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
-          <Title>Users in Room ({userCount})</Title>
+          <Title style={{ color: theme.colors.onSurface }}>Users in Room ({userCount})</Title>
           <ScrollView style={styles.usersList}>
             {users.map((roomUser) => {
               const isMe = roomUser.userId === user?.id;
@@ -922,9 +951,9 @@ const RoomScreen: React.FC = () => {
       </Card>
 
       {/* Friends Section */}
-      <Card style={styles.card}>
+      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
-          <Title>Friends</Title>
+          <Title style={{ color: theme.colors.onSurface }}>Friends</Title>
           <View style={styles.friendsTabs}>
             <Button
               mode={activeFriendsTab === 'list' ? 'contained' : 'outlined'}
@@ -945,7 +974,7 @@ const RoomScreen: React.FC = () => {
           {activeFriendsTab === 'list' ? (
             <ScrollView style={styles.friendsList}>
               {friends.length === 0 ? (
-                <Text style={styles.emptyQueue}>No friends yet</Text>
+                <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>No friends yet</Text>
               ) : (
                 friends.map((friend) => (
                   <List.Item

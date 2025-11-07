@@ -14,6 +14,7 @@ import {
   Card,
   List,
   ActivityIndicator,
+  useTheme,
 } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -33,6 +34,7 @@ interface RoomChatProps {
 
 const RoomChat: React.FC<RoomChatProps> = ({ roomId, supabase }) => {
   const { user } = useAuth();
+  const theme = useTheme();
   const [messages, setMessages] = useState<ChatMessageWithProfile[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -126,16 +128,16 @@ const RoomChat: React.FC<RoomChatProps> = ({ roomId, supabase }) => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.loadingText}>Loading chat...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>Loading chat...</Text>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
@@ -150,7 +152,7 @@ const RoomChat: React.FC<RoomChatProps> = ({ roomId, supabase }) => {
       >
         {messages.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
               No messages yet. Be the first to say something! 👋
             </Text>
           </View>
@@ -183,18 +185,22 @@ const RoomChat: React.FC<RoomChatProps> = ({ roomId, supabase }) => {
                 <View
                   style={[
                     styles.messageBubble,
-                    isMine && styles.myMessageBubble,
+                    isMine 
+                      ? [styles.myMessageBubble, { backgroundColor: theme.colors.primary }]
+                      : { backgroundColor: theme.colors.surfaceVariant },
                   ]}
                 >
                   {!isMine && (
-                    <Text style={styles.messageAuthor}>
+                    <Text style={[styles.messageAuthor, { color: theme.colors.primary }]}>
                       {message.displayName || message.username || 'Anonymous'}
                     </Text>
                   )}
                   <Text
                     style={[
                       styles.messageText,
-                      isMine && styles.myMessageText,
+                      isMine 
+                        ? styles.myMessageText 
+                        : { color: theme.colors.onSurfaceVariant },
                     ]}
                   >
                     {message.message}
@@ -202,7 +208,9 @@ const RoomChat: React.FC<RoomChatProps> = ({ roomId, supabase }) => {
                   <Text
                     style={[
                       styles.messageTime,
-                      isMine && styles.myMessageTime,
+                      isMine 
+                        ? styles.myMessageTime 
+                        : { color: theme.colors.onSurfaceVariant },
                     ]}
                   >
                     {formatTime(message.created_at)}
@@ -216,7 +224,10 @@ const RoomChat: React.FC<RoomChatProps> = ({ roomId, supabase }) => {
 
       {/* Input Area */}
       {user ? (
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, { 
+          backgroundColor: theme.colors.surface,
+          borderTopColor: theme.colors.outline,
+        }]}>
           <TextInput
             mode="outlined"
             placeholder="Type a message..."
@@ -237,9 +248,9 @@ const RoomChat: React.FC<RoomChatProps> = ({ roomId, supabase }) => {
           />
         </View>
       ) : (
-        <Card style={styles.signInPrompt}>
+        <Card style={[styles.signInPrompt, { backgroundColor: theme.colors.tertiaryContainer }]}>
           <Card.Content>
-            <Text style={styles.signInText}>
+            <Text style={[styles.signInText, { color: theme.colors.onTertiaryContainer }]}>
               Sign in to join the conversation
             </Text>
           </Card.Content>
@@ -252,7 +263,6 @@ const RoomChat: React.FC<RoomChatProps> = ({ roomId, supabase }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   loadingContainer: {
     flex: 1,
@@ -262,7 +272,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    color: '#666',
+    fontSize: 14,
   },
   messagesContainer: {
     flex: 1,
@@ -279,7 +289,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     textAlign: 'center',
-    color: '#666',
     fontSize: 14,
   },
   messageWrapper: {
@@ -296,26 +305,23 @@ const styles = StyleSheet.create({
   },
   messageBubble: {
     maxWidth: '75%',
-    backgroundColor: '#fff',
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderBottomLeftRadius: 4,
+    elevation: 1,
   },
   myMessageBubble: {
-    backgroundColor: '#667eea',
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 4,
   },
   messageAuthor: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#667eea',
     marginBottom: 4,
   },
   messageText: {
     fontSize: 14,
-    color: '#333',
     lineHeight: 20,
   },
   myMessageText: {
@@ -323,28 +329,24 @@ const styles = StyleSheet.create({
   },
   messageTime: {
     fontSize: 10,
-    color: '#999',
     marginTop: 4,
+    opacity: 0.7,
   },
   myMessageTime: {
     color: 'rgba(255, 255, 255, 0.7)',
   },
   inputContainer: {
     padding: 12,
-    backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
   },
   input: {
-    backgroundColor: '#f5f5f5',
+    // Theme colors applied via TextInput props
   },
   signInPrompt: {
     margin: 12,
-    backgroundColor: '#fff3cd',
   },
   signInText: {
     textAlign: 'center',
-    color: '#856404',
   },
 });
 

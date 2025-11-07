@@ -482,15 +482,15 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    elevation: 4,
+    elevation: 6,
     // Web-compatible shadow
     ...(Platform.OS === 'web' ? {
-      boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.2)',
     } : {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
     }),
   },
   userInfo: {
@@ -534,7 +534,10 @@ const styles = StyleSheet.create({
   primaryActionButton: {
     flex: 1,
     borderRadius: 12,
-    elevation: 0,
+    elevation: 2,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+    } : {}),
   },
   primaryActionContent: {
     paddingVertical: 8,
@@ -554,7 +557,10 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     borderRadius: 16,
-    elevation: 2,
+    elevation: 4,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.15)',
+    } : {}),
   },
   emptyCardContent: {
     padding: 40,
@@ -574,6 +580,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderRadius: 16,
     overflow: 'hidden',
+    elevation: 4,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.15)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 6,
+    }),
   },
   roomCardContent: {
     padding: 20,
@@ -622,7 +637,10 @@ const styles = StyleSheet.create({
   joinButton: {
     flex: 1,
     borderRadius: 12,
-    elevation: 0,
+    elevation: 2,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+    } : {}),
   },
   shareButton: {
     flex: 1,

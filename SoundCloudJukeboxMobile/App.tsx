@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavigationContainer, DarkTheme as NavigationDarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme as NavigationDarkTheme, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { Provider as PaperProvider } from 'react-native-paper';
@@ -19,7 +19,7 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 
 // Import context
-import { AuthProvider } from './src/context/AuthContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 
 // Import theme
 import darkTheme from './src/config/theme';
@@ -80,6 +80,30 @@ const CustomNavigationDarkTheme = {
 
 // Main authenticated stack with drawer
 const AuthenticatedStack = () => {
+  const { user, loading } = useAuth();
+  const navigation = useNavigation();
+
+  // Redirect to auth if not authenticated
+  React.useEffect(() => {
+    if (!loading && !user) {
+      if (Platform.OS === 'web') {
+        window.location.href = '/auth';
+      } else {
+        navigation.replace('Auth' as never);
+      }
+    }
+  }, [user, loading, navigation]);
+
+  // Show loading while checking auth
+  if (loading) {
+    return null;
+  }
+
+  // Don't render drawer if not authenticated
+  if (!user) {
+    return null;
+  }
+
   return (
     <Drawer.Navigator
       drawerContent={(props) => <CustomDrawerContent {...props} />}
@@ -204,31 +228,6 @@ export default function App() {
               options={({ route }) => ({
                 title: route.params.roomName || 'Music Room',
               })}
-            />
-            <Stack.Screen
-              name="Admin"
-              component={AuthenticatedStack}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Discovery"
-              component={AuthenticatedStack}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Friends"
-              component={AuthenticatedStack}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Profile"
-              component={AuthenticatedStack}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Leaderboard"
-              component={AuthenticatedStack}
-              options={{ headerShown: false }}
             />
           </Stack.Navigator>
           <StatusBar style="light" />
