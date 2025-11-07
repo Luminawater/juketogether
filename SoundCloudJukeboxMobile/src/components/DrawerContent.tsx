@@ -5,6 +5,7 @@ import {
   Avatar,
   Divider,
   useTheme,
+  Chip,
 } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { DrawerContentScrollView, DrawerItem } from '@react-navigation/drawer';
@@ -12,7 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
-import { hasRole } from '../utils/permissions';
+import { hasRole, getTierDisplayName, getTierColor, getRoleDisplayName, getRoleColor } from '../utils/permissions';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -48,20 +49,42 @@ export const CustomDrawerContent: React.FC<any> = (props) => {
       {/* User Info Header */}
       <View style={[styles.userHeader, { borderBottomColor: theme.colors.outline }]}>
         <Avatar.Image
-          size={64}
+          size={72}
           source={{
             uri: user.user_metadata?.avatar_url ||
                  `https://ui-avatars.com/api/?name=${encodeURIComponent(user.email || '')}&background=667eea&color=fff`
           }}
         />
-        <Text style={[styles.userEmail, { color: theme.colors.onSurface }]} numberOfLines={1}>
-          {user.email}
-        </Text>
-        {profile.username && (
-          <Text style={[styles.userName, { color: theme.colors.onSurfaceVariant }]}>
-            @{profile.username}
+        <View style={styles.userInfo}>
+          <Text style={[styles.userEmail, { color: theme.colors.onSurface }]} numberOfLines={1}>
+            {profile.display_name || user.email}
           </Text>
-        )}
+          {profile.username && (
+            <Text style={[styles.userName, { color: theme.colors.onSurfaceVariant }]}>
+              @{profile.username}
+            </Text>
+          )}
+          <View style={styles.badgeContainer}>
+            <Chip
+              icon={() => <MaterialCommunityIcons name="crown" size={14} color={getTierColor(profile.subscription_tier)} />}
+              style={[styles.badge, { backgroundColor: getTierColor(profile.subscription_tier) + '20' }]}
+              textStyle={[styles.badgeText, { color: getTierColor(profile.subscription_tier) }]}
+              compact
+            >
+              {getTierDisplayName(profile.subscription_tier)}
+            </Chip>
+            {hasRole(profile.role, 'admin') && (
+              <Chip
+                icon={() => <MaterialCommunityIcons name="shield-account" size={14} color={getRoleColor(profile.role)} />}
+                style={[styles.badge, { backgroundColor: getRoleColor(profile.role) + '20' }]}
+                textStyle={[styles.badgeText, { color: getRoleColor(profile.role) }]}
+                compact
+              >
+                {getRoleDisplayName(profile.role)}
+              </Chip>
+            )}
+          </View>
+        </View>
       </View>
 
       {/* Navigation Items */}
@@ -197,22 +220,42 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userHeader: {
-    padding: 24,
+    padding: 20,
     paddingTop: 60,
-    paddingBottom: 24,
+    paddingBottom: 20,
     borderBottomWidth: 1,
     alignItems: 'center',
   },
-  userEmail: {
-    fontSize: 16,
-    fontWeight: '600',
+  userInfo: {
+    alignItems: 'center',
     marginTop: 12,
+    width: '100%',
+  },
+  userEmail: {
+    fontSize: 18,
+    fontWeight: '700',
     textAlign: 'center',
   },
   userName: {
     fontSize: 14,
     marginTop: 4,
     textAlign: 'center',
+    opacity: 0.7,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginTop: 12,
+    gap: 8,
+  },
+  badge: {
+    marginHorizontal: 4,
+    height: 24,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   drawerItem: {
     borderRadius: 12,

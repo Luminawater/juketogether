@@ -28,12 +28,15 @@ import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { Room } from '../types';
 import { UserBadge } from '../components/UserBadge';
+import { DashboardSkeleton } from '../components/LoadingSkeleton';
 import {
   getRemainingSongs,
   canPlaySong,
   getTierDisplayName,
   hasRole,
 } from '../utils/permissions';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { getRoomUrl, getRoomShareMessage } from '../utils/roomUtils';
 
 type DashboardScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Dashboard'>;
 
@@ -144,12 +147,15 @@ const DashboardScreen: React.FC = () => {
       setRoomDescription('');
       setRoomType('public');
 
+      const roomUrl = getRoomUrl(roomId, shortCode);
+      const shareMessage = getRoomShareMessage(roomName, roomId, shortCode);
+
       Alert.alert(
         'Success',
-        `Room created! Share code: ${shortCode}\nOr link: ${getRoomUrl(roomId)}`,
+        `Room created! Share code: ${shortCode}\nOr link: ${roomUrl}`,
         [
           { text: 'Copy Code', onPress: () => Share.share({ message: `Join my music room with code: ${shortCode}` }) },
-          { text: 'Copy Link', onPress: () => Share.share({ message: getRoomUrl(roomId) }) },
+          { text: 'Copy Link', onPress: () => Share.share({ message: shareMessage }) },
           { text: 'Join Room', onPress: () => joinRoom(roomId, roomName) },
           { text: 'OK' },
         ]
@@ -277,10 +283,6 @@ const DashboardScreen: React.FC = () => {
            timestamp;
   };
 
-  const getRoomUrl = (roomId: string) => {
-    // In a real app, this would be your actual domain
-    return `https://yourapp.com/room/${roomId}`;
-  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -293,8 +295,8 @@ const DashboardScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-        <Text style={{ color: theme.colors.onBackground }}>Loading...</Text>
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <DashboardSkeleton />
       </View>
     );
   }
@@ -359,69 +361,138 @@ const DashboardScreen: React.FC = () => {
           </Button>
         </View>
 
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>My Rooms</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>My Rooms</Text>
+          {rooms.length > 0 && (
+            <Text style={[styles.roomCount, { color: theme.colors.onSurfaceVariant }]}>
+              {rooms.length} {rooms.length === 1 ? 'room' : 'rooms'}
+            </Text>
+          )}
+        </View>
         {rooms.length === 0 ? (
           <Card style={[styles.emptyCard, { backgroundColor: theme.colors.surface }]}>
             <Card.Content style={styles.emptyCardContent}>
+              <MaterialCommunityIcons 
+                name="music-note-off" 
+                size={64} 
+                color={theme.colors.onSurfaceVariant} 
+                style={styles.emptyIcon}
+              />
               <Text style={[styles.emptyText, { color: theme.colors.onSurface }]}>
-                You haven't created any rooms yet.
+                No rooms yet
               </Text>
               <Text style={[styles.emptySubtext, { color: theme.colors.onSurfaceVariant }]}>
-                Create your first room to get started!
+                Create your first room to start sharing music with friends!
               </Text>
             </Card.Content>
           </Card>
         ) : (
           rooms.map((room) => (
-            <Card 
-              key={room.id} 
-              style={[styles.roomCard, { backgroundColor: theme.colors.surface }]}
-              elevation={2}
+            <TouchableOpacity
+              key={room.id}
+              activeOpacity={0.7}
+              onPress={() => joinRoom(room.id, room.name)}
             >
-              <Card.Content style={styles.roomCardContent}>
-                <View style={styles.roomHeader}>
-                  <View style={styles.roomInfo}>
-                    <Title style={[styles.roomTitle, { color: theme.colors.onSurface }]}>
-                      {room.name}
-                    </Title>
-                    {room.description && (
-                      <Paragraph style={[styles.roomDescription, { color: theme.colors.onSurfaceVariant }]}>
-                        {room.description}
-                      </Paragraph>
-                    )}
-                  </View>
-                  <View style={styles.roomMeta}>
-                    <View style={[styles.roomTypeBadge, { backgroundColor: theme.colors.primaryContainer }]}>
-                      <Text style={[styles.roomType, { color: theme.colors.onPrimaryContainer }]}>
-                        {room.type}
-                      </Text>
+              <Card 
+                style={[styles.roomCard, { backgroundColor: theme.colors.surface }]}
+                elevation={3}
+              >
+                <Card.Content style={styles.roomCardContent}>
+                  <View style={styles.roomHeader}>
+                    <View style={[styles.roomIconContainer, { backgroundColor: theme.colors.primaryContainer }]}>
+                      <MaterialCommunityIcons 
+                        name={room.type === 'private' ? 'lock' : 'earth'} 
+                        size={24} 
+                        color={theme.colors.onPrimaryContainer} 
+                      />
                     </View>
-                    <Text style={[styles.roomDate, { color: theme.colors.onSurfaceVariant }]}>
-                      {formatDate(room.created_at)}
-                    </Text>
+                    <View style={styles.roomInfo}>
+                      <View style={styles.roomTitleRow}>
+                        <Title style={[styles.roomTitle, { color: theme.colors.onSurface }]} numberOfLines={1}>
+                          {room.name}
+                        </Title>
+                        <View style={[
+                          styles.roomTypeBadge, 
+                          { 
+                            backgroundColor: room.type === 'private' 
+                              ? theme.colors.errorContainer 
+                              : theme.colors.primaryContainer 
+                          }
+                        ]}>
+                          <Text style={[
+                            styles.roomType, 
+                            { 
+                              color: room.type === 'private' 
+                                ? theme.colors.onErrorContainer 
+                                : theme.colors.onPrimaryContainer 
+                            }
+                          ]}>
+                            {room.type === 'private' ? 'Private' : 'Public'}
+                          </Text>
+                        </View>
+                      </View>
+                      {room.description && (
+                        <Paragraph 
+                          style={[styles.roomDescription, { color: theme.colors.onSurfaceVariant }]} 
+                          numberOfLines={2}
+                        >
+                          {room.description}
+                        </Paragraph>
+                      )}
+                      <View style={styles.roomMeta}>
+                        <View style={styles.roomMetaItem}>
+                          <MaterialCommunityIcons 
+                            name="calendar" 
+                            size={14} 
+                            color={theme.colors.onSurfaceVariant} 
+                          />
+                          <Text style={[styles.roomDate, { color: theme.colors.onSurfaceVariant }]}>
+                            {formatDate(room.created_at)}
+                          </Text>
+                        </View>
+                        {room.short_code && (
+                          <View style={styles.roomMetaItem}>
+                            <MaterialCommunityIcons 
+                              name="tag" 
+                              size={14} 
+                              color={theme.colors.onSurfaceVariant} 
+                            />
+                            <Text style={[styles.roomCode, { color: theme.colors.primary }]}>
+                              {room.short_code}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
                   </View>
-                </View>
-                <View style={styles.roomActions}>
-                  <Button
-                    mode="contained"
-                    onPress={() => joinRoom(room.id, room.name)}
-                    style={styles.joinButton}
-                    contentStyle={styles.roomButtonContent}
-                  >
-                    Join
-                  </Button>
-                  <Button
-                    mode="outlined"
-                    onPress={() => Share.share({ message: getRoomUrl(room.id) })}
-                    style={styles.shareButton}
-                    contentStyle={styles.roomButtonContent}
-                    icon="share-variant"
-                  >
-                    Share
-                  </Button>
-                </View>
-              </Card.Content>
-            </Card>
+                  <View style={styles.roomActions}>
+                    <Button
+                      mode="contained"
+                      onPress={() => joinRoom(room.id, room.name)}
+                      style={styles.joinButton}
+                      contentStyle={styles.roomButtonContent}
+                      icon="play"
+                    >
+                      Join Room
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        const roomUrl = getRoomUrl(room.id, room.short_code);
+                        const shareMessage = getRoomShareMessage(room.name, room.id, room.short_code);
+                        Share.share({ message: shareMessage, url: roomUrl });
+                      }}
+                      style={styles.shareButton}
+                      contentStyle={styles.roomButtonContent}
+                      icon="share-variant"
+                    >
+                      Share
+                    </Button>
+                  </View>
+                </Card.Content>
+              </Card>
+            </TouchableOpacity>
           ))
         )}
       </ScrollView>
@@ -602,25 +673,38 @@ const styles = StyleSheet.create({
   secondaryActionContent: {
     paddingVertical: 8,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   sectionTitle: {
     fontSize: 24,
     fontWeight: '700',
-    marginBottom: 20,
     letterSpacing: -0.5,
+  },
+  roomCount: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   emptyCard: {
     borderRadius: 16,
-    elevation: 4,
+    elevation: 2,
     ...(Platform.OS === 'web' ? {
       boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.15)',
     } : {}),
   },
   emptyCardContent: {
-    padding: 40,
+    padding: 48,
     alignItems: 'center',
   },
+  emptyIcon: {
+    marginBottom: 16,
+    opacity: 0.5,
+  },
   emptyText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     textAlign: 'center',
     marginBottom: 8,
@@ -628,19 +712,21 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     textAlign: 'center',
+    lineHeight: 20,
   },
   roomCard: {
     marginBottom: 16,
     borderRadius: 16,
     overflow: 'hidden',
-    elevation: 4,
+    elevation: 3,
     ...(Platform.OS === 'web' ? {
-      boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.15)',
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
+      transition: 'transform 0.2s, box-shadow 0.2s',
     } : {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 6,
+      shadowOpacity: 0.12,
+      shadowRadius: 8,
     }),
   },
   roomCardContent: {
@@ -648,25 +734,50 @@ const styles = StyleSheet.create({
   },
   roomHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     marginBottom: 16,
-    gap: 16,
+  },
+  roomIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  roomTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   roomInfo: {
     flex: 1,
   },
-  roomTitle: {
-    fontSize: 20,
+  roomMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 16,
+  },
+  roomMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  roomCode: {
+    fontSize: 12,
     fontWeight: '600',
-    marginBottom: 8,
+    fontFamily: 'monospace',
+  },
+  roomTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    flex: 1,
   },
   roomDescription: {
     fontSize: 14,
     lineHeight: 20,
-  },
-  roomMeta: {
-    alignItems: 'flex-end',
-    gap: 8,
+    marginTop: 4,
   },
   roomTypeBadge: {
     paddingHorizontal: 10,

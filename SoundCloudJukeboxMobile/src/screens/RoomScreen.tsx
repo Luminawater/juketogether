@@ -7,6 +7,7 @@ import {
   Platform,
   Share,
   Dimensions,
+  TouchableOpacity,
 } from 'react-native';
 import {
   Text,
@@ -29,6 +30,7 @@ import {
 } from 'react-native-paper';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { Track } from '../types';
@@ -48,6 +50,7 @@ import {
   TrackReactionCounts,
   ReactionType,
 } from '../services/trackReactionsService';
+import { getRoomUrl, getRoomShareMessage } from '../utils/roomUtils';
 
 type RoomScreenRouteProp = RouteProp<RootStackParamList, 'Room'>;
 type RoomScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Room'>;
@@ -604,26 +607,79 @@ const RoomScreen: React.FC = () => {
 
   const shareRoom = async () => {
     try {
-      // Generate shareable link - using roomId that can be pasted into the app
-      // For web/mobile apps, we can use a simple format or full URL
-      const shareMessage = `Join my music room "${roomName}"!\n\nRoom ID: ${roomId}\n\nPaste this Room ID in the app to join, or use this link: https://juketogether.vercel.app/room/${roomId}`;
-      
-      const result = await Share.share({
-        message: shareMessage,
-        title: `Join ${roomName}`,
-      });
+      // Fetch room data including short_code
+      let shortCode: string | undefined;
+      if (supabase) {
+        const { data: roomData, error: roomError } = await supabase
+          .from('rooms')
+          .select('short_code')
+          .eq('id', roomId)
+          .single();
 
-      if (result.action === Share.sharedAction) {
-        if (result.activityType) {
-          // Shared with activity type of result.activityType
-          console.log('Shared via:', result.activityType);
-        } else {
-          // Shared
-          console.log('Room shared successfully');
+        if (!roomError && roomData) {
+          shortCode = roomData.short_code;
         }
-      } else if (result.action === Share.dismissedAction) {
-        // Dismissed
-        console.log('Share dismissed');
+      }
+
+      // Generate shareable link
+      const roomUrl = getRoomUrl(roomId, shortCode);
+      const shareMessage = getRoomShareMessage(roomName, roomId, shortCode);
+
+      // For web platform, use clipboard API
+      if (Platform.OS === 'web') {
+        try {
+          await navigator.clipboard.writeText(roomUrl);
+          Alert.alert(
+            'Link Copied!',
+            `Room link copied to clipboard!\n\n${roomUrl}${shortCode ? `\n\nOr share code: ${shortCode}` : ''}`,
+            [
+              {
+                text: 'Share via...',
+                onPress: async () => {
+                  // Try to use Web Share API if available
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({
+                        title: `Join ${roomName}`,
+                        text: shareMessage,
+                        url: roomUrl,
+                      });
+                    } catch (shareError: any) {
+                      // User cancelled or share failed
+                      if (shareError.name !== 'AbortError') {
+                        console.error('Share error:', shareError);
+                      }
+                    }
+                  } else {
+                    // Fallback: show the message again
+                    Alert.alert('Share Room', shareMessage);
+                  }
+                },
+              },
+              { text: 'OK' },
+            ]
+          );
+        } catch (clipboardError) {
+          // Fallback if clipboard API fails
+          Alert.alert('Room Link', shareMessage);
+        }
+      } else {
+        // For mobile platforms, use React Native Share API
+        const result = await Share.share({
+          message: shareMessage,
+          title: `Join ${roomName}`,
+          url: roomUrl, // iOS will use this for better sharing
+        });
+
+        if (result.action === Share.sharedAction) {
+          if (result.activityType) {
+            console.log('Shared via:', result.activityType);
+          } else {
+            console.log('Room shared successfully');
+          }
+        } else if (result.action === Share.dismissedAction) {
+          console.log('Share dismissed');
+        }
       }
     } catch (error: any) {
       Alert.alert('Error', 'Failed to share room link');
@@ -1471,41 +1527,117 @@ const RoomScreen: React.FC = () => {
 
       {/* Tabs */}
       <View style={[styles.tabs, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.outline }]}>
-        <Button
-          mode={activeTab === 'main' ? 'contained' : 'text'}
+        <TouchableOpacity
           onPress={() => setActiveTab('main')}
-          icon="music-note"
-          style={styles.tabButton}
+          style={[
+            styles.tabButton,
+            activeTab === 'main' && {
+              backgroundColor: theme.colors.primary,
+            },
+          ]}
+          activeOpacity={0.7}
         >
-          Main
-        </Button>
-        <Button
-          mode={activeTab === 'users' ? 'contained' : 'text'}
-          onPress={() => setActiveTab('users')}
-          icon="account-group"
-          style={styles.tabButton}
-        >
-          Users
-        </Button>
-        {user && isSpotifyUser(user) && (
-          <Button
-            mode={activeTab === 'spotify' ? 'contained' : 'text'}
-            onPress={() => setActiveTab('spotify')}
-            icon="spotify"
-            style={styles.tabButton}
+          <MaterialCommunityIcons
+            name="music-note"
+            size={20}
+            color={activeTab === 'main' ? theme.colors.onPrimary : theme.colors.onSurface}
+            style={styles.tabIcon}
+          />
+          <Text
+            style={[
+              styles.tabButtonText,
+              {
+                color: activeTab === 'main' ? theme.colors.onPrimary : theme.colors.onSurface,
+              },
+            ]}
           >
-            Spotify
-          </Button>
+            Main
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setActiveTab('users')}
+          style={[
+            styles.tabButton,
+            activeTab === 'users' && {
+              backgroundColor: theme.colors.primary,
+            },
+          ]}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons
+            name="account-group"
+            size={20}
+            color={activeTab === 'users' ? theme.colors.onPrimary : theme.colors.onSurface}
+            style={styles.tabIcon}
+          />
+          <Text
+            style={[
+              styles.tabButtonText,
+              {
+                color: activeTab === 'users' ? theme.colors.onPrimary : theme.colors.onSurface,
+              },
+            ]}
+          >
+            Users
+          </Text>
+        </TouchableOpacity>
+        {user && isSpotifyUser(user) && (
+          <TouchableOpacity
+            onPress={() => setActiveTab('spotify')}
+            style={[
+              styles.tabButton,
+              activeTab === 'spotify' && {
+                backgroundColor: theme.colors.primary,
+              },
+            ]}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons
+              name="spotify"
+              size={20}
+              color={activeTab === 'spotify' ? theme.colors.onPrimary : theme.colors.onSurface}
+              style={styles.tabIcon}
+            />
+            <Text
+              style={[
+                styles.tabButtonText,
+                {
+                  color: activeTab === 'spotify' ? theme.colors.onPrimary : theme.colors.onSurface,
+                },
+              ]}
+            >
+              Spotify
+            </Text>
+          </TouchableOpacity>
         )}
         {(isOwner || isAdmin) && (
-          <Button
-            mode={activeTab === 'settings' ? 'contained' : 'text'}
+          <TouchableOpacity
             onPress={() => setActiveTab('settings')}
-            icon="cog"
-            style={styles.tabButton}
+            style={[
+              styles.tabButton,
+              activeTab === 'settings' && {
+                backgroundColor: theme.colors.primary,
+              },
+            ]}
+            activeOpacity={0.7}
           >
-            Settings
-          </Button>
+            <MaterialCommunityIcons
+              name="cog"
+              size={20}
+              color={activeTab === 'settings' ? theme.colors.onPrimary : theme.colors.onSurface}
+              style={styles.tabIcon}
+            />
+            <Text
+              style={[
+                styles.tabButtonText,
+                {
+                  color: activeTab === 'settings' ? theme.colors.onPrimary : theme.colors.onSurface,
+                },
+              ]}
+            >
+              Settings
+            </Text>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -1601,6 +1733,24 @@ const styles = StyleSheet.create({
   tabButton: {
     flex: 1,
     minWidth: IS_MOBILE ? 80 : 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: IS_MOBILE ? 10 : 12,
+    paddingHorizontal: IS_MOBILE ? 8 : 12,
+    borderRadius: 8,
+    marginHorizontal: 4,
+    ...(Platform.OS === 'web' ? {
+      cursor: 'pointer',
+      userSelect: 'none',
+    } : {}),
+  },
+  tabIcon: {
+    marginRight: 6,
+  },
+  tabButtonText: {
+    fontSize: IS_MOBILE ? 13 : 14,
+    fontWeight: '500',
   },
   tabContent: {
     flex: 1,
