@@ -52,6 +52,8 @@ import {
 } from '../services/trackReactionsService';
 import { getRoomUrl, getRoomShareMessage, extractMusicUrls, isValidMusicUrl } from '../utils/roomUtils';
 import RoomChat from '../components/RoomChat';
+import AdsBanner from '../components/AdsBanner';
+import { hasTier } from '../utils/permissions';
 
 type RoomScreenRouteProp = RouteProp<RootStackParamList, 'Room'>;
 type RoomScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Room'>;
@@ -91,7 +93,7 @@ const IS_MOBILE = SCREEN_WIDTH < 768;
 const RoomScreen: React.FC = () => {
   const route = useRoute<RoomScreenRouteProp>();
   const navigation = useNavigation<RoomScreenNavigationProp>();
-  const { user, session, supabase } = useAuth();
+  const { user, session, supabase, profile } = useAuth();
   const theme = useTheme();
 
   const { roomId, roomName } = route.params;
@@ -899,6 +901,31 @@ const RoomScreen: React.FC = () => {
           )}
         </Card.Content>
       </Card>
+
+      {/* Ads Banner - Only show for non-PRO users */}
+      {(!profile || !hasTier(profile.subscription_tier, 'pro')) && (
+        <AdsBanner
+          onUpgradePress={() => {
+            if (!user) {
+              // If not logged in, navigate to auth screen
+              navigation.navigate('Auth');
+            } else {
+              // Navigate to profile or upgrade screen
+              Alert.alert(
+                'Upgrade to PRO',
+                'Upgrade to PRO to remove ads and unlock premium features!',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Learn More', onPress: () => {
+                    // Navigate to profile screen
+                    navigation.navigate('Profile');
+                  }},
+                ]
+              );
+            }
+          }}
+        />
+      )}
 
       {/* Add Track */}
       <Card style={styles.card}>
