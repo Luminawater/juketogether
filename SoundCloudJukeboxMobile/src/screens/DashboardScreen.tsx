@@ -21,6 +21,7 @@ import {
   Dialog,
   Menu,
   IconButton,
+  useTheme,
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -40,6 +41,7 @@ type DashboardScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Da
 const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<DashboardScreenNavigationProp>();
   const { user, profile, permissions, signOut, supabase } = useAuth();
+  const theme = useTheme();
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
@@ -240,16 +242,16 @@ const DashboardScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text>Loading...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <Text style={{ color: theme.colors.onBackground }}>Loading...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header with user info */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
         <View style={styles.userInfo}>
           <Avatar.Image
             size={50}
@@ -259,8 +261,8 @@ const DashboardScreen: React.FC = () => {
             }}
           />
           <View style={styles.userDetails}>
-            <Text style={styles.userEmail}>{user?.email}</Text>
-            <Text style={styles.userGreeting}>Welcome back!</Text>
+            <Text style={[styles.userEmail, { color: theme.colors.onSurface }]}>{user?.email}</Text>
+            <Text style={[styles.userGreeting, { color: theme.colors.onSurfaceVariant }]}>Welcome back!</Text>
             {profile && permissions && (
               <View style={styles.userBadges}>
                 <UserBadge
@@ -270,7 +272,7 @@ const DashboardScreen: React.FC = () => {
                   size="small"
                 />
                 {permissions.max_songs !== Infinity && (
-                  <Text style={styles.songCount}>
+                  <Text style={[styles.songCount, { color: theme.colors.onSurfaceVariant }]}>
                     {permissions.songs_played}/{permissions.max_songs} songs played
                   </Text>
                 )}
@@ -284,7 +286,7 @@ const DashboardScreen: React.FC = () => {
           anchor={
             <IconButton
               icon="menu"
-              iconColor="#fff"
+              iconColor={theme.colors.onSurface}
               onPress={() => setMenuVisible(true)}
             />
           }
@@ -350,48 +352,33 @@ const DashboardScreen: React.FC = () => {
         </Menu>
       </View>
 
-      <ScrollView style={styles.content}>
-        <Text style={styles.sectionTitle}>Create New Room</Text>
-        <Card style={styles.createCard}>
-          <Card.Content>
-            <TextInput
-              label="Room Name"
-              value={roomName}
-              onChangeText={setRoomName}
-              mode="outlined"
-              style={styles.input}
-            />
-            <TextInput
-              label="Description (optional)"
-              value={roomDescription}
-              onChangeText={setRoomDescription}
-              mode="outlined"
-              multiline
-              numberOfLines={3}
-              style={styles.input}
-            />
-            <Text style={styles.radioLabel}>Room Type:</Text>
-            <RadioButton.Group onValueChange={value => setRoomType(value as 'public' | 'private')} value={roomType}>
-              <View style={styles.radioOption}>
-                <RadioButton value="public" />
-                <Text>Public - Anyone with the link can join</Text>
-              </View>
-              <View style={styles.radioOption}>
-                <RadioButton value="private" />
-                <Text>Private - Only invited users can join</Text>
-              </View>
-            </RadioButton.Group>
-            <Button
-              mode="contained"
-              onPress={createRoom}
-              style={styles.createButton}
-            >
-              Create Room
-            </Button>
-          </Card.Content>
-        </Card>
+      <ScrollView 
+        style={styles.content}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.actionsSection}>
+          <Button
+            mode="contained"
+            onPress={() => setCreateDialogVisible(true)}
+            style={styles.primaryActionButton}
+            contentStyle={styles.primaryActionContent}
+            icon="plus"
+          >
+            Create Room
+          </Button>
+          <Button
+            mode="outlined"
+            onPress={() => setJoinDialogVisible(true)}
+            style={styles.secondaryActionButton}
+            contentStyle={styles.secondaryActionContent}
+            icon="account-plus"
+          >
+            Join Room
+          </Button>
+        </View>
 
-        <Text style={styles.sectionTitle}>My Rooms</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>My Rooms</Text>
         {rooms.length === 0 ? (
           <Card style={styles.emptyCard}>
             <Card.Content>
