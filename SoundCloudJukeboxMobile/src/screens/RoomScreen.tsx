@@ -718,72 +718,111 @@ const RoomScreen: React.FC = () => {
   const renderMainTab = () => (
     <ScrollView style={styles.tabContent}>
       {/* Current Track */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title>Now Playing</Title>
+      <Card style={[styles.card, styles.nowPlayingCard]}>
+        <Card.Content style={styles.nowPlayingContent}>
+          <View style={styles.nowPlayingHeader}>
+            <MaterialCommunityIcons 
+              name="music-note" 
+              size={24} 
+              color={theme.colors.primary} 
+            />
+            <Title style={styles.nowPlayingTitle}>Now Playing</Title>
+          </View>
           {currentTrack ? (
             <>
               <View style={styles.trackInfo}>
-                <Avatar.Image
-                  size={60}
-                  source={{ uri: currentTrack.info?.thumbnail || 'https://via.placeholder.com/60' }}
-                />
+                <View style={styles.thumbnailContainer}>
+                  <Avatar.Image
+                    size={IS_MOBILE ? 80 : 100}
+                    source={{ uri: currentTrack.info?.thumbnail || 'https://via.placeholder.com/100' }}
+                    style={styles.trackThumbnail}
+                  />
+                  {isPlaying && <View style={styles.playingIndicator} />}
+                </View>
                 <View style={styles.trackDetails}>
-                  <Text style={styles.trackTitle}>{currentTrack.info?.fullTitle || 'Unknown Track'}</Text>
-                  <Text style={styles.trackPlatform}>
-                    {currentTrack.url?.includes('spotify') ? '🎵 Spotify' : 
-                     currentTrack.url?.includes('youtube') ? '🎥 YouTube' : 
-                     '🎵 SoundCloud'}
+                  <Text style={styles.trackTitle} numberOfLines={2}>
+                    {currentTrack.info?.fullTitle || 'Unknown Track'}
                   </Text>
+                  <View style={styles.platformBadge}>
+                    <MaterialCommunityIcons 
+                      name={
+                        currentTrack.url?.includes('spotify') ? 'spotify' : 
+                        currentTrack.url?.includes('youtube') ? 'youtube' : 
+                        'music-note'
+                      }
+                      size={16}
+                      color={theme.colors.onSurfaceVariant}
+                    />
+                    <Text style={styles.trackPlatform}>
+                      {currentTrack.url?.includes('spotify') ? 'Spotify' : 
+                       currentTrack.url?.includes('youtube') ? 'YouTube' : 
+                       'SoundCloud'}
+                    </Text>
+                  </View>
                 </View>
               </View>
 
               {/* Track Reactions */}
               {user && (
-                <View style={styles.reactionsContainer}>
+                <View style={[styles.reactionsContainer, { borderColor: theme.colors.outline }]}>
                   <View style={styles.reactionButtonGroup}>
-                    <IconButton
-                      icon="thumb-up"
-                      iconColor={trackReactions.userReaction === 'like' ? '#4caf50' : '#666'}
-                      size={28}
+                    <TouchableOpacity
                       onPress={() => handleReaction('like')}
                       disabled={loadingReaction}
                       style={[
-                        styles.reactionButton,
-                        trackReactions.userReaction === 'like' && styles.reactionButtonActive
+                        styles.reactionButtonTouchable,
+                        trackReactions.userReaction === 'like' && { backgroundColor: 'rgba(76, 175, 80, 0.15)' }
                       ]}
-                    />
-                    <Text style={styles.reactionCount}>{trackReactions.likes}</Text>
+                    >
+                      <MaterialCommunityIcons
+                        name="thumb-up"
+                        size={24}
+                        color={trackReactions.userReaction === 'like' ? '#4caf50' : theme.colors.onSurfaceVariant}
+                      />
+                    </TouchableOpacity>
+                    <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>
+                      {trackReactions.likes}
+                    </Text>
                   </View>
 
                   <View style={styles.reactionButtonGroup}>
-                    <IconButton
-                      icon="thumb-down"
-                      iconColor={trackReactions.userReaction === 'dislike' ? '#f44336' : '#666'}
-                      size={28}
+                    <TouchableOpacity
                       onPress={() => handleReaction('dislike')}
                       disabled={loadingReaction}
                       style={[
-                        styles.reactionButton,
-                        trackReactions.userReaction === 'dislike' && styles.reactionButtonActive
+                        styles.reactionButtonTouchable,
+                        trackReactions.userReaction === 'dislike' && { backgroundColor: 'rgba(244, 67, 54, 0.15)' }
                       ]}
-                    />
-                    <Text style={styles.reactionCount}>{trackReactions.dislikes}</Text>
+                    >
+                      <MaterialCommunityIcons
+                        name="thumb-down"
+                        size={24}
+                        color={trackReactions.userReaction === 'dislike' ? '#f44336' : theme.colors.onSurfaceVariant}
+                      />
+                    </TouchableOpacity>
+                    <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>
+                      {trackReactions.dislikes}
+                    </Text>
                   </View>
 
                   <View style={styles.reactionButtonGroup}>
-                    <IconButton
-                      icon="star"
-                      iconColor={trackReactions.userReaction === 'fantastic' ? '#ff9800' : '#666'}
-                      size={28}
+                    <TouchableOpacity
                       onPress={() => handleReaction('fantastic')}
                       disabled={loadingReaction}
                       style={[
-                        styles.reactionButton,
-                        trackReactions.userReaction === 'fantastic' && styles.reactionButtonActive
+                        styles.reactionButtonTouchable,
+                        trackReactions.userReaction === 'fantastic' && { backgroundColor: 'rgba(255, 152, 0, 0.15)' }
                       ]}
-                    />
-                    <Text style={styles.reactionCount}>{trackReactions.fantastic}</Text>
+                    >
+                      <MaterialCommunityIcons
+                        name="star"
+                        size={24}
+                        color={trackReactions.userReaction === 'fantastic' ? '#ff9800' : theme.colors.onSurfaceVariant}
+                      />
+                    </TouchableOpacity>
+                    <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>
+                      {trackReactions.fantastic}
+                    </Text>
                   </View>
                 </View>
               )}
@@ -797,7 +836,8 @@ const RoomScreen: React.FC = () => {
             <Button
               mode="contained"
               onPress={playPause}
-              style={styles.controlButton}
+              style={[styles.controlButton, styles.primaryControlButton]}
+              contentStyle={styles.controlButtonContent}
               disabled={!currentTrack || !canControl}
               icon={isPlaying ? 'pause' : 'play'}
             >
@@ -807,6 +847,7 @@ const RoomScreen: React.FC = () => {
               mode="outlined"
               onPress={nextTrack}
               style={styles.controlButton}
+              contentStyle={styles.controlButtonContent}
               disabled={queue.length === 0 || !canControl}
               icon="skip-next"
             >
@@ -816,6 +857,7 @@ const RoomScreen: React.FC = () => {
               mode="outlined"
               onPress={syncToSession}
               style={styles.controlButton}
+              contentStyle={styles.controlButtonContent}
               icon="sync"
             >
               Sync
@@ -876,18 +918,38 @@ const RoomScreen: React.FC = () => {
           ) : (
             <ScrollView style={styles.queueList}>
               {queue.map((track, index) => (
-                <List.Item
+                <TouchableOpacity
                   key={track.id}
-                  title={track.info?.fullTitle || 'Unknown Track'}
-                  description={`Added by ${track.addedBy === user?.id ? 'You' : 'Someone'}`}
-                  left={() => (
+                  activeOpacity={0.7}
+                  style={[styles.queueItem, { backgroundColor: theme.colors.surfaceVariant }]}
+                >
+                  <View style={styles.queueItemContent}>
+                    <View style={styles.queueItemNumber}>
+                      <Text style={[styles.queueNumber, { color: theme.colors.primary }]}>
+                        {index + 1}
+                      </Text>
+                    </View>
                     <Avatar.Image
-                      size={40}
-                      source={{ uri: track.info?.thumbnail || 'https://via.placeholder.com/40' }}
+                      size={50}
+                      source={{ uri: track.info?.thumbnail || 'https://via.placeholder.com/50' }}
+                      style={styles.queueItemThumbnail}
                     />
-                  )}
-                  right={() => <Text>{index + 1}</Text>}
-                />
+                    <View style={styles.queueItemDetails}>
+                      <Text 
+                        style={[styles.queueItemTitle, { color: theme.colors.onSurface }]}
+                        numberOfLines={1}
+                      >
+                        {track.info?.fullTitle || 'Unknown Track'}
+                      </Text>
+                      <Text 
+                        style={[styles.queueItemDescription, { color: theme.colors.onSurfaceVariant }]}
+                        numberOfLines={1}
+                      >
+                        Added by {track.addedBy === user?.id ? 'You' : 'Someone'}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           )}
@@ -903,23 +965,50 @@ const RoomScreen: React.FC = () => {
           ) : (
             <ScrollView style={styles.queueList}>
               {history.slice(0, 10).map((track) => (
-                <List.Item
+                <TouchableOpacity
                   key={track.id}
-                  title={track.info?.fullTitle || 'Unknown Track'}
-                  description="Previously played"
-                  left={() => (
-                    <Avatar.Image
-                      size={40}
-                      source={{ uri: track.info?.thumbnail || 'https://via.placeholder.com/40' }}
-                    />
-                  )}
+                  activeOpacity={0.7}
+                  style={[styles.queueItem, styles.historyItem, { backgroundColor: theme.colors.surfaceVariant }]}
                   onPress={() => {
                     // Replay track
                     if (socketService.socket) {
                       socketService.socket.emit('replay-track', { roomId, trackId: track.id });
                     }
                   }}
-                />
+                >
+                  <View style={styles.queueItemContent}>
+                    <MaterialCommunityIcons 
+                      name="history" 
+                      size={20} 
+                      color={theme.colors.onSurfaceVariant}
+                      style={styles.historyIcon}
+                    />
+                    <Avatar.Image
+                      size={50}
+                      source={{ uri: track.info?.thumbnail || 'https://via.placeholder.com/50' }}
+                      style={styles.queueItemThumbnail}
+                    />
+                    <View style={styles.queueItemDetails}>
+                      <Text 
+                        style={[styles.queueItemTitle, { color: theme.colors.onSurface }]}
+                        numberOfLines={1}
+                      >
+                        {track.info?.fullTitle || 'Unknown Track'}
+                      </Text>
+                      <Text 
+                        style={[styles.queueItemDescription, { color: theme.colors.onSurfaceVariant }]}
+                        numberOfLines={1}
+                      >
+                        Previously played
+                      </Text>
+                    </View>
+                    <MaterialCommunityIcons 
+                      name="replay" 
+                      size={20} 
+                      color={theme.colors.primary}
+                    />
+                  </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           )}
@@ -1789,33 +1878,91 @@ const styles = StyleSheet.create({
   card: {
     margin: IS_MOBILE ? 12 : 16,
     marginTop: IS_MOBILE ? 12 : 16,
-    borderRadius: 16,
-    elevation: 4,
+    borderRadius: 20,
+    elevation: 6,
+    overflow: 'hidden',
     ...(Platform.OS === 'web' ? {
-      boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.15)',
+      boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.2)',
+      transition: 'transform 0.2s, box-shadow 0.2s',
     } : {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
     }),
+  },
+  nowPlayingCard: {
+    borderWidth: Platform.OS === 'web' ? 1 : 0,
+    borderColor: Platform.OS === 'web' ? 'rgba(102, 126, 234, 0.3)' : 'transparent',
+  },
+  nowPlayingContent: {
+    padding: IS_MOBILE ? 16 : 20,
+  },
+  nowPlayingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: IS_MOBILE ? 16 : 20,
+    gap: 8,
+  },
+  nowPlayingTitle: {
+    fontSize: IS_MOBILE ? 20 : 24,
+    fontWeight: '700',
+    letterSpacing: -0.5,
   },
   trackInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: IS_MOBILE ? 12 : 16,
+    marginVertical: IS_MOBILE ? 16 : 20,
+  },
+  thumbnailContainer: {
+    position: 'relative',
+  },
+  trackThumbnail: {
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.3)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+    }),
+  },
+  playingIndicator: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#4caf50',
+    borderWidth: 3,
+    borderColor: '#121212',
   },
   trackDetails: {
-    marginLeft: IS_MOBILE ? 12 : 16,
+    marginLeft: IS_MOBILE ? 16 : 20,
     flex: 1,
   },
   trackTitle: {
-    fontSize: IS_MOBILE ? 16 : 18,
-    fontWeight: 'bold',
+    fontSize: IS_MOBILE ? 18 : 22,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    marginBottom: 6,
+  },
+  platformBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(102, 126, 234, 0.1)',
   },
   trackPlatform: {
-    fontSize: IS_MOBILE ? 12 : 14,
-    marginTop: 4,
+    fontSize: IS_MOBILE ? 11 : 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   noTrack: {
     textAlign: 'center',
@@ -1825,14 +1972,26 @@ const styles = StyleSheet.create({
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: IS_MOBILE ? 6 : 8,
-    marginTop: IS_MOBILE ? 12 : 16,
+    gap: IS_MOBILE ? 8 : 12,
+    marginTop: IS_MOBILE ? 16 : 20,
     flexWrap: 'wrap',
   },
   controlButton: {
     flex: IS_MOBILE ? 0 : 1,
-    minWidth: IS_MOBILE ? 90 : 100,
-    maxWidth: IS_MOBILE ? 120 : 150,
+    minWidth: IS_MOBILE ? 100 : 120,
+    maxWidth: IS_MOBILE ? 130 : 160,
+    borderRadius: 12,
+    ...(Platform.OS === 'web' ? {
+      transition: 'transform 0.2s, box-shadow 0.2s',
+    } : {}),
+  },
+  primaryControlButton: {
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 12px rgba(102, 126, 234, 0.4)',
+    } : {}),
+  },
+  controlButtonContent: {
+    paddingVertical: IS_MOBILE ? 6 : 8,
   },
   permissionNotice: {
     fontSize: IS_MOBILE ? 11 : 12,
@@ -1981,26 +2140,81 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: IS_MOBILE ? 12 : 16,
-    marginVertical: IS_MOBILE ? 12 : 16,
-    paddingVertical: IS_MOBILE ? 6 : 8,
+    gap: IS_MOBILE ? 16 : 24,
+    marginVertical: IS_MOBILE ? 16 : 20,
+    paddingVertical: IS_MOBILE ? 12 : 16,
     borderTopWidth: 1,
     borderBottomWidth: 1,
   },
   reactionButtonGroup: {
     flexDirection: 'column',
     alignItems: 'center',
-    gap: IS_MOBILE ? 2 : 4,
+    gap: IS_MOBILE ? 4 : 6,
   },
-  reactionButton: {
-    margin: 0,
-  },
-  reactionButtonActive: {
-    // Background color applied inline with theme
+  reactionButtonTouchable: {
+    padding: IS_MOBILE ? 10 : 12,
+    borderRadius: 12,
+    ...(Platform.OS === 'web' ? {
+      cursor: 'pointer',
+      transition: 'background-color 0.2s, transform 0.2s',
+    } : {}),
   },
   reactionCount: {
-    fontSize: IS_MOBILE ? 11 : 12,
-    fontWeight: '500',
+    fontSize: IS_MOBILE ? 12 : 13,
+    fontWeight: '600',
+  },
+  queueItem: {
+    marginVertical: IS_MOBILE ? 6 : 8,
+    marginHorizontal: IS_MOBILE ? 4 : 8,
+    borderRadius: 12,
+    padding: IS_MOBILE ? 10 : 12,
+    ...(Platform.OS === 'web' ? {
+      cursor: 'pointer',
+    } : {}),
+  },
+  queueItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: IS_MOBILE ? 12 : 16,
+  },
+  queueItemNumber: {
+    width: IS_MOBILE ? 28 : 32,
+    height: IS_MOBILE ? 28 : 32,
+    borderRadius: IS_MOBILE ? 14 : 16,
+    backgroundColor: 'rgba(102, 126, 234, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  queueNumber: {
+    fontSize: IS_MOBILE ? 13 : 15,
+    fontWeight: '700',
+  },
+  queueItemThumbnail: {
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.2)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+    }),
+  },
+  queueItemDetails: {
+    flex: 1,
+  },
+  queueItemTitle: {
+    fontSize: IS_MOBILE ? 14 : 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  queueItemDescription: {
+    fontSize: IS_MOBILE ? 12 : 13,
+  },
+  historyItem: {
+    opacity: 0.8,
+  },
+  historyIcon: {
+    marginRight: IS_MOBILE ? -4 : 0,
   },
 });
 

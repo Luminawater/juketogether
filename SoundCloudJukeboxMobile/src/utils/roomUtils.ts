@@ -1,5 +1,3 @@
-import { API_URL } from '../config/constants';
-
 /**
  * Generates a shareable URL for a room
  * @param roomId - The room ID
@@ -10,9 +8,9 @@ export const getRoomUrl = (roomId: string, shortCode?: string): string => {
   // Use short code if available, otherwise use room ID
   const identifier = shortCode || roomId;
   
-  // For web, use the full URL format
-  // For mobile apps, this will be handled by deep linking
-  const baseUrl = API_URL.replace(/\/$/, ''); // Remove trailing slash if present
+  // Always use the production domain for shared room links
+  // This ensures links work for anyone who receives them, regardless of environment
+  const baseUrl = 'https://www.juketogether.com';
   return `${baseUrl}/room/${identifier}`;
 };
 
