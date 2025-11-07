@@ -33,9 +33,16 @@ interface LeaderboardEntry {
   total_rooms_created?: number;
   total_tracks_played?: number;
   total_play_time_hours?: number;
+  // Reaction stats
+  total_likes?: number;
+  total_dislikes?: number;
+  total_fantastic?: number;
+  reaction_score?: number;
+  tracks_with_reactions?: number;
+  total_reactions?: number;
 }
 
-type LeaderboardType = 'total_listeners' | 'peak_listeners' | 'rooms_created' | 'tracks_played';
+type LeaderboardType = 'total_listeners' | 'peak_listeners' | 'rooms_created' | 'tracks_played' | 'reactions';
 
 const LeaderboardScreen: React.FC = () => {
   const navigation = useNavigation<LeaderboardScreenNavigationProp>();
@@ -65,6 +72,9 @@ const LeaderboardScreen: React.FC = () => {
           break;
         case 'tracks_played':
           viewName = 'leaderboard_tracks_played';
+          break;
+        case 'reactions':
+          viewName = 'leaderboard_reactions';
           break;
         default:
           viewName = 'leaderboard_total_listeners';
@@ -100,6 +110,8 @@ const LeaderboardScreen: React.FC = () => {
         return 'Rooms Created';
       case 'tracks_played':
         return 'Tracks Played';
+      case 'reactions':
+        return 'Track Reactions';
       default:
         return 'Leaderboard';
     }
@@ -115,6 +127,8 @@ const LeaderboardScreen: React.FC = () => {
         return entry.total_rooms_created || 0;
       case 'tracks_played':
         return entry.total_tracks_played || 0;
+      case 'reactions':
+        return entry.reaction_score || 0;
       default:
         return 0;
     }
@@ -130,6 +144,8 @@ const LeaderboardScreen: React.FC = () => {
         return 'Rooms';
       case 'tracks_played':
         return 'Tracks';
+      case 'reactions':
+        return 'Reaction Score';
       default:
         return '';
     }
@@ -202,6 +218,14 @@ const LeaderboardScreen: React.FC = () => {
           icon="music-note"
         >
           Tracks
+        </Button>
+        <Button
+          mode={activeTab === 'reactions' ? 'contained' : 'outlined'}
+          onPress={() => setActiveTab('reactions')}
+          style={styles.tabButton}
+          icon="star"
+        >
+          Reactions
         </Button>
       </ScrollView>
 
@@ -297,7 +321,43 @@ const LeaderboardScreen: React.FC = () => {
                   </View>
 
                   {/* Additional Stats */}
-                  {activeTab !== 'total_listeners' && (
+                  {activeTab === 'reactions' ? (
+                    <>
+                      <Divider style={styles.divider} />
+                      <View style={styles.additionalStats}>
+                        <Chip
+                          icon="thumb-up"
+                          style={[styles.chip, { backgroundColor: '#e8f5e9' }]}
+                          textStyle={styles.chipText}
+                        >
+                          👍 {entry.total_likes || 0}
+                        </Chip>
+                        <Chip
+                          icon="star"
+                          style={[styles.chip, { backgroundColor: '#fff3e0' }]}
+                          textStyle={styles.chipText}
+                        >
+                          ⭐ {entry.total_fantastic || 0}
+                        </Chip>
+                        <Chip
+                          icon="thumb-down"
+                          style={[styles.chip, { backgroundColor: '#ffebee' }]}
+                          textStyle={styles.chipText}
+                        >
+                          👎 {entry.total_dislikes || 0}
+                        </Chip>
+                        {entry.tracks_with_reactions !== undefined && (
+                          <Chip
+                            icon="music-note"
+                            style={styles.chip}
+                            textStyle={styles.chipText}
+                          >
+                            {entry.tracks_with_reactions} tracks
+                          </Chip>
+                        )}
+                      </View>
+                    </>
+                  ) : activeTab !== 'total_listeners' && (
                     <>
                       <Divider style={styles.divider} />
                       <View style={styles.additionalStats}>

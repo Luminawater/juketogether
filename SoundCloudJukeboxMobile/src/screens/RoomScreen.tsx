@@ -46,6 +46,7 @@ import {
   TrackReactionCounts,
   ReactionType,
 } from '../services/trackReactionsService';
+import RoomChat from '../components/RoomChat';
 
 type RoomScreenRouteProp = RouteProp<RootStackParamList, 'Room'>;
 type RoomScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Room'>;
@@ -87,7 +88,7 @@ const RoomScreen: React.FC = () => {
   const { roomId, roomName } = route.params;
 
   // Main state
-  const [activeTab, setActiveTab] = useState<'main' | 'users' | 'settings' | 'spotify'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'users' | 'settings' | 'spotify' | 'chat'>('main');
   const [queue, setQueue] = useState<Track[]>([]);
   const [history, setHistory] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
@@ -1501,6 +1502,14 @@ const RoomScreen: React.FC = () => {
             Settings
           </Button>
         )}
+        <Button
+          mode={activeTab === 'chat' ? 'contained' : 'text'}
+          onPress={() => setActiveTab('chat')}
+          icon="message-text"
+          style={styles.tabButton}
+        >
+          Chat
+        </Button>
       </View>
 
       {/* Tab Content */}
@@ -1508,6 +1517,9 @@ const RoomScreen: React.FC = () => {
       {activeTab === 'users' && renderUsersTab()}
       {activeTab === 'spotify' && renderSpotifyTab()}
       {activeTab === 'settings' && renderSettingsTab()}
+      {activeTab === 'chat' && (
+        <RoomChat roomId={roomId} supabase={supabase} />
+      )}
 
       {/* Floating Player */}
       {currentTrack && (
