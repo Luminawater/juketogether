@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>SoundCloud Jukebox - Bypass Password</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .bookmarklet {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .bookmarklet:hover {
+            background: #5568d3;
+        }
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h1>🔓 Bypass Localtunnel Password</h1>
+        <p>Unfortunately, localtunnel's password page can't be fully bypassed because it checks your browser's User-Agent before any JavaScript runs.</p>
+        
+        <h2>Solution 1: Browser Extension (Easiest)</h2>
+        <p>Install a browser extension to modify headers:</p>
+        <ul>
+            <li><strong>Chrome/Edge:</strong> Install "ModHeader" extension</li>
+            <li><strong>Firefox:</strong> Install "Modify Headers" extension</li>
+        </ul>
+        <p>Then add this header: <code>bypass-tunnel-reminder: true</code></p>
+        
+        <h2>Solution 2: Use ngrok Instead</h2>
+        <p>ngrok doesn't require passwords (but needs a free account):</p>
+        <ol>
+            <li>Sign up at <a href="https://ngrok.com" target="_blank">https://ngrok.com</a></li>
+            <li>Get your authtoken from the dashboard</li>
+            <li>Run: <code>ngrok config add-authtoken YOUR_TOKEN</code></li>
+            <li>Run: <code>npx --yes ngrok http 8080</code></li>
+        </ol>
+        
+        <h2>Solution 3: Accept the Password</h2>
+        <p>The password is only needed <strong>once per visitor's IP address every 7 days</strong>.</p>
+        <p>Password: <strong id="password">Loading...</strong></p>
+        <p>After entering it once, visitors won't see it again for 7 days.</p>
+    </div>
+    
+    <script>
+        // Try to get password
+        fetch('https://loca.lt/mytunnelpassword')
+            .then(r => r.text())
+            .then(p => document.getElementById('password').textContent = p.trim())
+            .catch(() => document.getElementById('password').textContent = 'Get it with: curl https://loca.lt/mytunnelpassword');
+    </script>
+</body>
+</html>
+

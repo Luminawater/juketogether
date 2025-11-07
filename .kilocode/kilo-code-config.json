@@ -1,0 +1,19 @@
+{
+  "projectName": "soundcloud-jukebox",
+  "include": [
+    "src/**/*.js",
+    "src/**/*.ts",
+    "src/**/*.jsx",
+    "src/**/*.tsx",
+    "**/*.md",
+    "**/*.json"
+  ],
+  "exclude": [
+    "node_modules/**",
+    "dist/**",
+    "build/**",
+    ".git/**",
+    ".vscode/**",
+    ".kilocode/**"
+  ]
+}
