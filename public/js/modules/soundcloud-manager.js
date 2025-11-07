@@ -18,12 +18,15 @@ let lastPauseTime = 0; // Track when widget last paused to prevent immediate ret
 // DOM elements
 const currentTrackDiv = document.getElementById('current-track');
 
+// Store updateCurrentTrackDisplay callback in module scope
+let updateCurrentTrackDisplayCallback = null;
+
 // Initialize SoundCloud manager
 function initSoundCloudManager(deps) {
     // Dependencies will be passed from main app
     const socket = deps.socket;
     const roomId = deps.roomId;
-    const updateCurrentTrackDisplay = deps.updateCurrentTrackDisplay;
+    updateCurrentTrackDisplayCallback = deps.updateCurrentTrackDisplay;
 
     return {
         widget,
@@ -32,7 +35,7 @@ function initSoundCloudManager(deps) {
         currentRoomIsPlaying,
         loadTrack,
         playTrack,
-        updateCurrentTrackDisplay: updateCurrentTrackDisplay,
+        updateCurrentTrackDisplay: updateCurrentTrackDisplayCallback,
         fetchTrackMetadata,
         addTrack,
         extractSoundCloudUrls,
@@ -48,12 +51,16 @@ function initSoundCloudManager(deps) {
     };
 }
 
-// Update current track display
+// Update current track display (fallback if callback not set)
 function updateCurrentTrackDisplay(title, url) {
-    currentTrackDiv.innerHTML = `
-        <p><strong>Now Playing:</strong> ${title}</p>
-        <p style="font-size: 0.9em; margin-top: 5px;"><a href="${url}" target="_blank">View on SoundCloud</a></p>
-    `;
+    if (updateCurrentTrackDisplayCallback) {
+        updateCurrentTrackDisplayCallback(title, url);
+    } else {
+        currentTrackDiv.innerHTML = `
+            <p><strong>Now Playing:</strong> ${title}</p>
+            <p style="font-size: 0.9em; margin-top: 5px;"><a href="${url}" target="_blank">View on SoundCloud</a></p>
+        `;
+    }
 }
 
 // Helper function to update play/pause button
@@ -493,6 +500,12 @@ function loadTrack(url, trackInfo, onLoaded) {
         console.error('SoundCloud Widget API not loaded');
         showError('SoundCloud API failed to load. Please refresh the page.');
         return;
+    }
+
+    // Update track display if trackInfo is available
+    if (trackInfo) {
+        const displayTitle = trackInfo.fullTitle || (trackInfo.artist ? `${trackInfo.artist} - ${trackInfo.title}` : trackInfo.title) || 'Unknown Track';
+        updateCurrentTrackDisplay(displayTitle, url);
     }
 
     // Clear previous position sync interval

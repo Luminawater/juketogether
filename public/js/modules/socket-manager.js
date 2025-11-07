@@ -576,7 +576,9 @@ function initSocketManager(deps) {
 
     return {
         socket,
-        myUserId
+        myUserId,
+        get currentPlatform() { return currentPlatform; },
+        set currentPlatform(value) { currentPlatform = value; }
     };
 }
 
