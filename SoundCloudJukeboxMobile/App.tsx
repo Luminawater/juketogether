@@ -3,6 +3,8 @@ import { NavigationContainer, DarkTheme as NavigationDarkTheme } from '@react-na
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
+import { Platform } from 'react-native';
+import * as Linking from 'expo-linking';
 
 // Import screens
 import HomeScreen from './src/screens/HomeScreen';
@@ -26,7 +28,7 @@ export type RootStackParamList = {
   Home: undefined;
   Auth: undefined;
   Dashboard: undefined;
-  Room: { roomId: string; roomName: string };
+  Room: { roomId: string; roomName?: string; isShortCode?: boolean };
   Admin: undefined;
   Discovery: undefined;
   Friends: undefined;
@@ -35,6 +37,27 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+// Deep linking configuration for web
+const linking = {
+  prefixes: [
+    Linking.createURL('/'),
+    ...(Platform.OS === 'web' ? ['/'] : []),
+  ],
+  config: {
+    screens: {
+      Home: '',
+      Auth: 'auth',
+      Dashboard: 'dashboard',
+      Room: 'room/:roomId',
+      Admin: 'admin',
+      Discovery: 'discovery',
+      Friends: 'friends',
+      Profile: 'profile',
+      Leaderboard: 'leaderboard',
+    },
+  },
+};
 
 // Custom navigation dark theme matching Material Design
 const CustomNavigationDarkTheme = {
@@ -54,7 +77,10 @@ export default function App() {
   return (
     <AuthProvider>
       <PaperProvider theme={darkTheme}>
-        <NavigationContainer theme={CustomNavigationDarkTheme}>
+        <NavigationContainer 
+          theme={CustomNavigationDarkTheme}
+          linking={linking}
+        >
           <Stack.Navigator
             initialRouteName="Home"
             screenOptions={{

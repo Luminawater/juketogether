@@ -85,7 +85,8 @@ const DashboardScreen: React.FC = () => {
 
     try {
       const roomId = generateRoomId();
-      const { error } = await supabase
+      const shortCode = await generateShortCode();
+      const { data, error } = await supabase
         .from('rooms')
         .insert({
           id: roomId,
@@ -93,7 +94,10 @@ const DashboardScreen: React.FC = () => {
           description: roomDescription.trim() || null,
           type: roomType,
           created_by: user?.id,
-        });
+          short_code: shortCode,
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
@@ -104,8 +108,9 @@ const DashboardScreen: React.FC = () => {
 
       Alert.alert(
         'Success',
-        `Room created! Share this link: ${getRoomUrl(roomId)}`,
+        `Room created! Share code: ${shortCode}\nOr link: ${getRoomUrl(roomId)}`,
         [
+          { text: 'Copy Code', onPress: () => Share.share({ message: `Join my music room with code: ${shortCode}` }) },
           { text: 'Copy Link', onPress: () => Share.share({ message: getRoomUrl(roomId) }) },
           { text: 'Join Room', onPress: () => joinRoom(roomId, roomName) },
           { text: 'OK' },
@@ -127,33 +132,52 @@ const DashboardScreen: React.FC = () => {
 
   const joinRoomById = async () => {
     if (!joinRoomId.trim()) {
-      Alert.alert('Error', 'Please enter a room ID or URL');
+      Alert.alert('Error', 'Please enter a room code, ID or URL');
       return;
     }
 
-    let roomId = joinRoomId.trim();
+    let searchValue = joinRoomId.trim().toUpperCase();
 
     // Extract room ID from URL if it's a full URL
-    if (roomId.includes('/room/')) {
-      roomId = roomId.split('/room/')[1];
+    if (searchValue.includes('/ROOM/')) {
+      searchValue = searchValue.split('/ROOM/')[1];
     }
 
     try {
-      // Check if room exists
-      const { data, error } = await supabase
-        .from('rooms')
-        .select('*')
-        .eq('id', roomId)
-        .single();
+      // First try to find by short_code (if it's 5 characters and uppercase)
+      let data = null;
+      let error = null;
+
+      if (searchValue.length === 5 && /^[A-Z0-9]+$/.test(searchValue)) {
+        // Likely a short code
+        const result = await supabase
+          .from('rooms')
+          .select('*')
+          .eq('short_code', searchValue)
+          .single();
+        data = result.data;
+        error = result.error;
+      }
+
+      // If not found by short_code, try by room ID
+      if (error || !data) {
+        const result = await supabase
+          .from('rooms')
+          .select('*')
+          .eq('id', searchValue)
+          .single();
+        data = result.data;
+        error = result.error;
+      }
 
       if (error || !data) {
-        Alert.alert('Error', 'Room not found');
+        Alert.alert('Error', 'Room not found. Please check the code and try again.');
         return;
       }
 
       setJoinDialogVisible(false);
       setJoinRoomId('');
-      joinRoom(roomId, data.name);
+      joinRoom(data.id, data.name);
     } catch (error) {
       console.error('Error joining room:', error);
       Alert.alert('Error', 'Failed to join room');
@@ -162,6 +186,42 @@ const DashboardScreen: React.FC = () => {
 
   const generateRoomId = () => {
     return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+  };
+
+  // Generate unique short code (5 characters, uppercase alphanumeric)
+  // Excludes confusing characters: 0, O, 1, I
+  const generateShortCode = async (): Promise<string> => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    while (attempts < maxAttempts) {
+      let code = '';
+      for (let i = 0; i < 5; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      
+      // Check if code already exists
+      const { data, error } = await supabase
+        .from('rooms')
+        .select('short_code')
+        .eq('short_code', code)
+        .single();
+      
+      if (error && error.code === 'PGRST116') {
+        // No rows found, code is unique
+        return code;
+      }
+      
+      attempts++;
+    }
+    
+    // Fallback: add timestamp to ensure uniqueness
+    const timestamp = Date.now().toString(36).substr(-2).toUpperCase();
+    return chars.charAt(Math.floor(Math.random() * chars.length)) + 
+           chars.charAt(Math.floor(Math.random() * chars.length)) + 
+           chars.charAt(Math.floor(Math.random() * chars.length)) + 
+           timestamp;
   };
 
   const getRoomUrl = (roomId: string) => {
@@ -409,11 +469,12 @@ const DashboardScreen: React.FC = () => {
           <Dialog.Title>Join Room</Dialog.Title>
           <Dialog.Content>
             <TextInput
-              label="Room URL or ID"
+              label="Room Code, ID or URL"
               value={joinRoomId}
               onChangeText={setJoinRoomId}
               mode="outlined"
-              placeholder="Paste room URL or enter room ID"
+              placeholder="Enter 5-character code or room ID/URL"
+              autoCapitalize="characters"
               style={styles.dialogInput}
             />
           </Dialog.Content>

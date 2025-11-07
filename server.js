@@ -1737,6 +1737,7 @@ app.post('/api/rooms', async (req, res) => {
     }
 
     const roomId = generateRoomId();
+    const shortCode = await generateShortCode();
     const { data, error } = await supabase
       .from('rooms')
       .insert({
@@ -1745,6 +1746,7 @@ app.post('/api/rooms', async (req, res) => {
         description,
         type: type || 'public',
         created_by: user.id,
+        short_code: shortCode,
       })
       .select()
       .single();
@@ -1962,6 +1964,42 @@ app.put('/api/profile', async (req, res) => {
 // Utility function to generate room IDs
 function generateRoomId() {
   return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+}
+
+// Utility function to generate unique short codes (5 characters, uppercase alphanumeric)
+// Excludes confusing characters: 0, O, 1, I
+async function generateShortCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  while (attempts < maxAttempts) {
+    let code = '';
+    for (let i = 0; i < 5; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    // Check if code already exists
+    const { data, error } = await supabase
+      .from('rooms')
+      .select('short_code')
+      .eq('short_code', code)
+      .single();
+    
+    if (error && error.code === 'PGRST116') {
+      // No rows found, code is unique
+      return code;
+    }
+    
+    attempts++;
+  }
+  
+  // Fallback: add timestamp to ensure uniqueness
+  const timestamp = Date.now().toString(36).substr(-2).toUpperCase();
+  return chars.charAt(Math.floor(Math.random() * chars.length)) + 
+         chars.charAt(Math.floor(Math.random() * chars.length)) + 
+         chars.charAt(Math.floor(Math.random() * chars.length)) + 
+         timestamp;
 }
 
 // HTML routes removed - now using Expo web app

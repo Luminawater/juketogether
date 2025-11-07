@@ -434,12 +434,12 @@ const AdminScreen: React.FC = () => {
                           <Text>Free (1 song)</Text>
                         </View>
                         <View style={styles.radioOption}>
-                          <RadioButton value="rookie" />
-                          <Text>Rookie ($2, 10 songs)</Text>
+                          <RadioButton value="standard" />
+                          <Text>Standard ($2, 10 songs)</Text>
                         </View>
                         <View style={styles.radioOption}>
-                          <RadioButton value="standard" />
-                          <Text>Standard ($5, unlimited)</Text>
+                          <RadioButton value="pro" />
+                          <Text>Pro ($5, unlimited)</Text>
                         </View>
                       </RadioButton.Group>
                     </View>

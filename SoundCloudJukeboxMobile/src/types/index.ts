@@ -1,5 +1,5 @@
 export type UserRole = 'guest' | 'user' | 'moderator' | 'admin';
-export type SubscriptionTier = 'free' | 'rookie' | 'standard';
+export type SubscriptionTier = 'free' | 'standard' | 'pro';
 
 export interface User {
   id: string;

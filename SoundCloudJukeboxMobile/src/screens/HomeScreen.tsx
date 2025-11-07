@@ -1,20 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
-  ScrollView,
   Alert,
-  Linking,
-  TouchableOpacity,
+  Animated,
+  Dimensions,
+  Modal,
+  Image,
 } from 'react-native';
 import {
   Text,
-  Card,
   Title,
-  Paragraph,
   Button,
   TextInput,
-  Divider,
   useTheme,
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
@@ -22,15 +20,132 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 
+// Import logos
+const SoundCloudLogo = require('../../assets/logo-soundcloud.png');
+const SpotifyLogo = require('../../assets/Spotify-logo.png');
+const YouTubeLogo = require('../../assets/youtube.png');
+
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList>;
+
+const { width, height } = Dimensions.get('window');
+
+// Animated Orb Component
+const AnimatedOrb: React.FC<{
+  size: number;
+  color: string;
+  startX: number;
+  startY: number;
+  duration: number;
+  delay: number;
+}> = ({ size, color, startX, startY, duration, delay }) => {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const animate = () => {
+      Animated.parallel([
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(translateX, {
+              toValue: 1,
+              duration: duration,
+              delay: delay,
+              useNativeDriver: true,
+            }),
+            Animated.timing(translateX, {
+              toValue: 0,
+              duration: duration,
+              useNativeDriver: true,
+            }),
+          ])
+        ),
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(translateY, {
+              toValue: 1,
+              duration: duration * 1.3,
+              delay: delay,
+              useNativeDriver: true,
+            }),
+            Animated.timing(translateY, {
+              toValue: 0,
+              duration: duration * 1.3,
+              useNativeDriver: true,
+            }),
+          ])
+        ),
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(opacity, {
+              toValue: 0.6,
+              duration: duration * 0.8,
+              delay: delay,
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 0.3,
+              duration: duration * 0.8,
+              useNativeDriver: true,
+            }),
+          ])
+        ),
+      ]).start();
+    };
+
+    animate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const x = translateX.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, width * 0.3],
+  });
+
+  const y = translateY.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, height * 0.2],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.orb,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: color,
+          left: startX,
+          top: startY,
+          transform: [{ translateX: x }, { translateY: y }],
+          opacity: opacity,
+        },
+      ]}
+    >
+      <Animated.View
+        style={[
+          styles.orbInner,
+          {
+            width: size * 0.6,
+            height: size * 0.6,
+            borderRadius: (size * 0.6) / 2,
+            backgroundColor: color,
+            opacity: opacity,
+          },
+        ]}
+      />
+    </Animated.View>
+  );
+};
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const { user } = useAuth();
   const theme = useTheme();
 
-  const [invitationLink, setInvitationLink] = useState('');
-  const [joinRoomId, setJoinRoomId] = useState('');
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [roomId, setRoomId] = useState('');
 
   // If user is logged in, redirect to dashboard
   React.useEffect(() => {
@@ -39,306 +154,271 @@ const HomeScreen: React.FC = () => {
     }
   }, [user, navigation]);
 
-  const handleJoinViaInvitation = () => {
-    if (!invitationLink.trim()) {
-      Alert.alert('Error', 'Please enter an invitation link');
-      return;
-    }
-
-    // Extract room ID from URL or use as-is
-    let roomId = invitationLink.trim();
-    if (invitationLink.includes('/room/')) {
-      roomId = invitationLink.split('/room/')[1].split('?')[0];
-    }
-
-    // Navigate to room (no auth required for joining via invitation)
-    navigation.navigate('Room', { roomId, roomName: 'Music Room' });
-  };
-
-  const handleJoinViaRoomId = () => {
-    if (!joinRoomId.trim()) {
-      Alert.alert('Error', 'Please enter a room ID');
-      return;
-    }
-
-    // Navigate to room (no auth required for joining)
-    navigation.navigate('Room', { roomId: joinRoomId.trim(), roomName: 'Music Room' });
-  };
-
-  const handleCreateAccount = () => {
+  const handleLoginSignup = () => {
     navigation.navigate('Auth');
   };
 
-  const pricingTiers = [
-    {
-      name: 'Free',
-      price: '$0',
-      songs: '1 song',
-      features: ['Join rooms via invitation', 'Join via friends list', '1 song playback'],
-      color: '#9e9e9e',
-    },
-    {
-      name: 'Rookie',
-      price: '$2',
-      songs: '10 songs',
-      features: ['Everything in Free', 'Create your own room', '10 songs playback'],
-      color: '#4caf50',
-    },
-    {
-      name: 'Standard',
-      price: '$5',
-      songs: 'Unlimited',
-      features: ['Everything in Rookie', 'Unlimited songs', 'Priority support'],
-      color: '#667eea',
-    },
+  const handleJoinRoom = () => {
+    setShowJoinModal(true);
+  };
+
+  const handleJoinRoomSubmit = async () => {
+    if (!roomId.trim()) {
+      Alert.alert('Error', 'Please enter a room code, ID or invitation link');
+      return;
+    }
+
+    let searchValue = roomId.trim().toUpperCase();
+
+    // Extract room ID from URL if it's a full URL
+    if (searchValue.includes('/ROOM/')) {
+      searchValue = searchValue.split('/ROOM/')[1].split('?')[0];
+    }
+
+    // If it's a 5-character code, try to find by short_code
+    // Otherwise, navigate directly (will work if it's a valid room ID)
+    if (searchValue.length === 5 && /^[A-Z0-9]+$/.test(searchValue)) {
+      // Likely a short code - navigate and let RoomScreen handle the lookup
+      navigation.navigate('Room', { roomId: searchValue, roomName: 'Music Room', isShortCode: true });
+    } else {
+      // Assume it's a room ID
+      navigation.navigate('Room', { roomId: searchValue, roomName: 'Music Room' });
+    }
+    
+    setShowJoinModal(false);
+    setRoomId('');
+  };
+
+  // Orbs configuration
+  const orbs = [
+    { size: 200, color: '#667eea', startX: -100, startY: 100, duration: 8000, delay: 0 },
+    { size: 150, color: '#03DAC6', startX: width - 50, startY: 200, duration: 10000, delay: 2000 },
+    { size: 180, color: '#BB86FC', startX: width / 2, startY: -50, duration: 12000, delay: 4000 },
+    { size: 120, color: '#667eea', startX: width + 20, startY: height / 2, duration: 9000, delay: 1000 },
+    { size: 160, color: '#03DAC6', startX: -80, startY: height - 200, duration: 11000, delay: 3000 },
   ];
 
   return (
-    <ScrollView 
-      style={[styles.container, { backgroundColor: theme.colors.background }]} 
-      contentContainerStyle={styles.contentContainer}
-    >
-      <View style={styles.header}>
-        <Title style={[styles.title, { color: theme.colors.primary }]}>🎵 SoundCloud & Spotify Jukebox</Title>
-        <Paragraph style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
-          Listen to music together with friends in real-time
-        </Paragraph>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      {/* Animated Orbs Background */}
+      <View style={styles.orbsContainer} pointerEvents="none">
+        {orbs.map((orb, index) => (
+          <AnimatedOrb key={index} {...orb} />
+        ))}
       </View>
 
-      {/* Join Options - No Signup Required */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title style={styles.cardTitle}>Join a Music Room</Title>
-          <Paragraph style={styles.cardDescription}>
-            No account needed! Join via invitation link or room ID
-          </Paragraph>
+      {/* Content */}
+      <View style={styles.content}>
+        {/* Logo Row */}
+        <View style={styles.logoContainer}>
+          <Image
+            source={SoundCloudLogo}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Image
+            source={SpotifyLogo}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Image
+            source={YouTubeLogo}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
 
-          <View style={styles.joinSection}>
-            <TextInput
-              label="Invitation Link or Room ID"
-              value={invitationLink || joinRoomId}
-              onChangeText={(text) => {
-                setInvitationLink(text);
-                setJoinRoomId(text);
-              }}
-              mode="outlined"
-              placeholder="Paste invitation link or enter room ID"
-              style={styles.input}
-            />
-            <Button
-              mode="contained"
-              onPress={handleJoinViaInvitation}
-              style={styles.joinButton}
-              icon="login"
-            >
-              Join Room
-            </Button>
-          </View>
-        </Card.Content>
-      </Card>
+        <Title style={[styles.title, { color: theme.colors.onBackground }]}>
+          🎵 Music Jukebox
+        </Title>
+        <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
+          Listen to music together with friends in real-time
+        </Text>
 
-      <Divider style={styles.divider} />
+        <View style={styles.buttonContainer}>
+          <Button
+            mode="contained"
+            onPress={handleLoginSignup}
+            style={styles.button}
+            contentStyle={styles.buttonContent}
+            labelStyle={styles.buttonLabel}
+            icon="account"
+          >
+            Login / Signup
+          </Button>
 
-      {/* Pricing Tiers */}
-      <View style={styles.pricingSection}>
-        <Title style={styles.sectionTitle}>Subscription Plans</Title>
-        <Paragraph style={styles.sectionDescription}>
-          Create your own room and unlock more features
-        </Paragraph>
-
-        <View style={styles.pricingGrid}>
-          {pricingTiers.map((tier, index) => (
-            <Card key={index} style={[styles.pricingCard, { borderColor: tier.color }]}>
-              <Card.Content>
-                <View style={[styles.pricingBadge, { backgroundColor: tier.color }]}>
-                  <Text style={styles.pricingName}>{tier.name}</Text>
-                </View>
-                <View style={styles.pricingHeader}>
-                  <Text style={[styles.pricingPrice, { color: theme.colors.onSurface }]}>{tier.price}</Text>
-                  <Text style={[styles.pricingSongs, { color: theme.colors.onSurfaceVariant }]}>{tier.songs}</Text>
-                </View>
-                <View style={styles.featuresList}>
-                  {tier.features.map((feature, idx) => (
-                    <View key={idx} style={styles.featureItem}>
-                      <Text style={[styles.featureText, { color: theme.colors.onSurface }]}>✓ {feature}</Text>
-                    </View>
-                  ))}
-                </View>
-                {tier.name === 'Free' ? (
-                  <Button
-                    mode="outlined"
-                    onPress={handleCreateAccount}
-                    style={[styles.pricingButton, { borderColor: tier.color }]}
-                    textColor={tier.color}
-                  >
-                    Sign Up Free
-                  </Button>
-                ) : (
-                  <Button
-                    mode="contained"
-                    onPress={handleCreateAccount}
-                    style={[styles.pricingButton, { backgroundColor: tier.color }]}
-                  >
-                    Upgrade to {tier.name}
-                  </Button>
-                )}
-              </Card.Content>
-            </Card>
-          ))}
+          <Button
+            mode="outlined"
+            onPress={handleJoinRoom}
+            style={[styles.button, styles.joinButton]}
+            contentStyle={styles.buttonContent}
+            labelStyle={styles.buttonLabel}
+            icon="door-open"
+          >
+            Join Room
+          </Button>
         </View>
       </View>
 
-      {/* Create Account CTA */}
-      <Card style={styles.ctaCard}>
-        <Card.Content>
-          <Title style={styles.ctaTitle}>Ready to create your own room?</Title>
-          <Paragraph style={styles.ctaDescription}>
-            Sign up for free and get 1 song to start. Upgrade anytime to unlock more features!
-          </Paragraph>
-          <Button
-            mode="contained"
-            onPress={handleCreateAccount}
-            style={styles.ctaButton}
-            icon="account-plus"
-          >
-            Create Account
-          </Button>
-        </Card.Content>
-      </Card>
-    </ScrollView>
+      {/* Join Room Modal */}
+      <Modal
+        visible={showJoinModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowJoinModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+            <Title style={[styles.modalTitle, { color: theme.colors.onSurface }]}>
+              Join a Music Room
+            </Title>
+            <Text style={[styles.modalDescription, { color: theme.colors.onSurfaceVariant }]}>
+              Enter a 5-character room code, room ID or paste an invitation link
+            </Text>
+            <TextInput
+              label="Room Code, ID or Invitation Link"
+              value={roomId}
+              onChangeText={setRoomId}
+              mode="outlined"
+              placeholder="Enter 5-character code or room ID/link"
+              style={styles.modalInput}
+              autoCapitalize="characters"
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <Button
+                mode="outlined"
+                onPress={() => {
+                  setShowJoinModal(false);
+                  setRoomId('');
+                }}
+                style={styles.modalButton}
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                onPress={handleJoinRoomSubmit}
+                style={styles.modalButton}
+              >
+                Join
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: 'relative',
   },
-  contentContainer: {
-    padding: 20,
-    paddingBottom: 40,
+  orbsContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden',
   },
-  header: {
+  orb: {
+    position: 'absolute',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 30,
-    marginTop: 40,
-    paddingVertical: 20,
+  },
+  orbInner: {
+    position: 'absolute',
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    zIndex: 1,
+  },
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
+    marginBottom: 32,
+    paddingHorizontal: 20,
+  },
+  logo: {
+    width: 60,
+    height: 60,
+    opacity: 0.9,
   },
   title: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: 16,
     textAlign: 'center',
-    color: '#667eea',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 18,
     textAlign: 'center',
-    marginTop: 8,
+    marginBottom: 48,
+    opacity: 0.8,
   },
-  card: {
-    marginBottom: 20,
+  buttonContainer: {
+    width: '100%',
+    maxWidth: 320,
+    gap: 16,
+  },
+  button: {
+    borderRadius: 12,
     elevation: 4,
   },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  cardDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-  },
-  joinSection: {
-    gap: 12,
-  },
-  input: {
-    marginBottom: 8,
-  },
   joinButton: {
-    marginTop: 8,
+    borderWidth: 2,
   },
-  divider: {
-    marginVertical: 30,
+  buttonContent: {
+    paddingVertical: 12,
   },
-  pricingSection: {
-    marginBottom: 30,
+  buttonLabel: {
+    fontSize: 16,
+    fontWeight: '600',
   },
-  sectionTitle: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
+    padding: 24,
+    elevation: 8,
+  },
+  modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 8,
     textAlign: 'center',
   },
-  sectionDescription: {
+  modalDescription: {
     fontSize: 14,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+    opacity: 0.8,
   },
-  pricingGrid: {
-    gap: 16,
+  modalInput: {
+    marginBottom: 24,
   },
-  pricingCard: {
-    marginBottom: 16,
-    borderWidth: 2,
-    elevation: 2,
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'flex-end',
   },
-  pricingBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 12,
-  },
-  pricingName: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  pricingHeader: {
-    marginBottom: 16,
-  },
-  pricingPrice: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  pricingSongs: {
-    fontSize: 16,
-  },
-  featuresList: {
-    marginBottom: 20,
-    gap: 8,
-  },
-  featureItem: {
-    marginBottom: 4,
-  },
-  featureText: {
-    fontSize: 14,
-  },
-  pricingButton: {
-    marginTop: 8,
-  },
-  ctaCard: {
-    backgroundColor: '#667eea',
-    elevation: 4,
-  },
-  ctaTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  ctaDescription: {
-    fontSize: 14,
-    color: '#fff',
-    opacity: 0.9,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  ctaButton: {
-    backgroundColor: '#fff',
+  modalButton: {
+    flex: 1,
   },
 });
 

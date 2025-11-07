@@ -17,13 +17,13 @@ export function hasRole(userRole: UserRole, requiredRole: UserRole): boolean {
 
 /**
  * Check if a user has a specific tier or higher
- * Tier hierarchy: standard > rookie > free
+ * Tier hierarchy: pro > standard > free
  */
 export function hasTier(userTier: SubscriptionTier, requiredTier: SubscriptionTier): boolean {
   const tierHierarchy: Record<SubscriptionTier, number> = {
     free: 0,
-    rookie: 1,
-    standard: 2,
+    standard: 1,
+    pro: 2,
   };
 
   return tierHierarchy[userTier] >= tierHierarchy[requiredTier];
@@ -36,9 +36,9 @@ export function getMaxSongsForTier(tier: SubscriptionTier): number {
   switch (tier) {
     case 'free':
       return 1;
-    case 'rookie':
-      return 10;
     case 'standard':
+      return 10;
+    case 'pro':
       return Infinity;
     default:
       return 0;
@@ -47,7 +47,7 @@ export function getMaxSongsForTier(tier: SubscriptionTier): number {
 
 /**
  * Check if user can play more songs based on their permissions
- * Moderators and admins have unlimited songs (treated as standard tier)
+ * Moderators and admins have unlimited songs (treated as pro tier)
  */
 export function canPlaySong(permissions: UserPermissions): boolean {
   // Moderators and admins have unlimited songs
@@ -86,8 +86,8 @@ export function getRoleDisplayName(role: UserRole): string {
 export function getTierDisplayName(tier: SubscriptionTier): string {
   const displayNames: Record<SubscriptionTier, string> = {
     free: 'Free',
-    rookie: 'Rookie',
     standard: 'Standard',
+    pro: 'Pro',
   };
   return displayNames[tier] || 'Free';
 }
@@ -98,8 +98,8 @@ export function getTierDisplayName(tier: SubscriptionTier): string {
 export function getTierColor(tier: SubscriptionTier): string {
   const colors: Record<SubscriptionTier, string> = {
     free: '#9e9e9e',
-    rookie: '#4caf50',
-    standard: '#667eea',
+    standard: '#4caf50',
+    pro: '#667eea',
   };
   return colors[tier] || '#9e9e9e';
 }
