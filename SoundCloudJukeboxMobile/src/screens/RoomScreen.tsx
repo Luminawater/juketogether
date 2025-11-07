@@ -454,7 +454,7 @@ const RoomScreen: React.FC = () => {
     }
 
     if (!trackUrl.trim()) {
-      Alert.alert('Error', 'Please enter a track URL');
+      Alert.alert('Error', 'Please enter a track URL or paste text containing URLs');
       return;
     }
 
@@ -463,22 +463,50 @@ const RoomScreen: React.FC = () => {
       return;
     }
 
-    const isSoundCloud = trackUrl.includes('soundcloud.com');
-    const isSpotify = trackUrl.includes('spotify.com') || trackUrl.includes('spotify:');
-    const isYouTube = trackUrl.includes('youtube.com') || trackUrl.includes('youtu.be');
-
-    if (!isSoundCloud && !isSpotify && !isYouTube) {
-      Alert.alert('Error', 'Please enter a valid SoundCloud, Spotify, or YouTube URL');
+    // Extract URLs from the input text
+    const extractedUrls = extractMusicUrls(trackUrl);
+    
+    if (extractedUrls.length === 0) {
+      Alert.alert(
+        'No URLs Found',
+        'Could not find any SoundCloud, Spotify, or YouTube URLs in the text. Please paste a valid URL or text containing URLs.'
+      );
       return;
     }
 
     setLoading(true);
     try {
       if (socketService.socket) {
-        socketService.socket.emit('add-track', {
-          roomId,
-          trackUrl: trackUrl.trim(),
-        });
+        // Add all extracted URLs
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (const url of extractedUrls) {
+          try {
+            socketService.socket.emit('add-track', {
+              roomId,
+              trackUrl: url,
+            });
+            successCount++;
+          } catch (error) {
+            console.error('Error adding track:', error);
+            errorCount++;
+          }
+        }
+        
+        // Show success message
+        if (successCount > 0) {
+          if (extractedUrls.length === 1) {
+            Alert.alert('Success', 'Track added to queue!');
+          } else {
+            Alert.alert(
+              'Success',
+              `Added ${successCount} track${successCount === 1 ? '' : 's'} to queue${errorCount > 0 ? ` (${errorCount} failed)` : ''}`
+            );
+          }
+        } else {
+          Alert.alert('Error', 'Failed to add tracks');
+        }
       }
       setTrackUrl('');
     } catch (error) {
@@ -820,7 +848,9 @@ const RoomScreen: React.FC = () => {
             value={trackUrl}
             onChangeText={setTrackUrl}
             mode="outlined"
-            placeholder="Paste a URL..."
+            placeholder="Paste URL(s) or text with URLs..."
+            multiline
+            numberOfLines={3}
             style={styles.urlInput}
             editable={!!user && (isOwner || isAdmin || roomSettings.allowQueue)}
             onSubmitEditing={addTrack}

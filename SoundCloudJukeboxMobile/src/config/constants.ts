@@ -2,13 +2,21 @@ import Constants from 'expo-constants';
 
 // Get the API URL from environment variables or use default
 const getApiUrl = () => {
-  // In development, use localhost or ngrok URL
-  if (__DEV__) {
-    // You can set this via .env or Expo Constants
-    return Constants.expoConfig?.extra?.apiUrl || 'http://localhost:8080';
+  // Check if we're in development mode
+  const isDev = __DEV__ || process.env.NODE_ENV === 'development';
+  
+  // In development, prioritize localhost unless explicitly overridden via env var
+  if (isDev) {
+    // Check for explicit override via environment variable (e.g., ngrok URL)
+    const envOverride = process.env.EXPO_PUBLIC_API_URL;
+    if (envOverride) {
+      return envOverride;
+    }
+    // Default to localhost for development (ignore app.json in dev mode)
+    return 'http://localhost:8080';
   }
   
-  // In production, use your Vercel/deployed URL
+  // In production, use your Vercel/deployed URL from app.json or fallback
   return Constants.expoConfig?.extra?.apiUrl || 'https://juketogether.vercel.app';
 };
 

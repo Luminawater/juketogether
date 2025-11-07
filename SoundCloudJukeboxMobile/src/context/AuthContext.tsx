@@ -249,13 +249,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Safety timeout to ensure loading always resolves (2 seconds)
     timeoutRef.current = setTimeout(() => {
-      console.warn('[AuthContext] Session check timeout, setting loading to false');
+      // Silently resolve loading as fallback
       resolveLoading();
     }, 2000);
 
     // Get session with immediate timeout protection
     const sessionTimeout = setTimeout(() => {
-      console.warn('[AuthContext] getSession() is taking too long, resolving loading');
+      // Silently resolve loading if session check takes too long (common in web)
       resolveLoading();
     }, 1500);
 

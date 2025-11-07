@@ -52,29 +52,57 @@ export const extractMusicUrls = (text: string): string[] => {
     return [];
   }
 
-  // URL regex pattern that matches http/https URLs
-  // This pattern matches URLs with or without protocol
-  const urlPattern = /(https?:\/\/[^\s]+|(?:soundcloud\.com|spotify\.com|open\.spotify\.com|youtube\.com|youtu\.be|spotify:)[^\s]*)/gi;
+  // More comprehensive URL regex pattern
+  // Matches:
+  // 1. Full URLs with protocol (http:// or https://)
+  // 2. URLs without protocol but with domain
+  // 3. Spotify URIs (spotify:track:...)
+  const urlPatterns = [
+    // Full URLs with protocol
+    /https?:\/\/(?:www\.)?(?:soundcloud\.com|open\.spotify\.com|spotify\.com|youtube\.com|youtu\.be)\/[^\s\)\]\}]*/gi,
+    // URLs without protocol
+    /(?:www\.)?(?:soundcloud\.com|open\.spotify\.com|spotify\.com|youtube\.com|youtu\.be)\/[^\s\)\]\}]*/gi,
+    // Spotify URIs
+    /spotify:[^\s\)\]\}]*/gi,
+  ];
   
-  const matches = text.match(urlPattern);
-  if (!matches) {
+  const allMatches: string[] = [];
+  
+  // Collect all matches from different patterns
+  for (const pattern of urlPatterns) {
+    const matches = text.match(pattern);
+    if (matches) {
+      allMatches.push(...matches);
+    }
+  }
+  
+  if (allMatches.length === 0) {
     return [];
   }
 
-  // Filter and normalize URLs
+  // Filter and normalize URLs, removing duplicates
   const validUrls: string[] = [];
+  const seenUrls = new Set<string>();
   
-  for (const match of matches) {
+  for (const match of allMatches) {
     let url = match.trim();
     
     // Remove trailing punctuation that might be part of the sentence
-    url = url.replace(/[.,;:!?]+$/, '');
+    url = url.replace(/[.,;:!?\)\]\}]+$/, '');
     
-    // Add protocol if missing
+    // Skip if empty after trimming
+    if (!url) {
+      continue;
+    }
+    
+    // Add protocol if missing (except for spotify: URIs)
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       // Check if it's a spotify: URI
       if (url.startsWith('spotify:')) {
-        validUrls.push(url);
+        if (!seenUrls.has(url)) {
+          validUrls.push(url);
+          seenUrls.add(url);
+        }
         continue;
       }
       // Otherwise add https://
@@ -82,12 +110,14 @@ export const extractMusicUrls = (text: string): string[] => {
     }
     
     // Validate it's a supported platform
-    const isSoundCloud = url.includes('soundcloud.com');
-    const isSpotify = url.includes('spotify.com') || url.includes('open.spotify.com') || url.startsWith('spotify:');
-    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+    const normalizedUrl = url.toLowerCase();
+    const isSoundCloud = normalizedUrl.includes('soundcloud.com');
+    const isSpotify = normalizedUrl.includes('spotify.com') || normalizedUrl.includes('open.spotify.com') || normalizedUrl.startsWith('spotify:');
+    const isYouTube = normalizedUrl.includes('youtube.com') || normalizedUrl.includes('youtu.be');
     
-    if (isSoundCloud || isSpotify || isYouTube) {
+    if ((isSoundCloud || isSpotify || isYouTube) && !seenUrls.has(url)) {
       validUrls.push(url);
+      seenUrls.add(url);
     }
   }
   
