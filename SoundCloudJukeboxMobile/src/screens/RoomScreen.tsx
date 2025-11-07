@@ -1098,15 +1098,15 @@ const RoomScreen: React.FC = () => {
           )}
 
           {loadingTracks ? (
-            <Card style={styles.card}>
+            <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
               <Card.Content>
-                <ActivityIndicator size="large" />
-                <Text style={styles.loadingText}>Loading tracks...</Text>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>Loading tracks...</Text>
               </Card.Content>
             </Card>
           ) : playlistTracks.length > 0 ? (
             <>
-              <Card style={styles.card}>
+              <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
                 <Card.Content>
                   <Button
                     mode="contained"
@@ -1118,9 +1118,9 @@ const RoomScreen: React.FC = () => {
                   </Button>
                 </Card.Content>
               </Card>
-              <Card style={styles.card}>
+              <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
                 <Card.Content>
-                  <Title>Tracks</Title>
+                  <Title style={{ color: theme.colors.onSurface }}>Tracks</Title>
                   <ScrollView style={styles.queueList}>
                     {playlistTracks.map((track) => (
                       <List.Item
@@ -1152,9 +1152,9 @@ const RoomScreen: React.FC = () => {
               </Card>
             </>
           ) : (
-            <Card style={styles.card}>
+            <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
               <Card.Content>
-                <Text style={styles.emptyQueue}>No tracks found in this playlist</Text>
+                <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>No tracks found in this playlist</Text>
               </Card.Content>
             </Card>
           )}
@@ -1163,11 +1163,11 @@ const RoomScreen: React.FC = () => {
     }
 
     return (
-      <ScrollView style={styles.tabContent}>
-        <Card style={styles.card}>
+      <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
             <View style={styles.playlistHeader}>
-              <Title>Your Spotify Playlists</Title>
+              <Title style={{ color: theme.colors.onSurface }}>Your Spotify Playlists</Title>
               <Button
                 icon="refresh"
                 mode="text"
@@ -1181,9 +1181,9 @@ const RoomScreen: React.FC = () => {
         </Card>
 
         {spotifyError && (
-          <Card style={styles.card}>
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
-              <Text style={styles.errorText}>{spotifyError}</Text>
+              <Text style={[styles.errorText, { color: theme.colors.error }]}>{spotifyError}</Text>
               <Button
                 mode="outlined"
                 onPress={loadSpotifyPlaylists}
@@ -1196,10 +1196,10 @@ const RoomScreen: React.FC = () => {
         )}
 
         {loadingPlaylists ? (
-          <Card style={styles.card}>
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
-              <ActivityIndicator size="large" />
-              <Text style={styles.loadingText}>Loading playlists...</Text>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>Loading playlists...</Text>
             </Card.Content>
           </Card>
         ) : spotifyPlaylists.length > 0 ? (
