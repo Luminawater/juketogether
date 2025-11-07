@@ -93,15 +93,15 @@ export const CustomDrawerContent: React.FC<any> = (props) => {
         icon={({ color, size }) => (
           <MaterialCommunityIcons name="home" size={size} color={color} />
         )}
-        active={currentRoute === 'Dashboard'}
-        onPress={() => handleNavigate('Dashboard')}
+        active={currentRoute === 'Home'}
+        onPress={() => handleNavigate('Home')}
         labelStyle={[
           styles.drawerItemLabel,
-          currentRoute === 'Dashboard' && { color: theme.colors.primary, fontWeight: '600' },
+          currentRoute === 'Home' && { color: theme.colors.primary, fontWeight: '600' },
         ]}
         style={[
           styles.drawerItem,
-          currentRoute === 'Dashboard' && { backgroundColor: theme.colors.primaryContainer },
+          currentRoute === 'Home' && { backgroundColor: theme.colors.primaryContainer },
         ]}
         activeBackgroundColor={theme.colors.primaryContainer}
         inactiveBackgroundColor="transparent"

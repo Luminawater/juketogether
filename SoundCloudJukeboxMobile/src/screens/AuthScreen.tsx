@@ -46,7 +46,7 @@ const AuthScreen: React.FC = () => {
       hasNavigatedRef.current = true;
       // Use React Navigation for all platforms to avoid full page reload
       // This ensures session state is preserved
-      navigation.replace('Dashboard');
+            navigation.replace('Home');
     }
   }, [user, loading, navigation]);
 

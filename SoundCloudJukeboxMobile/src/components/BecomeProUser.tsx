@@ -41,7 +41,7 @@ const BecomeProUser: React.FC<BecomeProUserProps> = ({ roomId, hostTier }) => {
   const handleUpgrade = () => {
     // Navigate to auth screen or subscription screen
     // For now, navigate to Dashboard where user can upgrade
-    navigation.navigate('Dashboard');
+    navigation.navigate('Home');
   };
 
   return (

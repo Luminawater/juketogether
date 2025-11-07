@@ -194,8 +194,8 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({ visible, onDismiss, naviga
               <DrawerItem
                 icon="🏠"
                 label="Dashboard"
-                onPress={() => handleNavigate('Dashboard')}
-                active={currentRoute === 'Dashboard'}
+                onPress={() => handleNavigate('Home')}
+                active={currentRoute === 'Home'}
               />
               <DrawerItem
                 icon="🔍"

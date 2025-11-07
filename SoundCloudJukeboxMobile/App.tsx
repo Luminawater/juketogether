@@ -136,7 +136,7 @@ const AuthenticatedStack = () => {
       }}
     >
       <Drawer.Screen
-        name="Dashboard"
+        name="Home"
         component={DashboardScreen}
         options={{
           title: 'SoundCloud & Spotify Jukebox',

@@ -161,7 +161,7 @@ const HomeScreen: React.FC = () => {
       if (Platform.OS === 'web') {
         window.location.href = '/dashboard';
       } else {
-        navigation.replace('Dashboard');
+        navigation.replace('Home');
       }
     }
   }, [user, loading, navigation]);

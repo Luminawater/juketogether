@@ -726,9 +726,51 @@ const RoomScreen: React.FC = () => {
 
   const renderMainTab = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      {/* Current Track */}
-      <Card style={[styles.card, styles.nowPlayingCard]}>
-        <Card.Content style={styles.nowPlayingContent}>
+      {/* Current Track - Using NowPlayingCard component */}
+      <NowPlayingCard
+        currentTrack={currentTrack}
+        isPlaying={isPlaying}
+        trackReactions={trackReactions}
+        canControl={canControl}
+        onPlayPause={playPause}
+        onNext={nextTrack}
+        onSync={syncToSession}
+        onReaction={handleReaction}
+        loadingReaction={loadingReaction}
+        hasUser={!!user}
+        queueLength={queue.length}
+      />
+
+      {/* DJ Mode Interface */}
+      {roomSettings.djMode && (
+        <DJModeInterface
+          djMode={roomSettings.djMode}
+          djPlayers={roomSettings.djPlayers}
+          playerTracks={djPlayerTracks}
+          playerPlayingStates={djPlayerPlayingStates}
+          onPlayerPlayPause={(playerIndex) => {
+            setDjPlayerPlayingStates(prev => {
+              const newStates = [...prev];
+              newStates[playerIndex] = !newStates[playerIndex];
+              return newStates;
+            });
+          }}
+          onPlayerLoadTrack={(playerIndex) => {
+            if (queue.length > 0) {
+              const trackToLoad = queue[0];
+              setDjPlayerTracks(prev => {
+                const newTracks = [...prev];
+                newTracks[playerIndex] = trackToLoad;
+                return newTracks;
+              });
+              setQueue(prev => prev.slice(1));
+            } else {
+              Alert.alert('No Tracks', 'Queue is empty. Add tracks to load into DJ players.');
+            }
+          }}
+        />
+      )}
+
           <View style={styles.nowPlayingHeader}>
             <View style={styles.nowPlayingHeaderLeft}>
               <View style={[styles.iconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
@@ -862,52 +904,53 @@ const RoomScreen: React.FC = () => {
           )}
 
           {/* Playback Controls */}
-          <View style={styles.controls}>
-            <Button
-              mode="contained"
-              onPress={playPause}
-              style={[styles.controlButton, styles.primaryControlButton]}
-              contentStyle={styles.controlButtonContent}
-              disabled={!currentTrack || !canControl}
-              icon={isPlaying ? 'pause' : 'play'}
-              buttonColor={theme.colors.primary}
-              textColor={theme.colors.onPrimary}
-            >
-              {isPlaying ? 'Pause' : 'Play'}
-            </Button>
-            <Button
-              mode="outlined"
-              onPress={nextTrack}
-              style={[styles.controlButton, { borderColor: theme.colors.primary }]}
-              contentStyle={styles.controlButtonContent}
-              disabled={queue.length === 0 || !canControl}
-              icon="skip-next"
-              textColor={theme.colors.primary}
-            >
-              Next
-            </Button>
-            <Button
-              mode="outlined"
-              onPress={syncToSession}
-              style={[styles.controlButton, { borderColor: theme.colors.primary }]}
-              contentStyle={styles.controlButtonContent}
-              icon="sync"
-              textColor={theme.colors.primary}
-            >
-              Sync
-            </Button>
-          </View>
-          {!canControl && (
-            <View style={[styles.permissionNoticeContainer, { backgroundColor: `${theme.colors.error}15` }]}>
-              <MaterialCommunityIcons name="alert-circle" size={16} color={theme.colors.error} />
-              <Text style={[styles.permissionNotice, { color: theme.colors.error }]}>
-                Only room owner and admins can control playback
-              </Text>
-            </View>
-          )}
-        </Card.Content>
-      </Card>
-
+          <Card style={styles.card}>
+            <Card.Content>
+              <View style={styles.controls}>
+                <Button
+                  mode="contained"
+                  onPress={playPause}
+                  style={[styles.controlButton, styles.primaryControlButton]}
+                  contentStyle={styles.controlButtonContent}
+                  disabled={!currentTrack || !canControl}
+                  icon={isPlaying ? 'pause' : 'play'}
+                  buttonColor={theme.colors.primary}
+                  textColor={theme.colors.onPrimary}
+                >
+                  {isPlaying ? 'Pause' : 'Play'}
+                </Button>
+                <Button
+                  mode="outlined"
+                  onPress={nextTrack}
+                  style={[styles.controlButton, { borderColor: theme.colors.primary }]}
+                  contentStyle={styles.controlButtonContent}
+                  disabled={queue.length === 0 || !canControl}
+                  icon="skip-next"
+                  textColor={theme.colors.primary}
+                >
+                  Next
+                </Button>
+                <Button
+                  mode="outlined"
+                  onPress={syncToSession}
+                  style={[styles.controlButton, { borderColor: theme.colors.primary }]}
+                  contentStyle={styles.controlButtonContent}
+                  icon="sync"
+                  textColor={theme.colors.primary}
+                >
+                  Sync
+                </Button>
+              </View>
+              {!canControl && (
+                <View style={[styles.permissionNoticeContainer, { backgroundColor: `${theme.colors.error}15` }]}>
+                  <MaterialCommunityIcons name="alert-circle" size={16} color={theme.colors.error} />
+                  <Text style={[styles.permissionNotice, { color: theme.colors.error }]}>
+                    Only room owner and admins can control playback
+                  </Text>
+                </View>
+              )}
+            </Card.Content>
+          </Card>
       {/* Ads Banner - Only show for non-PRO users */}
       {(!profile || !hasTier(profile.subscription_tier, 'pro')) && (
         <AdsBanner
