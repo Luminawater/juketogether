@@ -40,6 +40,12 @@ import {
   SpotifyPlaylist,
   SpotifyTrack,
 } from '../services/spotifyService';
+import {
+  getTrackReactions,
+  setTrackReaction,
+  TrackReactionCounts,
+  ReactionType,
+} from '../services/trackReactionsService';
 
 type RoomScreenRouteProp = RouteProp<RootStackParamList, 'Room'>;
 type RoomScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Room'>;
@@ -76,7 +82,7 @@ interface RoomSettings {
 const RoomScreen: React.FC = () => {
   const route = useRoute<RoomScreenRouteProp>();
   const navigation = useNavigation<RoomScreenNavigationProp>();
-  const { user, session } = useAuth();
+  const { user, session, supabase } = useAuth();
 
   const { roomId, roomName } = route.params;
 
@@ -122,6 +128,15 @@ const RoomScreen: React.FC = () => {
   const [loadingPlaylists, setLoadingPlaylists] = useState(false);
   const [loadingTracks, setLoadingTracks] = useState(false);
   const [spotifyError, setSpotifyError] = useState<string | null>(null);
+
+  // Track reactions state
+  const [trackReactions, setTrackReactions] = useState<TrackReactionCounts>({
+    likes: 0,
+    dislikes: 0,
+    fantastic: 0,
+    userReaction: null,
+  });
+  const [loadingReaction, setLoadingReaction] = useState(false);
 
   // Connect to Socket.io when component mounts
   useEffect(() => {
@@ -285,6 +300,58 @@ const RoomScreen: React.FC = () => {
       loadSpotifyPlaylists();
     }
   }, [user, session]);
+
+  // Load track reactions when current track changes
+  useEffect(() => {
+    if (currentTrack && user) {
+      loadTrackReactions();
+    } else {
+      setTrackReactions({ likes: 0, dislikes: 0, fantastic: 0, userReaction: null });
+    }
+  }, [currentTrack?.id, roomId, user?.id]);
+
+  const loadTrackReactions = async () => {
+    if (!currentTrack || !user || !supabase) return;
+
+    try {
+      const reactions = await getTrackReactions(
+        supabase,
+        roomId,
+        currentTrack.id,
+        user.id
+      );
+      setTrackReactions(reactions);
+    } catch (error) {
+      console.error('Error loading track reactions:', error);
+    }
+  };
+
+  const handleReaction = async (reactionType: ReactionType) => {
+    if (!user || !currentTrack || !supabase || loadingReaction) return;
+
+    setLoadingReaction(true);
+    try {
+      const result = await setTrackReaction(
+        supabase,
+        roomId,
+        currentTrack.id,
+        user.id,
+        reactionType
+      );
+
+      if (result.success) {
+        // Reload reactions to get updated counts
+        await loadTrackReactions();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to update reaction');
+      }
+    } catch (error: any) {
+      console.error('Error handling reaction:', error);
+      Alert.alert('Error', 'Failed to update reaction');
+    } finally {
+      setLoadingReaction(false);
+    }
+  };
 
   const loadSpotifyPlaylists = async () => {
     if (!user || !session) return;
@@ -565,20 +632,72 @@ const RoomScreen: React.FC = () => {
         <Card.Content>
           <Title>Now Playing</Title>
           {currentTrack ? (
-            <View style={styles.trackInfo}>
-              <Avatar.Image
-                size={60}
-                source={{ uri: currentTrack.info?.thumbnail || 'https://via.placeholder.com/60' }}
-              />
-              <View style={styles.trackDetails}>
-                <Text style={styles.trackTitle}>{currentTrack.info?.fullTitle || 'Unknown Track'}</Text>
-                <Text style={styles.trackPlatform}>
-                  {currentTrack.url?.includes('spotify') ? '🎵 Spotify' : 
-                   currentTrack.url?.includes('youtube') ? '🎥 YouTube' : 
-                   '🎵 SoundCloud'}
-                </Text>
+            <>
+              <View style={styles.trackInfo}>
+                <Avatar.Image
+                  size={60}
+                  source={{ uri: currentTrack.info?.thumbnail || 'https://via.placeholder.com/60' }}
+                />
+                <View style={styles.trackDetails}>
+                  <Text style={styles.trackTitle}>{currentTrack.info?.fullTitle || 'Unknown Track'}</Text>
+                  <Text style={styles.trackPlatform}>
+                    {currentTrack.url?.includes('spotify') ? '🎵 Spotify' : 
+                     currentTrack.url?.includes('youtube') ? '🎥 YouTube' : 
+                     '🎵 SoundCloud'}
+                  </Text>
+                </View>
               </View>
-            </View>
+
+              {/* Track Reactions */}
+              {user && (
+                <View style={styles.reactionsContainer}>
+                  <View style={styles.reactionButtonGroup}>
+                    <IconButton
+                      icon="thumb-up"
+                      iconColor={trackReactions.userReaction === 'like' ? '#4caf50' : '#666'}
+                      size={28}
+                      onPress={() => handleReaction('like')}
+                      disabled={loadingReaction}
+                      style={[
+                        styles.reactionButton,
+                        trackReactions.userReaction === 'like' && styles.reactionButtonActive
+                      ]}
+                    />
+                    <Text style={styles.reactionCount}>{trackReactions.likes}</Text>
+                  </View>
+
+                  <View style={styles.reactionButtonGroup}>
+                    <IconButton
+                      icon="thumb-down"
+                      iconColor={trackReactions.userReaction === 'dislike' ? '#f44336' : '#666'}
+                      size={28}
+                      onPress={() => handleReaction('dislike')}
+                      disabled={loadingReaction}
+                      style={[
+                        styles.reactionButton,
+                        trackReactions.userReaction === 'dislike' && styles.reactionButtonActive
+                      ]}
+                    />
+                    <Text style={styles.reactionCount}>{trackReactions.dislikes}</Text>
+                  </View>
+
+                  <View style={styles.reactionButtonGroup}>
+                    <IconButton
+                      icon="star"
+                      iconColor={trackReactions.userReaction === 'fantastic' ? '#ff9800' : '#666'}
+                      size={28}
+                      onPress={() => handleReaction('fantastic')}
+                      disabled={loadingReaction}
+                      style={[
+                        styles.reactionButton,
+                        trackReactions.userReaction === 'fantastic' && styles.reactionButtonActive
+                      ]}
+                    />
+                    <Text style={styles.reactionCount}>{trackReactions.fantastic}</Text>
+                  </View>
+                </View>
+              )}
+            </>
           ) : (
             <Text style={styles.noTrack}>No track playing</Text>
           )}
@@ -1657,6 +1776,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'flex-start',
+  },
+  reactionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    marginVertical: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  reactionButtonGroup: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+  },
+  reactionButton: {
+    margin: 0,
+  },
+  reactionButtonActive: {
+    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+  },
+  reactionCount: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
   },
 });
 
