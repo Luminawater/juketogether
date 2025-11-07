@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/constants';
 import { UserProfile, UserPermissions } from '../types';
@@ -34,7 +34,7 @@ const localStorageHelpers = {
   },
 };
 
-// Web-compatible storage adapter for Supabase
+// Storage adapter for Supabase - uses SecureStore on mobile, localStorage on web
 const getStorage = () => {
   if (Platform.OS === 'web') {
     // Use localStorage for web with proper error handling
@@ -53,8 +53,31 @@ const getStorage = () => {
       },
     };
   }
-  // Use AsyncStorage for mobile
-  return AsyncStorage;
+  // Use SecureStore for mobile (secure encrypted storage)
+  return {
+    getItem: async (key: string) => {
+      try {
+        return await SecureStore.getItemAsync(key);
+      } catch (error) {
+        console.error('[SecureStore] Error getting item:', error);
+        return null;
+      }
+    },
+    setItem: async (key: string, value: string) => {
+      try {
+        await SecureStore.setItemAsync(key, value);
+      } catch (error) {
+        console.error('[SecureStore] Error setting item:', error);
+      }
+    },
+    removeItem: async (key: string) => {
+      try {
+        await SecureStore.deleteItemAsync(key);
+      } catch (error) {
+        console.error('[SecureStore] Error removing item:', error);
+      }
+    },
+  };
 };
 
 // Initialize Supabase client
