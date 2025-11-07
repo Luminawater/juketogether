@@ -1055,8 +1055,8 @@ const RoomScreen: React.FC = () => {
 
     if (selectedPlaylist) {
       return (
-        <ScrollView style={styles.tabContent}>
-          <Card style={styles.card}>
+        <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
               <View style={styles.playlistHeader}>
                 <Button
@@ -1069,12 +1069,12 @@ const RoomScreen: React.FC = () => {
                 >
                   Back to Playlists
                 </Button>
-                <Title>{selectedPlaylist.name}</Title>
+                <Title style={{ color: theme.colors.onSurface }}>{selectedPlaylist.name}</Title>
                 {selectedPlaylist.description && (
-                  <Text style={styles.playlistDescription}>{selectedPlaylist.description}</Text>
+                  <Text style={[styles.playlistDescription, { color: theme.colors.onSurfaceVariant }]}>{selectedPlaylist.description}</Text>
                 )}
                 {selectedPlaylist.tracks && (
-                  <Text style={styles.trackCount}>
+                  <Text style={[styles.trackCount, { color: theme.colors.onSurfaceVariant }]}>
                     {selectedPlaylist.tracks.total} tracks
                   </Text>
                 )}
@@ -1083,9 +1083,9 @@ const RoomScreen: React.FC = () => {
           </Card>
 
           {spotifyError && (
-            <Card style={styles.card}>
+            <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
               <Card.Content>
-                <Text style={styles.errorText}>{spotifyError}</Text>
+                <Text style={[styles.errorText, { color: theme.colors.error }]}>{spotifyError}</Text>
                 <Button
                   mode="outlined"
                   onPress={() => loadPlaylistTracks(selectedPlaylist)}
