@@ -61,14 +61,35 @@ const DashboardScreen: React.FC = () => {
 
   const loadUserRooms = async () => {
     try {
+      // Query rooms by host_user_id and join with room_settings
       const { data, error } = await supabase
         .from('rooms')
-        .select('*')
-        .eq('created_by', user?.id)
-        .order('created_at', { ascending: false });
+        .select(`
+          *,
+          room_settings (
+            name,
+            description,
+            is_private,
+            created_at
+          )
+        `)
+        .eq('host_user_id', user?.id)
+        .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      setRooms(data || []);
+      
+      // Transform the data to match the Room interface
+      const transformedRooms = (data || []).map((room: any) => ({
+        id: room.id,
+        name: room.room_settings?.name || 'Unnamed Room',
+        description: room.room_settings?.description,
+        type: room.room_settings?.is_private ? 'private' : 'public',
+        created_by: room.host_user_id || '',
+        created_at: room.room_settings?.created_at || room.updated_at,
+        short_code: room.short_code,
+      }));
+      
+      setRooms(transformedRooms);
     } catch (error) {
       console.error('Error loading rooms:', error);
       Alert.alert('Error', 'Failed to load rooms');
@@ -86,20 +107,37 @@ const DashboardScreen: React.FC = () => {
     try {
       const roomId = generateRoomId();
       const shortCode = await generateShortCode();
-      const { data, error } = await supabase
+      
+      // First, create the room entry
+      const { data: roomData, error: roomError } = await supabase
         .from('rooms')
         .insert({
           id: roomId,
-          name: roomName.trim(),
-          description: roomDescription.trim() || null,
-          type: roomType,
-          created_by: user?.id,
+          host_user_id: user?.id || '',
           short_code: shortCode,
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (roomError) throw roomError;
+
+      // Then, create the room_settings entry
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('room_settings')
+        .insert({
+          room_id: roomId,
+          name: roomName.trim(),
+          description: roomDescription.trim() || null,
+          is_private: roomType === 'private',
+        })
+        .select()
+        .single();
+
+      if (settingsError) {
+        // If settings creation fails, try to clean up the room
+        await supabase.from('rooms').delete().eq('id', roomId);
+        throw settingsError;
+      }
 
       setCreateDialogVisible(false);
       setRoomName('');
@@ -149,10 +187,17 @@ const DashboardScreen: React.FC = () => {
       let error = null;
 
       if (searchValue.length === 5 && /^[A-Z0-9]+$/.test(searchValue)) {
-        // Likely a short code
+        // Likely a short code - join with room_settings to get name
         const result = await supabase
           .from('rooms')
-          .select('*')
+          .select(`
+            *,
+            room_settings (
+              name,
+              description,
+              is_private
+            )
+          `)
           .eq('short_code', searchValue)
           .single();
         data = result.data;
@@ -163,7 +208,14 @@ const DashboardScreen: React.FC = () => {
       if (error || !data) {
         const result = await supabase
           .from('rooms')
-          .select('*')
+          .select(`
+            *,
+            room_settings (
+              name,
+              description,
+              is_private
+            )
+          `)
           .eq('id', searchValue)
           .single();
         data = result.data;
@@ -177,7 +229,8 @@ const DashboardScreen: React.FC = () => {
 
       setJoinDialogVisible(false);
       setJoinRoomId('');
-      joinRoom(data.id, data.name);
+      const roomName = (data as any).room_settings?.name || 'Music Room';
+      joinRoom(data.id, roomName);
     } catch (error) {
       console.error('Error joining room:', error);
       Alert.alert('Error', 'Failed to join room');

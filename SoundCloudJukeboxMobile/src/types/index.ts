@@ -36,6 +36,7 @@ export interface Room {
   type: 'public' | 'private';
   created_by: string;
   created_at: string;
+  short_code?: string;
   user_count?: number;
   country?: string;
   follower_count?: number;

@@ -1203,7 +1203,7 @@ const RoomScreen: React.FC = () => {
             </Card.Content>
           </Card>
         ) : spotifyPlaylists.length > 0 ? (
-          <Card style={styles.card}>
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
               <ScrollView style={styles.queueList}>
                 {spotifyPlaylists.map((playlist) => (
@@ -1230,9 +1230,9 @@ const RoomScreen: React.FC = () => {
             </Card.Content>
           </Card>
         ) : (
-          <Card style={styles.card}>
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
-              <Text style={styles.emptyQueue}>No playlists found</Text>
+              <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>No playlists found</Text>
             </Card.Content>
           </Card>
         )}
@@ -1244,10 +1244,10 @@ const RoomScreen: React.FC = () => {
     if (!isOwner && !isAdmin) {
       return (
         <View style={styles.tabContent}>
-          <Card style={styles.card}>
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
-              <Text style={styles.noAccess}>You don't have access to room settings.</Text>
-              <Text style={styles.noAccessSubtext}>Only room owners and admins can access settings.</Text>
+              <Text style={[styles.noAccess, { color: theme.colors.onSurfaceVariant }]}>You don't have access to room settings.</Text>
+              <Text style={[styles.noAccessSubtext, { color: theme.colors.onSurfaceVariant }]}>Only room owners and admins can access settings.</Text>
             </Card.Content>
           </Card>
         </View>
@@ -1255,21 +1255,21 @@ const RoomScreen: React.FC = () => {
     }
 
     return (
-      <ScrollView style={styles.tabContent}>
-        <Card style={styles.card}>
+      <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
-            <Title>Room Settings</Title>
+            <Title style={{ color: theme.colors.onSurface }}>Room Settings</Title>
             
             <View style={styles.settingItem}>
               <View style={styles.settingRow}>
-                <Text style={styles.settingLabel}>Private Room</Text>
+                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Private Room</Text>
                 <Switch
                   value={roomSettings.isPrivate}
                   onValueChange={(value) => setRoomSettings(prev => ({ ...prev, isPrivate: value }))}
                   disabled={!isOwner}
                 />
               </View>
-              <Text style={styles.settingDescription}>
+              <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
                 Only users with the room link can join
               </Text>
             </View>
@@ -1278,14 +1278,14 @@ const RoomScreen: React.FC = () => {
 
             <View style={styles.settingItem}>
               <View style={styles.settingRow}>
-                <Text style={styles.settingLabel}>Allow Users to Control Playback</Text>
+                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Allow Users to Control Playback</Text>
                 <Switch
                   value={roomSettings.allowControls}
                   onValueChange={(value) => setRoomSettings(prev => ({ ...prev, allowControls: value }))}
                   disabled={!isOwner && !isAdmin}
                 />
               </View>
-              <Text style={styles.settingDescription}>
+              <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
                 If disabled, only room owner and admins can control playback
               </Text>
             </View>
@@ -1294,14 +1294,14 @@ const RoomScreen: React.FC = () => {
 
             <View style={styles.settingItem}>
               <View style={styles.settingRow}>
-                <Text style={styles.settingLabel}>Allow Users to Queue Songs</Text>
+                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Allow Users to Queue Songs</Text>
                 <Switch
                   value={roomSettings.allowQueue}
                   onValueChange={(value) => setRoomSettings(prev => ({ ...prev, allowQueue: value }))}
                   disabled={!isOwner && !isAdmin}
                 />
               </View>
-              <Text style={styles.settingDescription}>
+              <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
                 If disabled, only room owner and admins can add tracks to the queue
               </Text>
             </View>
@@ -1310,7 +1310,7 @@ const RoomScreen: React.FC = () => {
 
             <View style={styles.settingItem}>
               <View style={styles.settingRow}>
-                <Text style={styles.settingLabel}>DJ Mode (Standard Tier)</Text>
+                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>DJ Mode (Standard Tier)</Text>
                 <Switch
                   value={roomSettings.djMode}
                   onValueChange={(value) => {
@@ -1323,13 +1323,13 @@ const RoomScreen: React.FC = () => {
                   disabled={!isOwner}
                 />
               </View>
-              <Text style={styles.settingDescription}>
+              <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
                 Enable DJ mode to add up to 3 additional players for mixing tracks
               </Text>
               
               {roomSettings.djMode && (
-                <View style={styles.djModeControls}>
-                  <Text style={styles.djModeLabel}>Active Players: {roomSettings.djPlayers} / 3</Text>
+                <View style={[styles.djModeControls, { backgroundColor: theme.colors.surfaceVariant }]}>
+                  <Text style={[styles.djModeLabel, { color: theme.colors.onSurface }]}>Active Players: {roomSettings.djPlayers} / 3</Text>
                   <View style={styles.djPlayerButtons}>
                     <Button
                       mode="outlined"
@@ -1366,14 +1366,14 @@ const RoomScreen: React.FC = () => {
               <>
                 <Divider style={styles.divider} />
                 <View style={styles.settingItem}>
-                  <Text style={styles.settingLabel}>Room Admins</Text>
-                  <Text style={styles.settingDescription}>
+                  <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Room Admins</Text>
+                  <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
                     Admins can access settings and control playback
                   </Text>
                   
                   <ScrollView style={styles.adminsList}>
                     {roomSettings.admins.length === 0 ? (
-                      <Text style={styles.emptyQueue}>No admins added yet</Text>
+                      <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>No admins added yet</Text>
                     ) : (
                       roomSettings.admins.map((adminId) => {
                         const adminUser = users.find(u => u.userId === adminId);
@@ -1535,25 +1535,37 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    padding: 16,
-    paddingTop: Platform.OS === 'web' ? 16 : 50,
-    elevation: 2,
+    padding: IS_MOBILE ? 12 : 16,
+    paddingTop: Platform.OS === 'web' ? 16 : (IS_MOBILE ? 50 : 60),
+    elevation: 6,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.2)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+    }),
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+    flexWrap: IS_MOBILE ? 'wrap' : 'nowrap',
   },
   roomTitle: {
-    fontSize: 24,
+    fontSize: IS_MOBILE ? 20 : 24,
     fontWeight: 'bold',
     flex: 1,
+    minWidth: IS_MOBILE ? '100%' : 'auto',
+    marginBottom: IS_MOBILE ? 8 : 0,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: IS_MOBILE ? 4 : 8,
+    flexWrap: 'wrap',
   },
   shareButton: {
     margin: 0,
@@ -1569,86 +1581,93 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: IS_MOBILE ? 11 : 12,
   },
   connectingIndicator: {
     marginTop: 8,
   },
   roomId: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: IS_MOBILE ? 12 : 14,
     marginTop: 4,
   },
   tabs: {
     flexDirection: 'row',
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    paddingHorizontal: 8,
+    paddingHorizontal: IS_MOBILE ? 4 : 8,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+    } : {}),
   },
   tabButton: {
     flex: 1,
+    minWidth: IS_MOBILE ? 80 : 100,
   },
   tabContent: {
     flex: 1,
+    paddingBottom: IS_MOBILE ? 20 : 40,
   },
   card: {
-    margin: 16,
-    marginTop: 16,
+    margin: IS_MOBILE ? 12 : 16,
+    marginTop: IS_MOBILE ? 12 : 16,
+    borderRadius: 16,
+    elevation: 4,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.15)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 6,
+    }),
   },
   trackInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 16,
+    marginVertical: IS_MOBILE ? 12 : 16,
   },
   trackDetails: {
-    marginLeft: 16,
+    marginLeft: IS_MOBILE ? 12 : 16,
     flex: 1,
   },
   trackTitle: {
-    fontSize: 18,
+    fontSize: IS_MOBILE ? 16 : 18,
     fontWeight: 'bold',
   },
   trackPlatform: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: IS_MOBILE ? 12 : 14,
     marginTop: 4,
   },
   noTrack: {
     textAlign: 'center',
     fontStyle: 'italic',
-    color: '#666',
-    paddingVertical: 20,
+    paddingVertical: IS_MOBILE ? 20 : 20,
   },
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
-    marginTop: 16,
+    gap: IS_MOBILE ? 6 : 8,
+    marginTop: IS_MOBILE ? 12 : 16,
     flexWrap: 'wrap',
   },
   controlButton: {
-    flex: 1,
-    minWidth: 100,
-    maxWidth: 150,
+    flex: IS_MOBILE ? 0 : 1,
+    minWidth: IS_MOBILE ? 90 : 100,
+    maxWidth: IS_MOBILE ? 120 : 150,
   },
   permissionNotice: {
-    fontSize: 12,
-    color: '#ff9800',
+    fontSize: IS_MOBILE ? 11 : 12,
     textAlign: 'center',
     marginTop: 8,
     fontStyle: 'italic',
   },
   anonymousNotice: {
-    fontSize: 14,
-    color: '#ff9800',
+    fontSize: IS_MOBILE ? 12 : 14,
     marginBottom: 12,
     textAlign: 'center',
     fontStyle: 'italic',
   },
   urlInput: {
-    marginBottom: 16,
+    marginBottom: IS_MOBILE ? 12 : 16,
   },
   addButton: {
     marginTop: 8,
@@ -1656,14 +1675,14 @@ const styles = StyleSheet.create({
   emptyQueue: {
     textAlign: 'center',
     fontStyle: 'italic',
-    color: '#666',
-    paddingVertical: 40,
+    paddingVertical: IS_MOBILE ? 30 : 40,
+    fontSize: IS_MOBILE ? 13 : 14,
   },
   queueList: {
-    maxHeight: 400,
+    maxHeight: IS_MOBILE ? 300 : 400,
   },
   usersList: {
-    maxHeight: 300,
+    maxHeight: IS_MOBILE ? 250 : 300,
   },
   userActions: {
     flexDirection: 'row',
@@ -1671,141 +1690,136 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   requestSent: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: IS_MOBILE ? 11 : 12,
     fontStyle: 'italic',
   },
   requestActions: {
     flexDirection: 'row',
-    gap: 4,
+    gap: IS_MOBILE ? 2 : 4,
+    flexWrap: 'wrap',
   },
   friendsTabs: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
+    gap: IS_MOBILE ? 6 : 8,
+    marginBottom: IS_MOBILE ? 12 : 16,
   },
   friendsTabButton: {
     flex: 1,
+    minWidth: IS_MOBILE ? 100 : 120,
   },
   friendsList: {
-    maxHeight: 400,
+    maxHeight: IS_MOBILE ? 300 : 400,
   },
   settingItem: {
-    marginVertical: 16,
+    marginVertical: IS_MOBILE ? 12 : 16,
   },
   settingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+    flexWrap: IS_MOBILE ? 'wrap' : 'nowrap',
   },
   settingLabel: {
-    fontSize: 16,
+    fontSize: IS_MOBILE ? 14 : 16,
     fontWeight: '500',
     flex: 1,
+    marginRight: IS_MOBILE ? 8 : 0,
   },
   settingDescription: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: IS_MOBILE ? 12 : 14,
     marginTop: 4,
   },
   divider: {
-    marginVertical: 8,
+    marginVertical: IS_MOBILE ? 6 : 8,
   },
   adminsList: {
-    maxHeight: 200,
-    marginVertical: 16,
+    maxHeight: IS_MOBILE ? 150 : 200,
+    marginVertical: IS_MOBILE ? 12 : 16,
   },
   addAdminForm: {
-    marginTop: 16,
+    marginTop: IS_MOBILE ? 12 : 16,
   },
   adminInput: {
-    marginBottom: 8,
+    marginBottom: IS_MOBILE ? 6 : 8,
   },
   addAdminButton: {
     marginTop: 8,
   },
   saveButton: {
-    marginTop: 16,
+    marginTop: IS_MOBILE ? 12 : 16,
   },
   noAccess: {
     textAlign: 'center',
-    fontSize: 16,
-    color: '#666',
-    marginVertical: 20,
+    fontSize: IS_MOBILE ? 14 : 16,
+    marginVertical: IS_MOBILE ? 16 : 20,
   },
   noAccessSubtext: {
     textAlign: 'center',
-    fontSize: 14,
-    color: '#999',
+    fontSize: IS_MOBILE ? 12 : 14,
     marginTop: 8,
   },
   playlistHeader: {
-    marginBottom: 16,
+    marginBottom: IS_MOBILE ? 12 : 16,
   },
   playlistDescription: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: IS_MOBILE ? 12 : 14,
     marginTop: 8,
     marginBottom: 4,
   },
   trackCount: {
-    fontSize: 12,
-    color: '#999',
+    fontSize: IS_MOBILE ? 11 : 12,
     marginTop: 4,
   },
   errorText: {
-    color: '#f44336',
-    marginBottom: 16,
+    marginBottom: IS_MOBILE ? 12 : 16,
     textAlign: 'center',
+    fontSize: IS_MOBILE ? 13 : 14,
   },
   loadingText: {
     textAlign: 'center',
-    marginTop: 16,
-    color: '#666',
+    marginTop: IS_MOBILE ? 12 : 16,
+    fontSize: IS_MOBILE ? 13 : 14,
   },
   djModeControls: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
+    marginTop: IS_MOBILE ? 12 : 16,
+    padding: IS_MOBILE ? 10 : 12,
+    borderRadius: 12,
   },
   djModeLabel: {
-    fontSize: 14,
+    fontSize: IS_MOBILE ? 13 : 14,
     fontWeight: '500',
-    marginBottom: 12,
-    color: '#333',
+    marginBottom: IS_MOBILE ? 10 : 12,
   },
   djPlayerButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: IS_MOBILE ? 6 : 8,
     justifyContent: 'flex-start',
+    flexWrap: 'wrap',
   },
   reactionsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 16,
-    marginVertical: 16,
-    paddingVertical: 8,
+    gap: IS_MOBILE ? 12 : 16,
+    marginVertical: IS_MOBILE ? 12 : 16,
+    paddingVertical: IS_MOBILE ? 6 : 8,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#e0e0e0',
   },
   reactionButtonGroup: {
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 4,
+    gap: IS_MOBILE ? 2 : 4,
   },
   reactionButton: {
     margin: 0,
   },
   reactionButtonActive: {
-    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+    // Background color applied inline with theme
   },
   reactionCount: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: IS_MOBILE ? 11 : 12,
     fontWeight: '500',
   },
 });
