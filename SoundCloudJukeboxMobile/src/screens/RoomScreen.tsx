@@ -1963,11 +1963,12 @@ const styles = StyleSheet.create({
     flexWrap: IS_MOBILE ? 'wrap' : 'nowrap',
   },
   roomTitle: {
-    fontSize: IS_MOBILE ? 20 : 24,
-    fontWeight: 'bold',
+    fontSize: IS_MOBILE ? 22 : 26,
+    fontWeight: '700',
     flex: 1,
     minWidth: IS_MOBILE ? '100%' : 'auto',
     marginBottom: IS_MOBILE ? 8 : 0,
+    letterSpacing: -0.5,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1981,12 +1982,19 @@ const styles = StyleSheet.create({
   connectionStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(102, 126, 234, 0.1)',
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 0px 8px currentColor',
+    } : {}),
   },
   statusText: {
     fontSize: IS_MOBILE ? 11 : 12,
