@@ -2,111 +2,120 @@ import { registerRootComponent } from 'expo';
 import { Platform } from 'react-native';
 import App from './App';
 
-// Enhanced logging to trace warning sources
+// Enhanced logging to trace warning sources (throttled to prevent spam)
 if (Platform.OS === 'web') {
   const originalWarn = console.warn;
-  const originalError = console.error;
   
-  // Track warning sources
+  // Track warning sources and detailed logs
   const warningSources = new Map<string, number>();
+  const detailedLogs = new Map<string, { stack: string; component: string; args: any[] }>();
+  const MAX_DETAILED_LOGS = 3; // Only show detailed info for first 3 occurrences
   
   console.warn = (...args: any[]) => {
     const message = args[0];
     
     if (typeof message === 'string') {
-      // Log pointerEvents deprecation with stack trace
+      // Handle pointerEvents deprecation
       if (message.includes('props.pointerEvents is deprecated')) {
-        const stack = new Error().stack;
-        const stackLines = stack?.split('\n') || [];
-        const source = stackLines.slice(2, 10).join('\n') || 'unknown';
         const count = (warningSources.get('pointerEvents') || 0) + 1;
         warningSources.set('pointerEvents', count);
         
-        // Try to extract component/file info from stack
-        const componentMatch = stackLines.find(line => 
-          line.includes('.tsx') || line.includes('.ts') || line.includes('Component')
-        );
-        
-        console.group(`🔍 [TRACE ${count}] pointerEvents deprecation warning`);
-        console.warn(...args);
-        console.log('📍 Component/File:', componentMatch || 'unknown');
-        console.log('📍 Full Stack trace:');
-        console.log(source);
-        console.log('📦 Warning args:', args);
-        console.log('💡 Tip: Look for View components with pointerEvents prop');
-        console.groupEnd();
+        // Only log detailed info for first few occurrences
+        if (count <= MAX_DETAILED_LOGS) {
+          const stack = new Error().stack;
+          const stackLines = stack?.split('\n') || [];
+          const source = stackLines.slice(2, 10).join('\n') || 'unknown';
+          const componentMatch = stackLines.find(line => 
+            line.includes('.tsx') || line.includes('.ts') || line.includes('Component')
+          ) || 'unknown';
+          
+          detailedLogs.set('pointerEvents', { stack: source, component: componentMatch, args });
+          
+          console.group(`🔍 [TRACE ${count}] pointerEvents deprecation warning`);
+          originalWarn(...args);
+          console.log('📍 Component/File:', componentMatch);
+          console.log('📍 Stack trace:', source);
+          console.log('💡 Tip: Look for View components with pointerEvents prop');
+          console.groupEnd();
+        }
+        // Suppress the warning after first few detailed logs
         return;
       }
       
-      // Log shadow props deprecation with stack trace
+      // Handle shadow props deprecation
       if (message.includes('shadow*') && message.includes('deprecated')) {
-        const stack = new Error().stack;
-        const stackLines = stack?.split('\n') || [];
-        const source = stackLines.slice(2, 10).join('\n') || 'unknown';
         const count = (warningSources.get('shadow') || 0) + 1;
         warningSources.set('shadow', count);
         
-        // Try to extract component/file info from stack
-        const componentMatch = stackLines.find(line => 
-          line.includes('.tsx') || line.includes('.ts') || line.includes('Component')
-        );
-        
-        console.group(`🔍 [TRACE ${count}] shadow* props deprecation warning`);
-        console.warn(...args);
-        console.log('📍 Component/File:', componentMatch || 'unknown');
-        console.log('📍 Full Stack trace:');
-        console.log(source);
-        console.log('📦 Warning args:', args);
-        console.log('💡 Tip: Use boxShadow for web, shadow* props for native');
-        console.groupEnd();
+        if (count <= MAX_DETAILED_LOGS) {
+          const stack = new Error().stack;
+          const stackLines = stack?.split('\n') || [];
+          const source = stackLines.slice(2, 10).join('\n') || 'unknown';
+          const componentMatch = stackLines.find(line => 
+            line.includes('.tsx') || line.includes('.ts') || line.includes('Component')
+          ) || 'unknown';
+          
+          detailedLogs.set('shadow', { stack: source, component: componentMatch, args });
+          
+          console.group(`🔍 [TRACE ${count}] shadow* props deprecation warning`);
+          originalWarn(...args);
+          console.log('📍 Component/File:', componentMatch);
+          console.log('📍 Stack trace:', source);
+          console.log('💡 Tip: Use boxShadow for web, shadow* props for native');
+          console.groupEnd();
+        }
         return;
       }
       
-      // Log useNativeDriver warning with stack trace
+      // Handle useNativeDriver warning
       if (
         message.includes('useNativeDriver') ||
         message.includes('native animated module is missing') ||
         message.includes('RCTAnimation')
       ) {
-        const stack = new Error().stack;
-        const source = stack?.split('\n').slice(2, 6).join('\n') || 'unknown';
         const count = (warningSources.get('useNativeDriver') || 0) + 1;
         warningSources.set('useNativeDriver', count);
         
-        console.group(`🔍 [TRACE ${count}] useNativeDriver warning`);
-        console.warn(...args);
-        console.log('📍 Stack trace:');
-        console.log(source);
-        console.log('📦 Full args:', args);
-        console.groupEnd();
+        if (count <= MAX_DETAILED_LOGS) {
+          const stack = new Error().stack;
+          const source = stack?.split('\n').slice(2, 6).join('\n') || 'unknown';
+          
+          console.group(`🔍 [TRACE ${count}] useNativeDriver warning`);
+          originalWarn(...args);
+          console.log('📍 Stack trace:', source);
+          console.groupEnd();
+        }
+        // Suppress after first few - this is expected on web
         return;
       }
       
-      // Log aria-hidden warnings
+      // Handle aria-hidden warnings
       if (message.includes('aria-hidden') || message.includes('Blocked aria-hidden')) {
-        const stack = new Error().stack;
-        const stackLines = stack?.split('\n') || [];
-        const source = stackLines.slice(2, 12).join('\n') || 'unknown';
         const count = (warningSources.get('aria-hidden') || 0) + 1;
         warningSources.set('aria-hidden', count);
         
-        // Try to extract component/file info from stack
-        const componentMatch = stackLines.find(line => 
-          line.includes('.tsx') || line.includes('.ts') || line.includes('Component') || line.includes('Dialog') || line.includes('Portal')
-        );
-        
-        console.group(`🔍 [TRACE ${count}] aria-hidden accessibility warning`);
-        console.warn(...args);
-        console.log('📍 Component/File:', componentMatch || 'unknown');
-        console.log('📍 Full Stack trace:');
-        console.log(source);
-        console.log('📦 Warning args:', args);
-        console.log('💡 Tip: Check Dialog/Portal components - use inert attribute instead of aria-hidden on focused elements');
-        console.groupEnd();
+        if (count <= MAX_DETAILED_LOGS) {
+          const stack = new Error().stack;
+          const stackLines = stack?.split('\n') || [];
+          const source = stackLines.slice(2, 12).join('\n') || 'unknown';
+          const componentMatch = stackLines.find(line => 
+            line.includes('.tsx') || line.includes('.ts') || line.includes('Component') || line.includes('Dialog') || line.includes('Portal')
+          ) || 'unknown';
+          
+          detailedLogs.set('aria-hidden', { stack: source, component: componentMatch, args });
+          
+          console.group(`🔍 [TRACE ${count}] aria-hidden accessibility warning`);
+          originalWarn(...args);
+          console.log('📍 Component/File:', componentMatch);
+          console.log('📍 Stack trace:', source);
+          console.log('💡 Tip: Check Dialog/Portal components - use inert attribute instead');
+          console.groupEnd();
+        }
         return;
       }
     }
     
+    // Pass through all other warnings
     originalWarn.apply(console, args);
   };
   
@@ -117,7 +126,12 @@ if (Platform.OS === 'web') {
         if (warningSources.size > 0) {
           console.group('📊 Warning Summary');
           warningSources.forEach((count, type) => {
-            console.log(`${type}: ${count} occurrence(s)`);
+            const details = detailedLogs.get(type);
+            if (details && count > MAX_DETAILED_LOGS) {
+              console.log(`${type}: ${count} occurrence(s) - See first ${MAX_DETAILED_LOGS} detailed logs above`);
+            } else {
+              console.log(`${type}: ${count} occurrence(s)`);
+            }
           });
           console.groupEnd();
         }

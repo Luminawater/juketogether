@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,6 +7,7 @@ import {
   Share,
   TouchableOpacity,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import {
   Text,
@@ -22,11 +23,11 @@ import {
   Dialog,
   useTheme,
 } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { Room } from '../types';
+import { SUPABASE_URL } from '../config/constants';
 import { UserBadge } from '../components/UserBadge';
 import { DashboardSkeleton } from '../components/LoadingSkeleton';
 import {
@@ -38,11 +39,11 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getRoomUrl, getRoomShareMessage } from '../utils/roomUtils';
 
-type DashboardScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Dashboard'>;
+type DashboardScreenNavigationProp = NavigationProp<RootStackParamList, 'Dashboard'>;
 
 const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<DashboardScreenNavigationProp>();
-  const { user, profile, permissions, signOut, supabase } = useAuth();
+  const { user, session, profile, permissions, signOut, supabase } = useAuth();
   const theme = useTheme();
 
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -58,14 +59,125 @@ const DashboardScreen: React.FC = () => {
   // Join room form state
   const [joinRoomId, setJoinRoomId] = useState('');
 
-  useEffect(() => {
-    loadUserRooms();
-  }, []);
+  // Refs to prevent infinite loops
+  const isLoadingRef = useRef(false);
+  const lastUserIdRef = useRef<string | null>(null);
+  const renderCountRef = useRef(0);
 
-  const loadUserRooms = async () => {
+  // Debug: Track renders
+  renderCountRef.current += 1;
+  console.log(`[DashboardScreen] Render #${renderCountRef.current}`, {
+    userId: user?.id,
+    hasUser: !!user,
+    loading,
+    roomsCount: rooms.length,
+    isLoadingRef: isLoadingRef.current,
+    lastUserId: lastUserIdRef.current,
+  });
+
+  const loadUserRooms = useCallback(async () => {
+    const userId = user?.id;
+    
+    console.log('[DashboardScreen] loadUserRooms called', {
+      userId,
+      isLoading: isLoadingRef.current,
+      lastUserId: lastUserIdRef.current,
+    });
+
+    // Prevent multiple simultaneous calls
+    if (isLoadingRef.current) {
+      console.log('[DashboardScreen] Already loading, skipping...');
+      return;
+    }
+
+    if (!userId) {
+      console.log('[DashboardScreen] No user ID, stopping loading');
+      setLoading(false);
+      return;
+    }
+
+    // Prevent loading same user multiple times
+    if (lastUserIdRef.current === userId) {
+      console.log('[DashboardScreen] Same user ID as last load, skipping...');
+      return;
+    }
+
+    isLoadingRef.current = true;
+    lastUserIdRef.current = userId;
+
+    // Add timeout to prevent infinite hanging
+    const timeoutId = setTimeout(() => {
+      console.error('[DashboardScreen] Query timeout after 10 seconds');
+      isLoadingRef.current = false;
+      setLoading(false);
+      Alert.alert('Timeout', 'Loading rooms took too long. Please try again.');
+    }, 10000);
+
     try {
+      console.log('[DashboardScreen] Starting room fetch for user:', userId);
+      console.log('[DashboardScreen] Supabase client:', !!supabase);
+      console.log('[DashboardScreen] Context session:', {
+        hasSession: !!session,
+        sessionUser: session?.user?.id,
+        accessToken: session?.access_token ? 'present' : 'missing',
+      });
+      
+      // Check localStorage for Supabase session (web only)
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        // Check all Supabase-related keys
+        const allKeys = Object.keys(localStorage).filter(k => 
+          k.includes('supabase') || 
+          k.includes('sb-') || 
+          k.toLowerCase().includes('auth')
+        );
+        console.log('[DashboardScreen] All auth-related localStorage keys:', allKeys);
+        
+        // Try to find the Supabase session key
+        const supabaseKeys = allKeys.filter(k => k.includes('sb-'));
+        if (supabaseKeys.length > 0) {
+          supabaseKeys.forEach(key => {
+            const value = localStorage.getItem(key);
+            console.log(`[DashboardScreen] localStorage[${key}]:`, {
+              exists: !!value,
+              length: value?.length || 0,
+              preview: value?.substring(0, 50) || 'empty',
+            });
+          });
+        }
+      }
+      
+      // Check if we have a session before querying
+      const { data: sessionData } = await supabase.auth.getSession();
+      console.log('[DashboardScreen] Supabase getSession() result:', {
+        hasSession: !!sessionData?.session,
+        sessionUser: sessionData?.session?.user?.id,
+        accessToken: sessionData?.session?.access_token ? 'present' : 'missing',
+        matchesContext: sessionData?.session?.user?.id === session?.user?.id,
+      });
+      
+      if (!sessionData?.session) {
+        console.error('[DashboardScreen] No session found in Supabase client!');
+        console.error('[DashboardScreen] Context session exists:', !!session);
+        if (session) {
+          console.error('[DashboardScreen] Session mismatch - context has session but Supabase client does not!');
+          console.error('[DashboardScreen] This might indicate a storage issue. Trying to set session...');
+          // Try to set the session manually
+          const { error: setError } = await supabase.auth.setSession({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+          });
+          if (setError) {
+            console.error('[DashboardScreen] Failed to set session:', setError);
+            throw new Error('Session restoration failed. Please sign in again.');
+          }
+          console.log('[DashboardScreen] Session manually restored, retrying query...');
+        } else {
+          throw new Error('No active session. Please sign in again.');
+        }
+      }
+      
       // Query rooms by host_user_id and join with room_settings
-      const { data, error } = await supabase
+      const queryPromise = supabase
         .from('rooms')
         .select(`
           *,
@@ -76,30 +188,79 @@ const DashboardScreen: React.FC = () => {
             created_at
           )
         `)
-        .eq('host_user_id', user?.id)
+        .eq('host_user_id', userId)
         .order('updated_at', { ascending: false });
 
-      if (error) throw error;
+      console.log('[DashboardScreen] Query created, awaiting response...');
+      const { data, error } = await queryPromise;
+      clearTimeout(timeoutId);
+
+      console.log('[DashboardScreen] Query response received', {
+        hasData: !!data,
+        dataLength: data?.length,
+        hasError: !!error,
+      });
+
+      if (error) {
+        console.error('[DashboardScreen] Supabase error:', error);
+        console.error('[DashboardScreen] Error details:', JSON.stringify(error, null, 2));
+        throw error;
+      }
+      
+      console.log('[DashboardScreen] Rooms fetched:', data?.length || 0);
+      console.log('[DashboardScreen] Raw data:', data);
       
       // Transform the data to match the Room interface
-      const transformedRooms = (data || []).map((room: any) => ({
-        id: room.id,
-        name: room.room_settings?.name || 'Unnamed Room',
-        description: room.room_settings?.description,
-        type: room.room_settings?.is_private ? 'private' : 'public',
-        created_by: room.host_user_id || '',
-        created_at: room.room_settings?.created_at || room.updated_at,
-        short_code: room.short_code,
-      }));
+      const transformedRooms = (data || []).map((room: any) => {
+        console.log('[DashboardScreen] Transforming room:', room.id);
+        return {
+          id: room.id,
+          name: room.room_settings?.name || 'Unnamed Room',
+          description: room.room_settings?.description,
+          type: (room.room_settings?.is_private ? 'private' : 'public') as 'public' | 'private',
+          created_by: room.host_user_id || '',
+          created_at: room.room_settings?.created_at || room.updated_at,
+          short_code: room.short_code,
+        };
+      });
       
+      console.log('[DashboardScreen] Setting rooms:', transformedRooms.length);
       setRooms(transformedRooms);
-    } catch (error) {
-      console.error('Error loading rooms:', error);
-      Alert.alert('Error', 'Failed to load rooms');
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      console.error('[DashboardScreen] Error loading rooms:', error);
+      console.error('[DashboardScreen] Error stack:', error?.stack);
+      console.error('[DashboardScreen] Error message:', error?.message);
+      Alert.alert('Error', `Failed to load rooms: ${error?.message || 'Unknown error'}`);
     } finally {
+      clearTimeout(timeoutId);
+      console.log('[DashboardScreen] Loading complete, setting loading to false');
+      isLoadingRef.current = false;
       setLoading(false);
     }
-  };
+  }, [user?.id, supabase]);
+
+  useEffect(() => {
+    const userId = user?.id;
+    console.log('[DashboardScreen] useEffect triggered', {
+      userId,
+      hasUser: !!user,
+      isLoading: isLoadingRef.current,
+      lastUserId: lastUserIdRef.current,
+    });
+
+    // Only load rooms if user is available and different from last load
+    if (userId && userId !== lastUserIdRef.current) {
+      loadUserRooms();
+    } else if (!userId) {
+      // If no user, stop loading immediately
+      console.log('[DashboardScreen] No user, stopping loading');
+      setLoading(false);
+    } else {
+      console.log('[DashboardScreen] User ID unchanged, skipping load');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]); // Only depend on user?.id, not loadUserRooms to prevent loops
 
   const createRoom = async () => {
     if (!roomName.trim()) {
@@ -293,7 +454,8 @@ const DashboardScreen: React.FC = () => {
     await signOut();
   };
 
-  if (loading) {
+  // Show skeleton only on initial load when we don't have user yet
+  if (loading && !user) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <DashboardSkeleton />
@@ -363,13 +525,27 @@ const DashboardScreen: React.FC = () => {
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>My Rooms</Text>
-          {rooms.length > 0 && (
+          {!loading && rooms.length > 0 && (
             <Text style={[styles.roomCount, { color: theme.colors.onSurfaceVariant }]}>
               {rooms.length} {rooms.length === 1 ? 'room' : 'rooms'}
             </Text>
           )}
         </View>
-        {rooms.length === 0 ? (
+        
+        {loading ? (
+          <Card style={[styles.emptyCard, { backgroundColor: theme.colors.surface }]}>
+            <Card.Content style={styles.emptyCardContent}>
+              <ActivityIndicator 
+                size="large" 
+                color={theme.colors.primary} 
+                style={styles.emptyIcon}
+              />
+              <Text style={[styles.emptyText, { color: theme.colors.onSurface }]}>
+                Loading rooms...
+              </Text>
+            </Card.Content>
+          </Card>
+        ) : rooms.length === 0 ? (
           <Card style={[styles.emptyCard, { backgroundColor: theme.colors.surface }]}>
             <Card.Content style={styles.emptyCardContent}>
               <MaterialCommunityIcons 
