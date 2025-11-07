@@ -1,4 +1,4 @@
-@echo off
+g@echo off
 echo Starting proxy server to bypass localtunnel password...
 echo.
 

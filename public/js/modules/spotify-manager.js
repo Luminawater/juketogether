@@ -16,6 +16,8 @@ let expectingPlayCommand = false;
 let currentRoomIsPlaying = false;
 let currentTrack = null;
 let accessToken = null;
+let sdkReady = false;
+let initializationPromise = null;
 
 // DOM elements
 const currentTrackDiv = document.getElementById('current-track');
@@ -29,9 +31,12 @@ function initSpotifyManager(deps) {
 
     return {
         player,
+        deviceId: () => deviceId,
+        accessToken: () => accessToken,
         currentTrackId,
         isCurrentlyPlaying,
         currentRoomIsPlaying,
+        widgetReady: () => widgetReady,
         loadTrack,
         playTrack,
         updateCurrentTrackDisplay: updateCurrentTrackDisplay,
@@ -306,94 +311,149 @@ function convertToSpotifyUri(url) {
 
 // Initialize Spotify Web Playback SDK
 function initializePlayer() {
-    return new Promise((resolve, reject) => {
-        // Check if SDK is loaded
-        if (!window.SpotifyApi) {
-            reject(new Error('Spotify Web Playback SDK not loaded'));
+    // Return existing promise if initialization is already in progress
+    if (initializationPromise) {
+        return initializationPromise;
+    }
+
+    initializationPromise = new Promise((resolve, reject) => {
+        // Check if SDK is already ready
+        if (sdkReady && window.Spotify && window.Spotify.Player) {
+            createPlayer(resolve, reject);
             return;
         }
 
-        // Get access token from server
-        fetch('/api/spotify-token')
-            .then(response => response.json())
-            .then(data => {
-                accessToken = data.access_token;
-                if (!accessToken) {
-                    reject(new Error('No Spotify access token available'));
-                    return;
+        // Wait for SDK to be ready
+        if (window.Spotify && window.Spotify.Player) {
+            sdkReady = true;
+            createPlayer(resolve, reject);
+        } else {
+            // Set up callback for when SDK loads
+            window.onSpotifyWebPlaybackSDKReady = () => {
+                sdkReady = true;
+                createPlayer(resolve, reject);
+            };
+
+            // If SDK is already loaded but callback wasn't called, try again after a short delay
+            setTimeout(() => {
+                if (window.Spotify && window.Spotify.Player && !sdkReady) {
+                    sdkReady = true;
+                    createPlayer(resolve, reject);
+                } else if (!window.Spotify || !window.Spotify.Player) {
+                    reject(new Error('Spotify Web Playback SDK not loaded'));
                 }
-
-                // Create player
-                player = new window.SpotifyApi.Player({
-                    name: 'SoundCloud Jukebox',
-                    getOAuthToken: cb => { cb(accessToken); },
-                    volume: 0.5
-                });
-
-                // Set up event listeners
-                player.addListener('ready', ({ device_id }) => {
-                    deviceId = device_id;
-                    widgetReady = true;
-                    console.log('Spotify player ready with device ID:', device_id);
-                    resolve();
-                });
-
-                player.addListener('not_ready', ({ device_id }) => {
-                    console.log('Spotify player not ready:', device_id);
-                    deviceId = null;
-                    widgetReady = false;
-                });
-
-                player.addListener('player_state_changed', state => {
-                    if (state) {
-                        isCurrentlyPlaying = !state.paused;
-                        updatePlayPauseButton(isCurrentlyPlaying);
-
-                        if (state.track_window?.current_track) {
-                            currentTrack = state.track_window.current_track;
-                            updateCurrentTrackDisplay(
-                                `${currentTrack.artists.map(a => a.name).join(', ')} - ${currentTrack.name}`,
-                                `https://open.spotify.com/track/${currentTrack.id}`
-                            );
-                        }
-                    }
-                });
-
-                player.addListener('initialization_error', ({ message }) => {
-                    console.error('Spotify initialization error:', message);
-                    reject(new Error(message));
-                });
-
-                player.addListener('authentication_error', ({ message }) => {
-                    console.error('Spotify authentication error:', message);
-                    reject(new Error(message));
-                });
-
-                player.addListener('account_error', ({ message }) => {
-                    console.error('Spotify account error:', message);
-                    reject(new Error(message));
-                });
-
-                // Connect to player
-                player.connect().then(success => {
-                    if (success) {
-                        console.log('Spotify player connected successfully');
-                    } else {
-                        reject(new Error('Failed to connect to Spotify player'));
-                    }
-                });
-            })
-            .catch(error => {
-                console.error('Error getting Spotify token:', error);
-                reject(error);
-            });
+            }, 1000);
+        }
     });
+
+    return initializationPromise;
+}
+
+// Create and configure the Spotify player
+function createPlayer(resolve, reject) {
+    // Get access token from server
+    fetch('/api/spotify-token')
+        .then(response => response.json())
+        .then(data => {
+            accessToken = data.access_token;
+            if (!accessToken) {
+                reject(new Error('No Spotify access token available'));
+                return;
+            }
+
+            // Create player using the correct API
+            player = new window.Spotify.Player({
+                name: 'SoundCloud Jukebox',
+                getOAuthToken: cb => { cb(accessToken); },
+                volume: 0.5
+            });
+
+            // Set up event listeners
+            player.addListener('ready', ({ device_id }) => {
+                deviceId = device_id;
+                widgetReady = true;
+                console.log('Spotify player ready with device ID:', device_id);
+                initializationPromise = null; // Clear promise after success
+                resolve();
+            });
+
+            player.addListener('not_ready', ({ device_id }) => {
+                console.log('Spotify player not ready:', device_id);
+                deviceId = null;
+                widgetReady = false;
+            });
+
+            player.addListener('player_state_changed', state => {
+                if (state) {
+                    isCurrentlyPlaying = !state.paused;
+                    updatePlayPauseButton(isCurrentlyPlaying);
+
+                    if (state.track_window?.current_track) {
+                        currentTrack = state.track_window.current_track;
+                        updateCurrentTrackDisplay(
+                            `${currentTrack.artists.map(a => a.name).join(', ')} - ${currentTrack.name}`,
+                            `https://open.spotify.com/track/${currentTrack.id}`
+                        );
+                    }
+                }
+            });
+
+            player.addListener('initialization_error', ({ message }) => {
+                console.error('Spotify initialization error:', message);
+                initializationPromise = null;
+                reject(new Error(message));
+            });
+
+            player.addListener('authentication_error', ({ message }) => {
+                console.error('Spotify authentication error:', message);
+                initializationPromise = null;
+                reject(new Error(message));
+            });
+
+            player.addListener('account_error', ({ message }) => {
+                console.error('Spotify account error:', message);
+                initializationPromise = null;
+                reject(new Error(message));
+            });
+
+            player.addListener('playback_error', ({ message }) => {
+                console.error('Spotify playback error:', message);
+                showError(`Playback error: ${message}`);
+            });
+
+            // Connect to player
+            player.connect().then(success => {
+                if (success) {
+                    console.log('Spotify player connected successfully');
+                } else {
+                    initializationPromise = null;
+                    reject(new Error('Failed to connect to Spotify player'));
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error getting Spotify token:', error);
+            initializationPromise = null;
+            reject(error);
+        });
 }
 
 // Load track in Spotify player
-function loadTrack(url, trackInfo, onLoaded) {
+async function loadTrack(url, trackInfo, onLoaded) {
+    // Ensure player is initialized before loading track
     if (!player || !widgetReady) {
-        console.error('Spotify player not ready');
+        console.log('Spotify player not ready, initializing...');
+        try {
+            await initializePlayer();
+        } catch (error) {
+            console.error('Failed to initialize Spotify player:', error);
+            showError('Failed to initialize Spotify player. Please refresh the page.');
+            return;
+        }
+    }
+
+    if (!player || !widgetReady) {
+        console.error('Spotify player not ready after initialization');
         showError('Spotify player is not ready. Please refresh the page.');
         return;
     }

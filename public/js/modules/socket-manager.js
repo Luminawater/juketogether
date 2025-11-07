@@ -167,7 +167,7 @@ function initSocketManager(deps) {
         if (currentPlatform === 'spotify') {
             spotifyManager.expectingPlayCommand = false; // We received the play command we were expecting
 
-            if (spotifyManager.player && spotifyManager.widgetReady) {
+            if (spotifyManager.player && spotifyManager.widgetReady()) {
                 try {
                     spotifyManager.playTrack();
                     console.log('Spotify play command executed');
@@ -175,7 +175,7 @@ function initSocketManager(deps) {
                     console.warn('Spotify play failed:', error);
                     // For Spotify, just try once more after a delay
                     setTimeout(() => {
-                        if (spotifyManager.player && spotifyManager.widgetReady) {
+                        if (spotifyManager.player && spotifyManager.widgetReady()) {
                             try {
                                 spotifyManager.playTrack();
                                 console.log('Spotify play succeeded after retry');
@@ -188,6 +188,10 @@ function initSocketManager(deps) {
             } else {
                 console.warn('Spotify player not ready when play command received');
                 spotifyManager.pendingPlayCommand = true;
+                // Try to initialize player if not ready
+                spotifyManager.initializePlayer().catch(error => {
+                    console.error('Failed to initialize Spotify player:', error);
+                });
             }
         } else {
             // SoundCloud play logic (existing)
@@ -268,7 +272,7 @@ function initSocketManager(deps) {
     // Pause command
     socket.on('pause-track', () => {
         if (currentPlatform === 'spotify') {
-            if (spotifyManager.player && spotifyManager.widgetReady) {
+            if (spotifyManager.player && spotifyManager.widgetReady()) {
                 spotifyManager.player.pause();
                 spotifyManager.isCurrentlyPlaying = false;
                 spotifyManager.currentRoomIsPlaying = false;
@@ -294,11 +298,19 @@ function initSocketManager(deps) {
                 console.log('Restarting Spotify track to position 0, keepPlaying:', keepPlaying);
                 spotifyManager.isSyncing = true;
 
+                const deviceId = spotifyManager.deviceId();
+                const accessToken = spotifyManager.accessToken();
+                if (!deviceId || !accessToken) {
+                    console.error('Spotify device ID or access token not available');
+                    spotifyManager.isSyncing = false;
+                    return;
+                }
+
                 // For Spotify, we need to use the Web API to seek
-                fetch(`https://api.spotify.com/v1/me/player/seek?position_ms=${position}&device_id=${spotifyManager.deviceId}`, {
+                fetch(`https://api.spotify.com/v1/me/player/seek?position_ms=${position}&device_id=${deviceId}`, {
                     method: 'PUT',
                     headers: {
-                        'Authorization': `Bearer ${spotifyManager.accessToken}`
+                        'Authorization': `Bearer ${accessToken}`
                     }
                 }).then(() => {
                     if (keepPlaying && !spotifyManager.isCurrentlyPlaying) {
@@ -352,10 +364,18 @@ function initSocketManager(deps) {
                 spotifyManager.isSyncing = true;
                 console.log('Syncing Spotify position to:', position, 'ms');
 
-                fetch(`https://api.spotify.com/v1/me/player/seek?position_ms=${position}&device_id=${spotifyManager.deviceId}`, {
+                const deviceId = spotifyManager.deviceId();
+                const accessToken = spotifyManager.accessToken();
+                if (!deviceId || !accessToken) {
+                    console.error('Spotify device ID or access token not available');
+                    spotifyManager.isSyncing = false;
+                    return;
+                }
+
+                fetch(`https://api.spotify.com/v1/me/player/seek?position_ms=${position}&device_id=${deviceId}`, {
                     method: 'PUT',
                     headers: {
-                        'Authorization': `Bearer ${spotifyManager.accessToken}`
+                        'Authorization': `Bearer ${accessToken}`
                     }
                 }).then(() => {
                     setTimeout(() => {
@@ -445,10 +465,16 @@ function initSocketManager(deps) {
                 spotifyManager.positionSyncInterval = null;
             }
 
-            // Load new Spotify track
-            spotifyManager.loadTrack(track.url, track.info, () => {
-                // Don't play locally - wait for server to broadcast 'play-track' event
-                console.log('Spotify track loaded, waiting for server play command...');
+            // Ensure player is initialized before loading track
+            spotifyManager.initializePlayer().then(() => {
+                // Load new Spotify track
+                spotifyManager.loadTrack(track.url, track.info, () => {
+                    // Don't play locally - wait for server to broadcast 'play-track' event
+                    console.log('Spotify track loaded, waiting for server play command...');
+                });
+            }).catch(error => {
+                console.error('Failed to initialize Spotify player for track change:', error);
+                showError('Failed to initialize Spotify player. Please refresh the page.');
             });
         } else {
             // Handle SoundCloud track change (existing logic)
@@ -515,10 +541,17 @@ function initSocketManager(deps) {
                 spotifyManager.isSyncing = true;
                 console.log('Syncing Spotify to position:', position);
 
-                fetch(`https://api.spotify.com/v1/me/player/seek?position_ms=${position}&device_id=${spotifyManager.deviceId}`, {
+                const deviceId = spotifyManager.deviceId();
+                const accessToken = spotifyManager.accessToken();
+                if (!deviceId || !accessToken) {
+                    console.error('Spotify device ID or access token not available');
+                    spotifyManager.isSyncing = false;
+                    return;
+                }
+                fetch(`https://api.spotify.com/v1/me/player/seek?position_ms=${position}&device_id=${deviceId}`, {
                     method: 'PUT',
                     headers: {
-                        'Authorization': `Bearer ${spotifyManager.accessToken}`
+                        'Authorization': `Bearer ${accessToken}`
                     }
                 }).then(() => {
                     setTimeout(() => {

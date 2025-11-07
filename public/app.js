@@ -26,6 +26,16 @@ import { showError, showSuccess } from './js/modules/ui-utils.js';
 let isUserSyncedToSession = false;
 let pendingRoomState = null;
 
+// Helper function to detect platform from URL
+function detectPlatform(url) {
+    if (!url) return 'soundcloud'; // Default to SoundCloud
+
+    if (url.includes('spotify.com') || url.includes('spotify:')) {
+        return 'spotify';
+    }
+    return 'soundcloud';
+}
+
 // Session management functions
 function showSessionJoinModal(state) {
     const modal = document.getElementById('session-join-modal');
@@ -129,74 +139,165 @@ function processRoomState(state) {
         console.log('Loading current track:', state.currentTrack.url);
         console.log('Syncing to position from Supabase (source of truth):', state.position, 'ms');
 
-        // Mark as initial load - prevent position syncs from affecting others
-        soundCloudManager.isInitialLoad = true;
-        soundCloudManager.initialLoadComplete = false;
+        // Detect platform from track URL
+        const platform = detectPlatform(state.currentTrack.url);
+        socketManager.currentPlatform = platform;
 
-        // Stop any ongoing sync operations
-        soundCloudManager.isSyncing = false;
+        if (platform === 'spotify') {
+            // Handle Spotify track initialization
+            spotifyManager.isInitialLoad = true;
+            spotifyManager.initialLoadComplete = false;
+            spotifyManager.isSyncing = false;
 
-        // Clear position sync interval to prevent interference
-        if (soundCloudManager.positionSyncInterval) {
-            clearInterval(soundCloudManager.positionSyncInterval);
-            soundCloudManager.positionSyncInterval = null;
-        }
+            // Clear position sync interval to prevent interference
+            if (spotifyManager.positionSyncInterval) {
+                clearInterval(spotifyManager.positionSyncInterval);
+                spotifyManager.positionSyncInterval = null;
+            }
 
-        soundCloudManager.loadTrack(state.currentTrack.url, state.currentTrack.info, () => {
-            // After track loads, sync to position from Supabase (source of truth)
-            // Only sync if position is significant (> 1 second) to avoid unnecessary seeks
-            if (state.position > 1000 && soundCloudManager.widget) {
-                // Wait a bit longer to ensure widget is fully ready and "listen in browser" is handled
-                setTimeout(() => {
-                    if (soundCloudManager.widget && !soundCloudManager.isSyncing) {
-                        // Set syncing flag to prevent position broadcasts during seek
-                        soundCloudManager.isSyncing = true;
-                        soundCloudManager.widget.seekTo(state.position);
-                        console.log('Synced to authoritative position from Supabase:', state.position, 'ms');
-
-                        // Sync play state after seeking
-                        if (state.isPlaying) {
-                            setTimeout(() => {
-                                if (soundCloudManager.widget) {
-                                    soundCloudManager.playTrack();
+            // Initialize player and load track
+            spotifyManager.initializePlayer().then(() => {
+                spotifyManager.loadTrack(state.currentTrack.url, state.currentTrack.info, () => {
+                    // After track loads, sync to position from Supabase (source of truth)
+                    // Only sync if position is significant (> 1 second) to avoid unnecessary seeks
+                    if (state.position > 1000 && spotifyManager.player) {
+                        // Wait a bit to ensure player is fully ready
+                        setTimeout(() => {
+                            if (spotifyManager.player && !spotifyManager.isSyncing) {
+                                spotifyManager.isSyncing = true;
+                                const deviceId = spotifyManager.deviceId();
+                                const accessToken = spotifyManager.accessToken();
+                                if (deviceId && accessToken) {
+                                    fetch(`https://api.spotify.com/v1/me/player/seek?position_ms=${state.position}&device_id=${deviceId}`, {
+                                        method: 'PUT',
+                                        headers: {
+                                            'Authorization': `Bearer ${accessToken}`
+                                        }
+                                    }).then(() => {
+                                        console.log('Synced to authoritative position from Supabase:', state.position, 'ms');
+                                        // Sync play state after seeking
+                                        if (state.isPlaying) {
+                                            setTimeout(() => {
+                                                if (spotifyManager.player) {
+                                                    spotifyManager.playTrack();
+                                                }
+                                                // Allow position syncs after initial load is complete
+                                                setTimeout(() => {
+                                                    spotifyManager.isInitialLoad = false;
+                                                    spotifyManager.initialLoadComplete = true;
+                                                    spotifyManager.isSyncing = false;
+                                                }, 2000); // 2 second grace period after initial load
+                                            }, 500);
+                                        } else {
+                                            // Not playing, just mark initial load complete
+                                            setTimeout(() => {
+                                                spotifyManager.isInitialLoad = false;
+                                                spotifyManager.initialLoadComplete = true;
+                                                spotifyManager.isSyncing = false;
+                                            }, 2000);
+                                        }
+                                    }).catch(error => {
+                                        console.error('Failed to seek Spotify player:', error);
+                                        spotifyManager.isSyncing = false;
+                                    });
                                 }
-                                // Allow position syncs after initial load is complete
+                            }
+                        }, 2000);
+                    } else if (state.isPlaying) {
+                        // If no position or position is small, just play from start
+                        setTimeout(() => {
+                            if (spotifyManager.player) {
+                                spotifyManager.playTrack();
+                            }
+                            // Allow position syncs after initial load is complete
+                            setTimeout(() => {
+                                spotifyManager.isInitialLoad = false;
+                                spotifyManager.initialLoadComplete = true;
+                            }, 2000); // 2 second grace period after initial load
+                        }, 500);
+                    } else {
+                        // Not playing, just mark initial load complete
+                        setTimeout(() => {
+                            spotifyManager.isInitialLoad = false;
+                            spotifyManager.initialLoadComplete = true;
+                        }, 2000);
+                    }
+                });
+            }).catch(error => {
+                console.error('Failed to initialize Spotify player:', error);
+                showError('Failed to initialize Spotify player. Please refresh the page.');
+            });
+        } else {
+            // Handle SoundCloud track (existing logic)
+            // Mark as initial load - prevent position syncs from affecting others
+            soundCloudManager.isInitialLoad = true;
+            soundCloudManager.initialLoadComplete = false;
+
+            // Stop any ongoing sync operations
+            soundCloudManager.isSyncing = false;
+
+            // Clear position sync interval to prevent interference
+            if (soundCloudManager.positionSyncInterval) {
+                clearInterval(soundCloudManager.positionSyncInterval);
+                soundCloudManager.positionSyncInterval = null;
+            }
+
+            soundCloudManager.loadTrack(state.currentTrack.url, state.currentTrack.info, () => {
+                // After track loads, sync to position from Supabase (source of truth)
+                // Only sync if position is significant (> 1 second) to avoid unnecessary seeks
+                if (state.position > 1000 && soundCloudManager.widget) {
+                    // Wait a bit longer to ensure widget is fully ready and "listen in browser" is handled
+                    setTimeout(() => {
+                        if (soundCloudManager.widget && !soundCloudManager.isSyncing) {
+                            // Set syncing flag to prevent position broadcasts during seek
+                            soundCloudManager.isSyncing = true;
+                            soundCloudManager.widget.seekTo(state.position);
+                            console.log('Synced to authoritative position from Supabase:', state.position, 'ms');
+
+                            // Sync play state after seeking
+                            if (state.isPlaying) {
+                                setTimeout(() => {
+                                    if (soundCloudManager.widget) {
+                                        soundCloudManager.playTrack();
+                                    }
+                                    // Allow position syncs after initial load is complete
+                                    setTimeout(() => {
+                                        soundCloudManager.isInitialLoad = false;
+                                        soundCloudManager.initialLoadComplete = true;
+                                        soundCloudManager.isSyncing = false;
+                                    }, 2000); // 2 second grace period after initial load
+                                }, 500);
+                            } else {
+                                // Not playing, just mark initial load complete
                                 setTimeout(() => {
                                     soundCloudManager.isInitialLoad = false;
                                     soundCloudManager.initialLoadComplete = true;
                                     soundCloudManager.isSyncing = false;
-                                }, 2000); // 2 second grace period after initial load
-                            }, 500);
-                        } else {
-                            // Not playing, just mark initial load complete
-                            setTimeout(() => {
-                                soundCloudManager.isInitialLoad = false;
-                                soundCloudManager.initialLoadComplete = true;
-                                soundCloudManager.isSyncing = false;
-                            }, 2000);
+                                }, 2000);
+                            }
                         }
-                    }
-                }, 2000); // Increased delay to allow "listen in browser" to complete
-            } else if (state.isPlaying) {
-                // If no position or position is small, just play from start
-                setTimeout(() => {
-                    if (soundCloudManager.widget) {
-                        soundCloudManager.playTrack();
-                    }
-                    // Allow position syncs after initial load is complete
+                    }, 2000); // Increased delay to allow "listen in browser" to complete
+                } else if (state.isPlaying) {
+                    // If no position or position is small, just play from start
+                    setTimeout(() => {
+                        if (soundCloudManager.widget) {
+                            soundCloudManager.playTrack();
+                        }
+                        // Allow position syncs after initial load is complete
+                        setTimeout(() => {
+                            soundCloudManager.isInitialLoad = false;
+                            soundCloudManager.initialLoadComplete = true;
+                        }, 2000); // 2 second grace period after initial load
+                    }, 500);
+                } else {
+                    // Not playing, just mark initial load complete
                     setTimeout(() => {
                         soundCloudManager.isInitialLoad = false;
                         soundCloudManager.initialLoadComplete = true;
-                    }, 2000); // 2 second grace period after initial load
-                }, 500);
-            } else {
-                // Not playing, just mark initial load complete
-                setTimeout(() => {
-                    soundCloudManager.isInitialLoad = false;
-                    soundCloudManager.initialLoadComplete = true;
-                }, 2000);
-            }
-        });
+                    }, 2000);
+                }
+            });
+        }
     } else if (!isUserSyncedToSession) {
         // User not synced to session, just update displays but don't load tracks
         updateCurrentTrackDisplay('Not synced to session', '');
