@@ -86,11 +86,9 @@ const AuthenticatedStack = () => {
   // Redirect to auth if not authenticated
   React.useEffect(() => {
     if (!loading && !user) {
-      if (Platform.OS === 'web') {
-        window.location.href = '/auth';
-      } else {
-        navigation.replace('Auth' as never);
-      }
+      // Use React Navigation for all platforms to avoid full page reload
+      // This ensures session state is preserved during navigation
+      navigation.replace('Auth' as never);
     }
   }, [user, loading, navigation]);
 

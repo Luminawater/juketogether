@@ -36,6 +36,8 @@ import { useAuth } from '../context/AuthContext';
 import { Track } from '../types';
 import { socketService, RoomState } from '../services/socketService';
 import { FloatingPlayer } from '../components/FloatingPlayer';
+import { NowPlayingCard } from '../components/NowPlayingCard';
+import { DJModeInterface } from '../components/DJModeInterface';
 import {
   isSpotifyUser,
   fetchUserPlaylists,
@@ -149,6 +151,10 @@ const RoomScreen: React.FC = () => {
     userReaction: null,
   });
   const [loadingReaction, setLoadingReaction] = useState(false);
+
+  // DJ Mode state
+  const [djPlayerTracks, setDjPlayerTracks] = useState<(Track | null)[]>([null, null, null]);
+  const [djPlayerPlayingStates, setDjPlayerPlayingStates] = useState<boolean[]>([false, false, false]);
 
   // Connect to Socket.io when component mounts
   useEffect(() => {

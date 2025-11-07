@@ -305,29 +305,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (error) {
           console.error('[AuthContext] Error getting session:', error);
+          resolveLoading();
         } else {
           if (session) {
             console.log('[AuthContext] Session restored from storage');
-          } else {
-            console.log('[AuthContext] No session found in storage');
-          }
-          setSession(session);
-          setUser(session?.user ?? null);
-          
-          // Fetch profile in background, don't block loading
-          // Use cache for initial load to speed up app startup
-          if (session?.user?.id) {
+            setSession(session);
+            setUser(session.user);
+            
+            // Fetch profile in background, don't block loading
+            // Use cache for initial load to speed up app startup
             fetchUserProfile(session.user.id, true).catch((err) => {
               console.error('[AuthContext] Error fetching profile:', err);
             });
+          } else {
+            console.log('[AuthContext] No session found in storage');
+            setSession(null);
+            setUser(null);
           }
+          
+          // Resolve loading after setting session/user state
+          resolveLoading();
         }
-        
-        resolveLoading();
       })
       .catch((error) => {
         clearTimeout(sessionTimeout);
         console.error('[AuthContext] Failed to get session:', error);
+        setSession(null);
+        setUser(null);
         resolveLoading();
       });
 

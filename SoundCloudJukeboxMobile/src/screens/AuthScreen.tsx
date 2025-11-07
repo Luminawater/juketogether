@@ -44,12 +44,9 @@ const AuthScreen: React.FC = () => {
   useEffect(() => {
     if (user && !loading && !hasNavigatedRef.current) {
       hasNavigatedRef.current = true;
-      if (Platform.OS === 'web') {
-        // Use window.location for web to avoid double navigation and deep linking issues
-        window.location.href = '/dashboard';
-      } else {
-        navigation.replace('Dashboard');
-      }
+      // Use React Navigation for all platforms to avoid full page reload
+      // This ensures session state is preserved
+      navigation.replace('Dashboard');
     }
   }, [user, loading, navigation]);
 
