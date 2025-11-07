@@ -13,7 +13,6 @@ const getApiUrl = () => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-    const port = window.location.port ? `:${window.location.port}` : '';
     
     // If on localhost, use localhost:8080 for socket server
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -21,8 +20,9 @@ const getApiUrl = () => {
     }
     
     // Otherwise, use the current hostname (production domain)
-    // For socket.io, we typically use the same origin
-    return `${protocol}//${hostname}${port}`;
+    // For socket.io, we use the same origin (no port needed)
+    // Socket.io will automatically handle websocket upgrade
+    return `${protocol}//${hostname}`;
   }
   
   // Check if we're in development mode
@@ -34,7 +34,7 @@ const getApiUrl = () => {
   }
   
   // In production, use your Vercel/deployed URL from app.json or fallback
-  return Constants.expoConfig?.extra?.apiUrl || 'https://juketogether.vercel.app';
+  return Constants.expoConfig?.extra?.apiUrl || 'https://juketogether.com';
 };
 
 export const API_URL = getApiUrl();
