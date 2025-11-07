@@ -1,9 +1,18 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
-import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/constants';
 import { UserProfile, UserPermissions } from '../types';
+
+// Conditionally import SecureStore only on mobile
+let SecureStore: typeof import('expo-secure-store') | null = null;
+if (Platform.OS !== 'web') {
+  try {
+    SecureStore = require('expo-secure-store');
+  } catch (e) {
+    console.warn('expo-secure-store not available');
+  }
+}
 
 // localStorage helper functions for web
 const localStorageHelpers = {
@@ -54,10 +63,16 @@ const getStorage = () => {
     };
   }
   // Use SecureStore for mobile (secure encrypted storage)
+  if (!SecureStore) {
+    // Fallback to AsyncStorage if SecureStore is not available
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    return AsyncStorage;
+  }
+  
   return {
     getItem: async (key: string) => {
       try {
-        return await SecureStore.getItemAsync(key);
+        return await SecureStore!.getItemAsync(key);
       } catch (error) {
         console.error('[SecureStore] Error getting item:', error);
         return null;
@@ -65,14 +80,14 @@ const getStorage = () => {
     },
     setItem: async (key: string, value: string) => {
       try {
-        await SecureStore.setItemAsync(key, value);
+        await SecureStore!.setItemAsync(key, value);
       } catch (error) {
         console.error('[SecureStore] Error setting item:', error);
       }
     },
     removeItem: async (key: string) => {
       try {
-        await SecureStore.deleteItemAsync(key);
+        await SecureStore!.deleteItemAsync(key);
       } catch (error) {
         console.error('[SecureStore] Error removing item:', error);
       }
@@ -290,22 +305,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (error) {
           console.error('[AuthContext] Error getting session:', error);
-          // If there's an error, try to clear potentially corrupted session data
-          if (Platform.OS === 'web' && typeof window !== 'undefined') {
-            // Check if there's a session in localStorage that might be corrupted
-            const sessionKey = Object.keys(window.localStorage).find(key => 
-              key.includes('supabase.auth.token')
-            );
-            if (sessionKey) {
-              console.warn('[AuthContext] Found potentially corrupted session, clearing...');
-              window.localStorage.removeItem(sessionKey);
-            }
-          }
         } else {
           if (session) {
-            console.log('[AuthContext] Session restored from localStorage');
+            console.log('[AuthContext] Session restored from storage');
           } else {
-            console.log('[AuthContext] No session found in localStorage');
+            console.log('[AuthContext] No session found in storage');
           }
           setSession(session);
           setUser(session?.user ?? null);
@@ -337,17 +341,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(session?.user ?? null);
           
           if (session?.user?.id) {
-            // Session exists - ensure it's persisted in localStorage
-            if (Platform.OS === 'web' && typeof window !== 'undefined') {
-              // Supabase should handle this automatically, but we can verify
-              const sessionKey = Object.keys(window.localStorage).find(key => 
-                key.includes('supabase.auth.token')
-              );
-              if (!sessionKey && event === 'SIGNED_IN') {
-                console.warn('[AuthContext] Session not found in localStorage after sign in');
-              }
-            }
-            
+            // Session exists - Supabase automatically persists it via our storage adapter
             // Clear cache on sign out, use cache on sign in
             const useCache = event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED';
             await fetchUserProfile(session.user.id, useCache);
