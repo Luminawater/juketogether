@@ -19,8 +19,6 @@ import {
   FAB,
   Portal,
   Dialog,
-  Menu,
-  IconButton,
   useTheme,
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
@@ -47,7 +45,6 @@ const DashboardScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [createDialogVisible, setCreateDialogVisible] = useState(false);
   const [joinDialogVisible, setJoinDialogVisible] = useState(false);
-  const [menuVisible, setMenuVisible] = useState(false);
 
   // Create room form state
   const [roomName, setRoomName] = useState('');
@@ -252,77 +249,6 @@ const DashboardScreen: React.FC = () => {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header with user info */}
       <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
-        <Menu
-          visible={menuVisible}
-          onDismiss={() => setMenuVisible(false)}
-          anchor={
-            <IconButton
-              icon="menu"
-              iconColor={theme.colors.onSurface}
-              onPress={() => setMenuVisible(true)}
-              style={styles.menuButton}
-            />
-          }
-        >
-          <Menu.Item
-            onPress={() => {
-              setMenuVisible(false);
-              navigation.navigate('Dashboard');
-            }}
-            title="Dashboard"
-            leadingIcon="home"
-          />
-          <Menu.Item
-            onPress={() => {
-              setMenuVisible(false);
-              navigation.navigate('Discovery');
-            }}
-            title="Discover Rooms"
-            leadingIcon="compass"
-          />
-          <Menu.Item
-            onPress={() => {
-              setMenuVisible(false);
-              navigation.navigate('Leaderboard');
-            }}
-            title="Leaderboard"
-            leadingIcon="trophy"
-          />
-          <Menu.Item
-            onPress={() => {
-              setMenuVisible(false);
-              navigation.navigate('Friends');
-            }}
-            title="Friends"
-            leadingIcon="account-group"
-          />
-          <Menu.Item
-            onPress={() => {
-              setMenuVisible(false);
-              navigation.navigate('Profile');
-            }}
-            title="Edit Profile"
-            leadingIcon="account-edit"
-          />
-          {profile && hasRole(profile.role, 'admin') && (
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(false);
-                navigation.navigate('Admin');
-              }}
-              title="Admin Panel"
-              leadingIcon="shield-account"
-            />
-          )}
-          <Menu.Item
-            onPress={() => {
-              setMenuVisible(false);
-              handleSignOut();
-            }}
-            title="Sign Out"
-            leadingIcon="logout"
-          />
-        </Menu>
         <View style={styles.userInfo}>
           <Avatar.Image
             size={50}
@@ -560,10 +486,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    gap: 16,
-  },
-  menuButton: {
-    margin: 0,
   },
   userInfo: {
     flexDirection: 'row',

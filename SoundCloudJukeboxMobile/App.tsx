@@ -23,6 +23,9 @@ import { AuthProvider } from './src/context/AuthContext';
 // Import theme
 import darkTheme from './src/config/theme';
 
+// Import components
+import { HeaderMenuButton } from './src/components/HeaderMenuButton';
+
 // Navigation types
 export type RootStackParamList = {
   Home: undefined;
@@ -112,49 +115,55 @@ export default function App() {
               component={DashboardScreen}
               options={{
                 title: 'SoundCloud & Spotify Jukebox',
-                headerLeft: null
+                headerLeft: () => <HeaderMenuButton />
               }}
             />
             <Stack.Screen
               name="Room"
               component={RoomScreen}
               options={({ route }) => ({
-                title: route.params.roomName || 'Music Room'
+                title: route.params.roomName || 'Music Room',
+                headerLeft: () => <HeaderMenuButton />
               })}
             />
             <Stack.Screen
               name="Admin"
               component={AdminScreen}
               options={{
-                title: 'Admin Panel'
+                title: 'Admin Panel',
+                headerLeft: () => <HeaderMenuButton />
               }}
             />
             <Stack.Screen
               name="Discovery"
               component={DiscoveryScreen}
               options={{
-                title: 'Discover Rooms'
+                title: 'Discover Rooms',
+                headerLeft: () => <HeaderMenuButton />
               }}
             />
             <Stack.Screen
               name="Friends"
               component={FriendsScreen}
               options={{
-                title: 'Friends'
+                title: 'Friends',
+                headerLeft: () => <HeaderMenuButton />
               }}
             />
             <Stack.Screen
               name="Profile"
               component={ProfileScreen}
               options={{
-                title: 'Edit Profile'
+                title: 'Edit Profile',
+                headerLeft: () => <HeaderMenuButton />
               }}
             />
             <Stack.Screen
               name="Leaderboard"
               component={LeaderboardScreen}
               options={{
-                title: 'Leaderboard'
+                title: 'Leaderboard',
+                headerLeft: () => <HeaderMenuButton />
               }}
             />
           </Stack.Navigator>

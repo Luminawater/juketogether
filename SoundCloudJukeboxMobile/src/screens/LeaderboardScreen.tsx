@@ -519,6 +519,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: 11,
+    fontWeight: '500',
   },
 });
 

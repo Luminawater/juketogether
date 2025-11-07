@@ -24,10 +24,10 @@ import {
   Dialog,
   Paragraph,
   IconButton,
+  useTheme,
 } from 'react-native-paper';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import ConfettiCannon from 'react-native-confetti-cannon';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { Track } from '../types';
@@ -47,8 +47,6 @@ import {
   TrackReactionCounts,
   ReactionType,
 } from '../services/trackReactionsService';
-import RoomChat from '../components/RoomChat';
-import BecomeProUser from '../components/BecomeProUser';
 
 type RoomScreenRouteProp = RouteProp<RootStackParamList, 'Room'>;
 type RoomScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Room'>;
@@ -86,57 +84,12 @@ const RoomScreen: React.FC = () => {
   const route = useRoute<RoomScreenRouteProp>();
   const navigation = useNavigation<RoomScreenNavigationProp>();
   const { user, session, supabase } = useAuth();
+  const theme = useTheme();
 
-  const { roomId: initialRoomId, roomName: initialRoomName, isShortCode } = route.params;
-  
-  // Resolved room ID and name (may be resolved from short code)
-  const [roomId, setRoomId] = useState(initialRoomId);
-  const [roomName, setRoomName] = useState(initialRoomName || 'Music Room');
-  const [resolvingRoom, setResolvingRoom] = useState(isShortCode || false);
-
-  // Resolve short code to room ID if needed
-  useEffect(() => {
-    const resolveShortCode = async () => {
-      if (!isShortCode || !supabase) return;
-      
-      const searchValue = initialRoomId.toUpperCase();
-      
-      // Check if it's a 5-character code
-      if (searchValue.length === 5 && /^[A-Z0-9]+$/.test(searchValue)) {
-        try {
-          setResolvingRoom(true);
-          const { data, error } = await supabase
-            .from('rooms')
-            .select('id, name')
-            .eq('short_code', searchValue)
-            .single();
-
-          if (error || !data) {
-            Alert.alert('Error', 'Room not found. Please check the code and try again.');
-            navigation.goBack();
-            return;
-          }
-
-          setRoomId(data.id);
-          setRoomName(data.name || 'Music Room');
-        } catch (error) {
-          console.error('Error resolving short code:', error);
-          Alert.alert('Error', 'Failed to find room');
-          navigation.goBack();
-        } finally {
-          setResolvingRoom(false);
-        }
-      }
-    };
-
-    resolveShortCode();
-  }, [isShortCode, initialRoomId, supabase, navigation]);
-
-  // Confetti ref
-  const confettiRef = useRef<any>(null);
+  const { roomId, roomName } = route.params;
 
   // Main state
-  const [activeTab, setActiveTab] = useState<'main' | 'users' | 'settings' | 'spotify' | 'chat'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'users' | 'settings' | 'spotify'>('main');
   const [queue, setQueue] = useState<Track[]>([]);
   const [history, setHistory] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
@@ -169,7 +122,6 @@ const RoomScreen: React.FC = () => {
   const [canControl, setCanControl] = useState(true);
   const [addAdminInput, setAddAdminInput] = useState('');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-  const [hostTier, setHostTier] = useState<string | undefined>(undefined);
 
   // Spotify state
   const [spotifyPlaylists, setSpotifyPlaylists] = useState<SpotifyPlaylist[]>([]);
@@ -188,32 +140,8 @@ const RoomScreen: React.FC = () => {
   });
   const [loadingReaction, setLoadingReaction] = useState(false);
 
-  // Fetch host tier from Supabase
+  // Connect to Socket.io when component mounts
   useEffect(() => {
-    const fetchHostTier = async () => {
-      if (!supabase) return;
-      try {
-        const { data, error } = await supabase
-          .from('rooms')
-          .select('host_tier')
-          .eq('id', roomId)
-          .single();
-
-        if (!error && data) {
-          setHostTier(data.host_tier);
-        }
-      } catch (error) {
-        console.error('Error fetching host tier:', error);
-      }
-    };
-
-    fetchHostTier();
-  }, [roomId, supabase]);
-
-  // Connect to Socket.io when component mounts (wait for room resolution if needed)
-  useEffect(() => {
-    if (resolvingRoom) return; // Don't connect until room is resolved
-    
     const userId = user?.id || `anonymous_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
     socketService.connect(roomId, userId);
@@ -257,10 +185,6 @@ const RoomScreen: React.FC = () => {
 
     const handleTrackAdded = (track: Track) => {
       setQueue(prev => [...prev, track]);
-      // Celebrate when track is added!
-      if (confettiRef.current) {
-        confettiRef.current.start();
-      }
     };
 
     const handleTrackRemoved = (trackId: string) => {
@@ -370,7 +294,7 @@ const RoomScreen: React.FC = () => {
       socketService.off('error', handleError);
       socketService.disconnect();
     };
-  }, [roomId, user?.id, navigation, resolvingRoom]);
+  }, [roomId, user?.id, navigation]);
 
   // Load Spotify playlists when user is logged in with Spotify
   useEffect(() => {
@@ -420,11 +344,6 @@ const RoomScreen: React.FC = () => {
       if (result.success) {
         // Reload reactions to get updated counts
         await loadTrackReactions();
-        
-        // Celebrate "Fantastic" reactions with confetti! 🎉
-        if (reactionType === 'fantastic' && confettiRef.current) {
-          confettiRef.current.start();
-        }
       } else {
         Alert.alert('Error', result.error || 'Failed to update reaction');
       }
@@ -484,8 +403,6 @@ const RoomScreen: React.FC = () => {
       trackInfo: queueTrack.info,
       platform: 'spotify',
     });
-    
-    // Confetti will trigger when track is actually added via handleTrackAdded
   };
 
   const queueAllTracks = () => {
@@ -712,9 +629,6 @@ const RoomScreen: React.FC = () => {
 
   const renderMainTab = () => (
     <ScrollView style={styles.tabContent}>
-      {/* Become Pro User Component */}
-      {hostTier && <BecomeProUser roomId={roomId} hostTier={hostTier} />}
-
       {/* Current Track */}
       <Card style={styles.card}>
         <Card.Content>
@@ -1392,7 +1306,7 @@ const RoomScreen: React.FC = () => {
 
             <View style={styles.settingItem}>
               <View style={styles.settingRow}>
-                <Text style={styles.settingLabel}>DJ Mode (Pro Tier)</Text>
+                <Text style={styles.settingLabel}>DJ Mode (Standard Tier)</Text>
                 <Switch
                   value={roomSettings.djMode}
                   onValueChange={(value) => {
@@ -1527,20 +1441,10 @@ const RoomScreen: React.FC = () => {
     );
   };
 
-  // Show loading while resolving short code
-  if (resolvingRoom) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" />
-        <Text style={{ marginTop: 16 }}>Finding room...</Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
         <View style={styles.headerTop}>
           <Text style={styles.roomTitle}>{roomName}</Text>
           <View style={styles.headerRight}>
@@ -1552,13 +1456,13 @@ const RoomScreen: React.FC = () => {
               style={styles.shareButton}
             />
             <View style={styles.connectionStatus}>
-              <View style={[styles.statusDot, { backgroundColor: connected ? '#4caf50' : '#f44336' }]} />
-              <Text style={styles.statusText}>{connected ? 'Connected' : 'Connecting...'}</Text>
+              <View style={[styles.statusDot, { backgroundColor: connected ? theme.colors.primary : theme.colors.error }]} />
+              <Text style={[styles.statusText, { color: theme.colors.onSurface }]}>{connected ? 'Connected' : 'Connecting...'}</Text>
             </View>
           </View>
         </View>
         <Text style={styles.roomId}>Room ID: {roomId} • {userCount} users</Text>
-        {!connected && <ActivityIndicator size="small" color="#fff" style={styles.connectingIndicator} />}
+        {!connected && <ActivityIndicator size="small" color={theme.colors.onSurface} style={styles.connectingIndicator} />}
       </View>
 
       {/* Tabs */}
@@ -1599,14 +1503,6 @@ const RoomScreen: React.FC = () => {
             Settings
           </Button>
         )}
-        <Button
-          mode={activeTab === 'chat' ? 'contained' : 'text'}
-          onPress={() => setActiveTab('chat')}
-          icon="message-text"
-          style={styles.tabButton}
-        >
-          Chat
-        </Button>
       </View>
 
       {/* Tab Content */}
@@ -1614,9 +1510,6 @@ const RoomScreen: React.FC = () => {
       {activeTab === 'users' && renderUsersTab()}
       {activeTab === 'spotify' && renderSpotifyTab()}
       {activeTab === 'settings' && renderSettingsTab()}
-      {activeTab === 'chat' && (
-        <RoomChat roomId={roomId} supabase={supabase} />
-      )}
 
       {/* Floating Player */}
       {currentTrack && (
@@ -1629,15 +1522,6 @@ const RoomScreen: React.FC = () => {
           onToggleMinimize={() => setPlayerMinimized(!playerMinimized)}
         />
       )}
-
-      {/* Confetti Celebrations 🎉 */}
-      <ConfettiCannon
-        ref={confettiRef}
-        count={200}
-        origin={{ x: -10, y: 0 }}
-        fadeOut={true}
-        autoStart={false}
-      />
     </View>
   );
 };
@@ -1645,12 +1529,11 @@ const RoomScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   header: {
-    backgroundColor: '#667eea',
     padding: 16,
     paddingTop: Platform.OS === 'web' ? 16 : 50,
+    elevation: 2,
   },
   headerTop: {
     flexDirection: 'row',
@@ -1661,7 +1544,6 @@ const styles = StyleSheet.create({
   roomTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: 'white',
     flex: 1,
   },
   headerRight: {
