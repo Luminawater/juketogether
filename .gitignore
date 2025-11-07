@@ -9,4 +9,12 @@ yarn-error.log*
 web-build/
 SoundCloudJukeboxMobile/node_modules/
 SoundCloudJukeboxMobile/.expo/
+SoundCloudJukeboxMobile/.expo-shared/
 SoundCloudJukeboxMobile/dist/
+SoundCloudJukeboxMobile/web-build/
+SoundCloudJukeboxMobile/.metro/
+SoundCloudJukeboxMobile/.turbo/
+SoundCloudJukeboxMobile/.cache/
+SoundCloudJukeboxMobile/*.tsbuildinfo
+SoundCloudJukeboxMobile/.npm/
+SoundCloudJukeboxMobile/.yarn/
