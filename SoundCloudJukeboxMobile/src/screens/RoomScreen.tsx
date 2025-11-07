@@ -1446,11 +1446,11 @@ const RoomScreen: React.FC = () => {
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
         <View style={styles.headerTop}>
-          <Text style={styles.roomTitle}>{roomName}</Text>
+          <Text style={[styles.roomTitle, { color: theme.colors.onSurface }]}>{roomName}</Text>
           <View style={styles.headerRight}>
             <IconButton
               icon="share-variant"
-              iconColor="#fff"
+              iconColor={theme.colors.onSurface}
               size={24}
               onPress={shareRoom}
               style={styles.shareButton}
@@ -1461,7 +1461,7 @@ const RoomScreen: React.FC = () => {
             </View>
           </View>
         </View>
-        <Text style={styles.roomId}>Room ID: {roomId} • {userCount} users</Text>
+        <Text style={[styles.roomId, { color: theme.colors.onSurfaceVariant }]}>Room ID: {roomId} • {userCount} users</Text>
         {!connected && <ActivityIndicator size="small" color={theme.colors.onSurface} style={styles.connectingIndicator} />}
       </View>
 
