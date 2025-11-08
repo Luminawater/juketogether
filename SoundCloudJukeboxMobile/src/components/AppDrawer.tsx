@@ -74,17 +74,20 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({ visible, onDismiss, naviga
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Native driver is not supported on web
+    const useNativeDriver = Platform.OS !== 'web';
+    
     if (visible) {
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: 0,
           duration: 300,
-          useNativeDriver: true,
+          useNativeDriver: useNativeDriver,
         }),
         Animated.timing(backdropOpacity, {
           toValue: 1,
           duration: 300,
-          useNativeDriver: true,
+          useNativeDriver: useNativeDriver,
         }),
       ]).start();
     } else {
@@ -92,12 +95,12 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({ visible, onDismiss, naviga
         Animated.timing(slideAnim, {
           toValue: -DRAWER_WIDTH,
           duration: 300,
-          useNativeDriver: true,
+          useNativeDriver: useNativeDriver,
         }),
         Animated.timing(backdropOpacity, {
           toValue: 0,
           duration: 300,
-          useNativeDriver: true,
+          useNativeDriver: useNativeDriver,
         }),
       ]).start();
     }
