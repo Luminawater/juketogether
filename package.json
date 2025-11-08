@@ -18,6 +18,7 @@
     "vercel-build": "cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build",
     "build:web": "cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build",
     "build:cloudflare": "npm run build:web && node scripts/copy-redirects.js",
+    "build:cloudflare:direct": "cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build && cd .. && node scripts/copy-redirects.js",
     "test:stripe": "node test-stripe.js",
     "test:payment": "node test-payment.js"
   },
