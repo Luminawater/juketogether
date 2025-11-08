@@ -382,6 +382,185 @@ app.post('/api/stripe-webhook', async (req, res) => {
   }
 });
 
+// Proxy endpoint for SoundCloud oEmbed API (to avoid CORS issues)
+// Supports both POST (with JSON body) and GET (with query params)
+app.post('/api/soundcloud-oembed', async (req, res) => {
+  if (!fetch) {
+    return res.status(500).json({ error: 'Fetch not available. Please install node-fetch' });
+  }
+  
+  try {
+    const { url, maxheight, auto_play, show_comments } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: 'URL parameter is required' });
+    }
+    
+    // Use URLSearchParams for form data (as per SoundCloud docs)
+    const formData = new URLSearchParams();
+    formData.append('format', 'json');
+    formData.append('url', url);
+    if (maxheight) formData.append('maxheight', maxheight);
+    if (auto_play !== undefined) formData.append('auto_play', auto_play);
+    if (show_comments !== undefined) formData.append('show_comments', show_comments);
+    
+    const response = await fetch('https://soundcloud.com/oembed', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0 (compatible; SoundCloud-Jukebox/1.0)'
+      },
+      body: formData.toString()
+    });
+    
+    if (!response.ok) {
+      throw new Error(`SoundCloud API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('oEmbed response for', url, ':', JSON.stringify(data).substring(0, 200));
+    res.json(data);
+  } catch (error) {
+    console.error('Error proxying oEmbed request:', error);
+    res.status(500).json({ error: 'Failed to fetch oEmbed data', details: error.message });
+  }
+});
+
+// GET endpoint for oEmbed (alternative to POST)
+app.get('/api/soundcloud-oembed', async (req, res) => {
+  if (!fetch) {
+    return res.status(500).json({ error: 'Fetch not available. Please install node-fetch' });
+  }
+  
+  try {
+    const { url, maxheight, auto_play, show_comments } = req.query;
+    if (!url) {
+      return res.status(400).json({ error: 'URL parameter is required' });
+    }
+    
+    // Build query string for SoundCloud oEmbed API
+    const params = new URLSearchParams();
+    params.append('format', 'json');
+    params.append('url', url);
+    if (maxheight) params.append('maxheight', maxheight);
+    if (auto_play !== undefined) params.append('auto_play', auto_play);
+    if (show_comments !== undefined) params.append('show_comments', show_comments);
+    
+    const oembedUrl = `https://soundcloud.com/oembed?${params.toString()}`;
+    const response = await fetch(oembedUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; SoundCloud-Jukebox/1.0)'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`SoundCloud API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('oEmbed GET response for', url, ':', JSON.stringify(data).substring(0, 200));
+    res.json(data);
+  } catch (error) {
+    console.error('Error proxying oEmbed request (GET):', error);
+    res.status(500).json({ error: 'Failed to fetch oEmbed data', details: error.message });
+  }
+});
+
+// RapidAPI endpoint for SoundCloud tracks (primary method)
+// Uses RapidAPI to fetch track metadata
+app.post('/api/soundcloud-rapidapi', async (req, res) => {
+  if (!fetch) {
+    return res.status(500).json({ error: 'Fetch not available. Please install node-fetch' });
+  }
+  
+  const rapidApiKey = process.env.XRAPID_API_KEY;
+  const rapidApiApp = process.env.XRAPID_APP;
+  
+  if (!rapidApiKey) {
+    return res.status(503).json({ error: 'RapidAPI key not configured. Set XRAPID_API_KEY environment variable.' });
+  }
+  
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: 'URL parameter is required' });
+    }
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-rapidapi-host': 'soundcloud-track-information-api.p.rapidapi.com',
+      'x-rapidapi-key': rapidApiKey,
+    };
+    
+    // Add app header if configured
+    if (rapidApiApp) {
+      headers['x-rapidapi-app'] = rapidApiApp;
+    }
+    
+    const response = await fetch('https://soundcloud-track-information-api.p.rapidapi.com/soundcloud', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({ url }),
+    });
+    
+    if (!response.ok) {
+      // If rate limited, return error so client can fallback
+      if (response.status === 429) {
+        return res.status(429).json({ error: 'Rate limit reached', details: 'RapidAPI monthly limit exceeded' });
+      }
+      throw new Error(`RapidAPI error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('RapidAPI response for', url, ':', JSON.stringify(data).substring(0, 200));
+    res.json(data);
+  } catch (error) {
+    console.error('Error proxying RapidAPI request:', error);
+    res.status(500).json({ error: 'Failed to fetch track metadata from RapidAPI', details: error.message });
+  }
+});
+
+// Resolve endpoint for SoundCloud tracks (requires client_id)
+// This is a fallback when oEmbed doesn't return metadata
+app.post('/api/soundcloud-resolve', async (req, res) => {
+  if (!fetch) {
+    return res.status(500).json({ error: 'Fetch not available. Please install node-fetch' });
+  }
+  
+  const clientId = process.env.SOUNDCLOUD_CLIENT_ID;
+  if (!clientId) {
+    return res.status(503).json({ error: 'SoundCloud client_id not configured. Set SOUNDCLOUD_CLIENT_ID environment variable.' });
+  }
+  
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: 'URL parameter is required' });
+    }
+    
+    // Use SoundCloud resolve endpoint
+    const resolveUrl = `https://api.soundcloud.com/resolve?url=${encodeURIComponent(url)}&client_id=${clientId}`;
+    const response = await fetch(resolveUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; SoundCloud-Jukebox/1.0)',
+        'Accept': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`SoundCloud Resolve API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Resolve response for', url, ':', JSON.stringify(data).substring(0, 200));
+    res.json(data);
+  } catch (error) {
+    console.error('Error proxying resolve request:', error);
+    res.status(500).json({ error: 'Failed to resolve track', details: error.message });
+  }
+});
+
 // Root route is now handled by Vercel static build (Expo web app)
 // app.get('/', ...) removed - Vercel serves index.html from web-build
 

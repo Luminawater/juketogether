@@ -57,6 +57,20 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
     SUPPORTED_LANGUAGES.find((lang) => lang.code === DEFAULT_LANGUAGE) || SUPPORTED_LANGUAGES[0]
   );
   const [isLoading, setIsLoading] = useState(true);
+  const [i18nLanguage, setI18nLanguage] = useState(i18n.language); // Track i18n language changes
+
+  // Listen to i18n language changes to force re-render
+  useEffect(() => {
+    const handleLanguageChange = (lng: string) => {
+      setI18nLanguage(lng);
+    };
+
+    i18n.on('languageChanged', handleLanguageChange);
+
+    return () => {
+      i18n.off('languageChanged', handleLanguageChange);
+    };
+  }, []);
 
   // Sync i18n language with context language
   useEffect(() => {
@@ -144,16 +158,20 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
     }
   };
 
+  // Include i18nLanguage in dependency to force re-render when language changes
+  const contextValue = React.useMemo(
+    () => ({
+      language,
+      setLanguage,
+      supportedLanguages: SUPPORTED_LANGUAGES,
+      t,
+      i18n,
+    }),
+    [language, t, i18nLanguage] // Re-create when language or i18nLanguage changes
+  );
+
   return (
-    <LanguageContext.Provider
-      value={{
-        language,
-        setLanguage,
-        supportedLanguages: SUPPORTED_LANGUAGES,
-        t,
-        i18n,
-      }}
-    >
+    <LanguageContext.Provider value={contextValue}>
       {children}
     </LanguageContext.Provider>
   );
