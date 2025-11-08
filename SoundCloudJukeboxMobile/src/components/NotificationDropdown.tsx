@@ -54,6 +54,8 @@ const getNotificationIcon = (type: NotificationType): string => {
       return 'account-group';
     case 'collab_accept':
       return 'check-circle';
+    case 'tier_change':
+      return 'crown';
     default:
       return 'bell';
   }
@@ -73,6 +75,8 @@ const getNotificationColor = (type: NotificationType, theme: any): string => {
       return theme.colors.primary;
     case 'collab_accept':
       return theme.colors.primary;
+    case 'tier_change':
+      return '#667eea';
     default:
       return theme.colors.onSurfaceVariant;
   }

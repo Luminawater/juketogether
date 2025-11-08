@@ -35,7 +35,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
-import { Track } from '../types';
+import { Track, SubscriptionTier } from '../types';
 import { socketService, RoomState } from '../services/socketService';
 import { FloatingPlayer } from '../components/FloatingPlayer';
 import { NowPlayingCard } from '../components/NowPlayingCard';
@@ -68,9 +68,10 @@ import {
 import { getRoomUrl, getRoomShareMessage, extractMusicUrls, isValidMusicUrl } from '../utils/roomUtils';
 import RoomChat from '../components/RoomChat';
 import AdsBanner from '../components/AdsBanner';
-import { hasTier } from '../utils/permissions';
+import { hasTier, getTierHeaderColor } from '../utils/permissions';
 import { ShareRoomDialog } from '../components/ShareRoomDialog';
 import { QueueDialog } from '../components/QueueDialog';
+import { CreatePlaylistDialog } from '../components/CreatePlaylistDialog';
 import { API_URL } from '../config/constants';
 import { getThumbnailUrl } from '../utils/imageUtils';
 
@@ -168,17 +169,24 @@ const AnimatedFAB: React.FC<AnimatedFABProps> = ({
   // Start pulse animation when playing
   React.useEffect(() => {
     if (isPlaying) {
-      // Pulse animation
+      // Pulse animation - subtle scale to avoid jumping
+      // Use a safe easing function that works on all platforms
+      // Animated.Easing.ease doesn't exist, use quad instead
+      const easing = Animated.Easing?.inOut && Animated.Easing?.quad 
+        ? Animated.Easing.inOut(Animated.Easing.quad)
+        : undefined;
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
-            toValue: 1.15,
-            duration: 800,
+            toValue: 1.03,
+            duration: 1200,
+            easing: easing,
             useNativeDriver: true,
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
-            duration: 800,
+            duration: 1200,
+            easing: easing,
             useNativeDriver: true,
           }),
         ])
@@ -1373,55 +1381,26 @@ const RoomScreen: React.FC = () => {
   };
 
   const [createPlaylistDialogVisible, setCreatePlaylistDialogVisible] = useState(false);
-  const [playlistNameInput, setPlaylistNameInput] = useState('');
-  const [creatingPlaylist, setCreatingPlaylist] = useState(false);
 
-  const handleCreatePlaylistFromRoom = async () => {
-    if (!user || !profile || profile.subscription_tier !== 'pro') {
+  const handleCreatePlaylist = async (playlistData: {
+    name: string;
+    description: string;
+    tracks: Track[];
+    invitedFriendIds: string[];
+  }) => {
+    if (!user || !profile || !hasTier(profile.subscription_tier, 'pro')) {
       Alert.alert('Error', 'Only PRO tier users can create playlists');
       return;
     }
 
-    // Combine history and queue tracks
-    const allTracks = [...history, ...queue];
-    
-    if (allTracks.length === 0) {
-      Alert.alert('Error', 'No tracks in history or queue to create a playlist');
-      return;
-    }
-
-    setPlaylistNameInput('');
-    setCreatePlaylistDialogVisible(true);
-  };
-
-  const confirmCreatePlaylist = async () => {
-    if (!user || !profile || profile.subscription_tier !== 'pro') {
-      return;
-    }
-
-    const playlistName = playlistNameInput.trim();
-    if (!playlistName) {
-      Alert.alert('Error', 'Playlist name cannot be empty');
-      return;
-    }
-
-    // Combine history and queue tracks
-    const allTracks = [...history, ...queue];
-    
-    if (allTracks.length === 0) {
-      Alert.alert('Error', 'No tracks in history or queue to create a playlist');
-      return;
-    }
-
-    setCreatingPlaylist(true);
     try {
       // Create playlist
       const { data: playlist, error: playlistError } = await supabase
         .from('playlists')
         .insert({
           user_id: user.id,
-          name: playlistName,
-          description: `Created from room ${roomName || roomId}`,
+          name: playlistData.name,
+          description: playlistData.description || `Created from room ${roomName || roomId}`,
           created_from_room_id: roomId,
         })
         .select()
@@ -1430,7 +1409,7 @@ const RoomScreen: React.FC = () => {
       if (playlistError) throw playlistError;
 
       // Add tracks to playlist
-      const tracksToInsert = allTracks.map((track, index) => ({
+      const tracksToInsert = playlistData.tracks.map((track, index) => ({
         playlist_id: playlist.id,
         track_id: track.id || `track_${index}`,
         track_url: track.url || '',
@@ -1448,12 +1427,30 @@ const RoomScreen: React.FC = () => {
 
       if (tracksError) throw tracksError;
 
+      // Create invites for friends
+      if (playlistData.invitedFriendIds.length > 0) {
+        const invitesToInsert = playlistData.invitedFriendIds.map((friendId) => ({
+          playlist_id: playlist.id,
+          invited_user_id: friendId,
+          invited_by: user.id,
+          status: 'pending',
+        }));
+
+        const { error: invitesError } = await supabase
+          .from('playlist_invites')
+          .insert(invitesToInsert);
+
+        if (invitesError) {
+          console.error('Error creating playlist invites:', invitesError);
+          // Don't fail the whole operation if invites fail
+        }
+      }
+
       setCreatePlaylistDialogVisible(false);
-      setPlaylistNameInput('');
 
       Alert.alert(
         'Success',
-        `Playlist "${playlistName}" created with ${allTracks.length} tracks!`,
+        `Playlist "${playlistData.name}" created with ${playlistData.tracks.length} tracks!${playlistData.invitedFriendIds.length > 0 ? ` ${playlistData.invitedFriendIds.length} friend(s) invited.` : ''}`,
         [
           {
             text: 'View Playlist',
@@ -1464,9 +1461,7 @@ const RoomScreen: React.FC = () => {
       );
     } catch (error: any) {
       console.error('Error creating playlist:', error);
-      Alert.alert('Error', error.message || 'Failed to create playlist');
-    } finally {
-      setCreatingPlaylist(false);
+      throw error; // Re-throw to let the dialog handle it
     }
   };
 
@@ -2479,7 +2474,7 @@ const RoomScreen: React.FC = () => {
           <Card.Content>
             <Button
               mode="contained"
-              onPress={handleCreatePlaylistFromRoom}
+              onPress={() => setCreatePlaylistDialogVisible(true)}
               icon="playlist-plus"
               style={styles.addButton}
               buttonColor={theme.colors.primary}
@@ -2937,6 +2932,21 @@ const RoomScreen: React.FC = () => {
     );
   };
 
+  // Automatically enable DJ mode when DJ Mode tab is accessed by Pro user
+  useEffect(() => {
+    const isPro = profile && hasTier(profile.subscription_tier, 'pro');
+    if (activeTab === 'djmode' && isPro && tierSettings.djMode && !roomSettings.djMode && (isOwner || isAdmin) && socketService.socket) {
+      socketService.socket.emit('update-room-settings', {
+        roomId,
+        settings: {
+          ...roomSettings,
+          djMode: true,
+          djPlayers: roomSettings.djPlayers || 1, // Default to 1 player if not set
+        },
+      });
+    }
+  }, [activeTab, profile, tierSettings.djMode, roomSettings.djMode, isOwner, isAdmin, roomId]);
+
   const renderDJModeTab = () => {
     const isPro = profile && hasTier(profile.subscription_tier, 'pro');
 
@@ -2956,8 +2966,36 @@ const RoomScreen: React.FC = () => {
       );
     }
 
-    // If user is pro and DJ mode is active, show the DJ interface
-    if (isDJModeActive && roomSettings.djMode) {
+    // Check if DJ mode is available (room creator has Pro tier)
+    if (!tierSettings.djMode) {
+      return (
+        <ScrollView
+          style={styles.tabContent}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+            <Card.Content style={styles.centerContent}>
+              <MaterialCommunityIcons
+                name="equalizer"
+                size={64}
+                color={theme.colors.primary}
+                style={styles.centerIcon}
+              />
+              <Text style={[styles.noAccess, { color: theme.colors.onSurface, fontSize: 18, marginBottom: 8 }]}>
+                DJ Mode Not Available
+              </Text>
+              <Text style={[styles.noAccessSubtext, { color: theme.colors.onSurfaceVariant }]}>
+                The room creator needs to have a Pro tier subscription to enable DJ Mode.
+              </Text>
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      );
+    }
+
+    // If user is pro and DJ mode is available, show the DJ interface
+    if (roomSettings.djMode || (isOwner || isAdmin)) {
       return (
         <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
           <DJModeInterface
@@ -3051,7 +3089,7 @@ const RoomScreen: React.FC = () => {
       );
     }
 
-    // If user is pro but DJ mode is not active, show message
+    // Loading state while DJ mode is being enabled
     return (
       <ScrollView
         style={styles.tabContent}
@@ -3060,17 +3098,9 @@ const RoomScreen: React.FC = () => {
       >
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content style={styles.centerContent}>
-            <MaterialCommunityIcons
-              name="equalizer"
-              size={64}
-              color={theme.colors.primary}
-              style={styles.centerIcon}
-            />
-            <Text style={[styles.noAccess, { color: theme.colors.onSurface, fontSize: 18, marginBottom: 8 }]}>
-              DJ Mode is not active
-            </Text>
-            <Text style={[styles.noAccessSubtext, { color: theme.colors.onSurfaceVariant }]}>
-              Click the DJ Mode tab to activate DJ Mode
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={[styles.noAccess, { color: theme.colors.onSurface, fontSize: 18, marginTop: 16 }]}>
+              Enabling DJ Mode...
             </Text>
           </Card.Content>
         </Card>
@@ -3172,64 +3202,6 @@ const RoomScreen: React.FC = () => {
               <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
                 If enabled, other users can add tracks to playlists created from this room
               </Text>
-            </View>
-
-            <Divider style={styles.divider} />
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingRow}>
-                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>DJ Mode</Text>
-                <Switch
-                  value={roomSettings.djMode}
-                  onValueChange={(value) => {
-                    setRoomSettings(prev => ({ 
-                      ...prev, 
-                      djMode: value,
-                      djPlayers: value ? prev.djPlayers : 0 // Reset players when disabling
-                    }));
-                  }}
-                  disabled={!isOwner || !tierSettings.djMode}
-                />
-              </View>
-              <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
-                {!tierSettings.djMode 
-                  ? `DJ Mode requires Pro tier. Current creator tier: ${creatorTier}. Upgrade to Pro to enable DJ mode.`
-                  : 'Enable DJ mode to add up to 4 players for mixing tracks with waveforms and BPM sync'}
-              </Text>
-              
-              {roomSettings.djMode && (
-                <View style={[styles.djModeControls, { backgroundColor: theme.colors.surfaceVariant }]}>
-                  <Text style={[styles.djModeLabel, { color: theme.colors.onSurface }]}>Active Players: {roomSettings.djPlayers} / 4</Text>
-                  <View style={styles.djPlayerButtons}>
-                    <Button
-                      mode="outlined"
-                      onPress={() => {
-                        if (roomSettings.djPlayers < 4) {
-                          setRoomSettings(prev => ({ ...prev, djPlayers: prev.djPlayers + 1 }));
-                        }
-                      }}
-                      disabled={roomSettings.djPlayers >= 4 || !isOwner}
-                      icon="plus"
-                      compact
-                    >
-                      Add Player
-                    </Button>
-                    <Button
-                      mode="outlined"
-                      onPress={() => {
-                        if (roomSettings.djPlayers > 0) {
-                          setRoomSettings(prev => ({ ...prev, djPlayers: prev.djPlayers - 1 }));
-                        }
-                      }}
-                      disabled={roomSettings.djPlayers <= 0 || !isOwner}
-                      icon="minus"
-                      compact
-                    >
-                      Remove Player
-                    </Button>
-                  </View>
-                </View>
-              )}
             </View>
 
             <Divider style={styles.divider} />
@@ -3354,10 +3326,14 @@ const RoomScreen: React.FC = () => {
     return <RoomChat roomId={roomId} supabase={supabase} />;
   };
 
+  // Determine tier for header color - use creator tier if available, otherwise current user's tier
+  const headerTier = creatorTier || (profile?.subscription_tier as SubscriptionTier) || 'free';
+  const headerColor = getTierHeaderColor(headerTier);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
+      <View style={[styles.header, { backgroundColor: headerColor }]}>
         <View style={styles.headerTop}>
           <View style={styles.headerLeft}>
             <Text style={[styles.roomTitle, { color: theme.colors.onSurface }]}>{roomName}</Text>
@@ -3415,6 +3391,7 @@ const RoomScreen: React.FC = () => {
               )}
               style={[styles.userCountChip, { backgroundColor: theme.colors.primaryContainer }]}
               textStyle={[styles.userCountChipText, { color: '#FFFFFF' }]}
+              onPress={() => setActiveTab('users')}
             >
               {userCount}
             </Chip>
@@ -3436,6 +3413,17 @@ const RoomScreen: React.FC = () => {
                 style={styles.iconButton}
               />
             </View>
+            {profile && hasTier(profile.subscription_tier, 'pro') && (
+              <View style={styles.iconButtonWrapper}>
+                <IconButton
+                  icon="playlist-music"
+                  iconColor={theme.colors.onSurface}
+                  size={20}
+                  onPress={() => setCreatePlaylistDialogVisible(true)}
+                  style={styles.iconButton}
+                />
+              </View>
+            )}
             <View style={styles.iconButtonWrapper}>
               <IconButton
                 icon="share-variant"
@@ -3456,7 +3444,7 @@ const RoomScreen: React.FC = () => {
       </View>
 
       {/* Tabs */}
-      <View style={[styles.tabs, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.outline }]}>
+      <View style={[styles.tabs, { backgroundColor: headerColor, borderBottomColor: theme.colors.outline }]}>
         <TouchableOpacity
           onPress={() => setActiveTab('main')}
           style={[
@@ -3729,46 +3717,15 @@ const RoomScreen: React.FC = () => {
       )}
 
       {/* Create Playlist Dialog */}
-      <Portal>
-        <Dialog
-          visible={createPlaylistDialogVisible}
-          onDismiss={() => {
-            setCreatePlaylistDialogVisible(false);
-            setPlaylistNameInput('');
-          }}
-        >
-          <Dialog.Title>Create Playlist from Room</Dialog.Title>
-          <Dialog.Content>
-            <TextInput
-              label="Playlist Name"
-              value={playlistNameInput}
-              onChangeText={setPlaylistNameInput}
-              mode="outlined"
-              autoFocus
-              placeholder="Enter playlist name"
-            />
-            <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant, marginTop: 8 }]}>
-              This will create a playlist with {history.length + queue.length} tracks from this room's history and queue.
-            </Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => {
-              setCreatePlaylistDialogVisible(false);
-              setPlaylistNameInput('');
-            }}>
-              Cancel
-            </Button>
-            <Button
-              onPress={confirmCreatePlaylist}
-              mode="contained"
-              loading={creatingPlaylist}
-              disabled={creatingPlaylist || !playlistNameInput.trim()}
-            >
-              Create
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+      <CreatePlaylistDialog
+        visible={createPlaylistDialogVisible}
+        onDismiss={() => setCreatePlaylistDialogVisible(false)}
+        onCreate={handleCreatePlaylist}
+        queue={queue}
+        history={history}
+        userId={user?.id}
+        supabase={supabase}
+      />
 
       {/* Ad Dialog */}
       <AdDialog
@@ -4566,6 +4523,8 @@ const styles = StyleSheet.create({
   },
   fabAnimatedContainer: {
     position: 'relative',
+    // Prevent layout shifts during scale animation
+    alignSelf: 'flex-start',
   },
   fab: {
     backgroundColor: 'transparent',

@@ -104,15 +104,11 @@ const detectLanguage = async (): Promise<string> => {
     }
 
     // Fallback to device language
-    const deviceLang = Localization.locale.split('-')[0];
-    if (resources[deviceLang as keyof typeof resources]) {
-      return deviceLang;
-    }
-
-    // Fallback to device locale (e.g., 'en-US' -> 'en')
-    const deviceLocale = Localization.locale.split('-')[0];
-    if (resources[deviceLocale as keyof typeof resources]) {
-      return deviceLocale;
+    if (Localization.locale) {
+      const deviceLang = Localization.locale.split('-')[0];
+      if (resources[deviceLang as keyof typeof resources]) {
+        return deviceLang;
+      }
     }
   } catch (error) {
     console.error('Error detecting language:', error);

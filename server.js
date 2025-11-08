@@ -3438,6 +3438,68 @@ app.post('/api/stripe-webhook', async (req, res) => {
           const userId = subscription.metadata.user_id;
           const tier = subscription.metadata.tier || 'standard';
           
+          // Get current tier before updating
+          const { data: currentProfile } = await supabase
+            .from('user_profiles')
+            .select('subscription_tier')
+            .eq('id', userId)
+            .single();
+          
+          const oldTier = currentProfile?.subscription_tier || 'free';
+          
+          // Only proceed if tier actually changed
+          if (oldTier !== tier) {
+            // Get tier display names
+            const { data: oldTierData } = await supabase
+              .from('subscription_tier_settings')
+              .select('display_name')
+              .eq('tier', oldTier)
+              .single();
+            
+            const { data: newTierData } = await supabase
+              .from('subscription_tier_settings')
+              .select('display_name')
+              .eq('tier', tier)
+              .single();
+            
+            const oldTierDisplayName = oldTierData?.display_name || oldTier.charAt(0).toUpperCase() + oldTier.slice(1);
+            const newTierDisplayName = newTierData?.display_name || tier.charAt(0).toUpperCase() + tier.slice(1);
+            
+            // Determine if it's an upgrade or downgrade
+            const tierHierarchy = { free: 0, rookie: 1, standard: 2, pro: 3 };
+            const oldTierLevel = tierHierarchy[oldTier] ?? 0;
+            const newTierLevel = tierHierarchy[tier] ?? 0;
+            const isUpgrade = newTierLevel > oldTierLevel;
+            const isDowngrade = newTierLevel < oldTierLevel;
+            
+            let title, message;
+            if (isUpgrade) {
+              title = `🎉 Upgraded to ${newTierDisplayName} Tier!`;
+              message = `Your subscription has been upgraded from ${oldTierDisplayName} to ${newTierDisplayName}. Enjoy your new features!`;
+            } else if (isDowngrade) {
+              title = `Subscription Changed to ${newTierDisplayName} Tier`;
+              message = `Your subscription has been changed from ${oldTierDisplayName} to ${newTierDisplayName}.`;
+            } else {
+              title = `Subscription Updated to ${newTierDisplayName} Tier`;
+              message = `Your subscription tier has been updated to ${newTierDisplayName}.`;
+            }
+            
+            // Create notification
+            await supabase
+              .from('notifications')
+              .insert({
+                user_id: userId,
+                type: 'tier_change',
+                title: title,
+                message: message,
+                metadata: {
+                  old_tier: oldTier,
+                  new_tier: tier,
+                },
+                seen: false,
+              });
+          }
+          
           // Update user profile
           const { error: profileError } = await supabase
             .from('user_profiles')
@@ -3547,6 +3609,44 @@ app.post('/api/stripe-webhook', async (req, res) => {
         // Downgrade user to free tier
         if (supabase && deletedSubscription.metadata?.user_id) {
           const userId = deletedSubscription.metadata.user_id;
+          
+          // Get current tier before updating
+          const { data: currentProfile } = await supabase
+            .from('user_profiles')
+            .select('subscription_tier')
+            .eq('id', userId)
+            .single();
+          
+          const oldTier = currentProfile?.subscription_tier || 'free';
+          const newTier = 'free';
+          
+          // Only create notification if tier actually changed
+          if (oldTier !== newTier) {
+            // Get tier display names
+            const { data: oldTierData } = await supabase
+              .from('subscription_tier_settings')
+              .select('display_name')
+              .eq('tier', oldTier)
+              .single();
+            
+            const oldTierDisplayName = oldTierData?.display_name || oldTier.charAt(0).toUpperCase() + oldTier.slice(1);
+            const newTierDisplayName = 'Free';
+            
+            // Create notification
+            await supabase
+              .from('notifications')
+              .insert({
+                user_id: userId,
+                type: 'tier_change',
+                title: `Subscription Changed to ${newTierDisplayName} Tier`,
+                message: `Your subscription has been changed from ${oldTierDisplayName} to ${newTierDisplayName}.`,
+                metadata: {
+                  old_tier: oldTier,
+                  new_tier: newTier,
+                },
+                seen: false,
+              });
+          }
           
           const { error } = await supabase
             .from('user_profiles')

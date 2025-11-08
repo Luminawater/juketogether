@@ -429,8 +429,9 @@ const AdminScreen: React.FC = () => {
         updated_at: new Date().toISOString(),
       };
 
-      // If tier changed, reset songs played count
-      if (editingTier !== selectedUser.subscription_tier) {
+      // If tier changed, reset songs played count and send notification
+      const oldTier = selectedUser.subscription_tier;
+      if (editingTier !== oldTier) {
         updates.songs_played_count = 0;
         updates.subscription_updated_at = new Date().toISOString();
       }
@@ -441,6 +442,21 @@ const AdminScreen: React.FC = () => {
         .eq('id', selectedUser.id);
 
       if (updateError) throw updateError;
+
+      // Send notification if tier changed
+      if (editingTier !== oldTier) {
+        const { createTierChangeNotification } = await import('../services/notificationService');
+        const { getTierDisplayName } = await import('../utils/permissions');
+        
+        await createTierChangeNotification(
+          supabase,
+          selectedUser.id,
+          oldTier,
+          editingTier,
+          getTierDisplayName(oldTier as any),
+          getTierDisplayName(editingTier as any)
+        );
+      }
 
       Alert.alert('Success', 'User updated successfully');
       setUserDialogVisible(false);

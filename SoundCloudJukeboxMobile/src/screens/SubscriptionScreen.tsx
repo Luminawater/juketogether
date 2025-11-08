@@ -157,6 +157,8 @@ const SubscriptionScreen: React.FC = () => {
       // Free tier - upgrade directly without payment
       setUpgrading(tier);
       try {
+        const oldTier = profile.subscription_tier;
+        
         const { error } = await supabase
           .from('user_profiles')
           .update({
@@ -168,6 +170,19 @@ const SubscriptionScreen: React.FC = () => {
 
         if (error) {
           throw error;
+        }
+
+        // Send notification if tier changed
+        if (oldTier !== tier) {
+          const { createTierChangeNotification } = await import('../services/notificationService');
+          await createTierChangeNotification(
+            supabase,
+            profile.id,
+            oldTier,
+            tier,
+            getTierDisplayName(oldTier),
+            getTierDisplayName(tier)
+          );
         }
 
         await refreshProfile();
@@ -272,7 +287,7 @@ const SubscriptionScreen: React.FC = () => {
   const getFeatureIcon = (featureName: string, enabled: boolean) => {
     const iconMap: Record<string, string> = {
       queue_limit: 'playlist-music',
-      dj_mode: 'turntable',
+      dj_mode: 'record-player',
       listed_on_discovery: 'compass-outline',
       listed_on_leaderboard: 'trophy',
       ads: 'advertisements-off',

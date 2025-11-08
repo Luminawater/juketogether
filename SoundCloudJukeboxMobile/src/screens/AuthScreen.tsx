@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
-  StyleSheet,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -47,7 +46,7 @@ const AuthScreen: React.FC = () => {
       hasNavigatedRef.current = true;
       // Use React Navigation for all platforms to avoid full page reload
       // This ensures session state is preserved
-            navigation.replace('Home');
+      navigation.replace('Home');
     }
   }, [user, loading, navigation]);
 
@@ -101,58 +100,74 @@ const AuthScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text>Loading...</Text>
+      <View className="flex-1 justify-center items-center bg-background">
+        <Text className="text-on-surface text-lg">Loading...</Text>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      className="flex-1 bg-background"
+      style={{ backgroundColor: theme.colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
+        className="flex-1"
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.content}>
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content style={styles.cardContent}>
+        <View className="flex-1 justify-center max-w-[420px] w-full self-center">
+          <Card 
+            className="rounded-[20px] overflow-hidden"
+            style={{ 
+              backgroundColor: theme.colors.surface,
+              ...(Platform.OS === 'web' ? {
+                boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.2)',
+              } : {
+                elevation: 4,
+              }),
+            }}
+          >
+            <Card.Content className="p-8">
               {/* Logo and Title */}
-              <View style={styles.header}>
+              <View className="items-center mb-10">
                 <Image
                   source={SpotifyLogo}
-                  style={styles.logo}
+                  className="w-14 h-14 mb-5"
                   resizeMode="contain"
                 />
-                <Title style={[styles.title, { color: theme.colors.onSurface }]}>
+                <Title 
+                  className="text-center text-[32px] font-bold -tracking-[0.5px] mb-2"
+                  style={{ color: theme.colors.onSurface }}
+                >
                   Music Jukebox
                 </Title>
-                <Paragraph style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
+                <Paragraph 
+                  className="text-center text-[15px] mt-1"
+                  style={{ color: theme.colors.onSurfaceVariant }}
+                >
                   {isLogin ? 'Welcome back' : 'Create your account'}
                 </Paragraph>
               </View>
 
               {/* OAuth Buttons */}
-              <View style={styles.oauthSection}>
+              <View className="mb-7">
                 <TouchableOpacity
                   onPress={() => handleOAuthSignIn('google')}
                   disabled={!!loadingOAuth}
-                  style={[
-                    styles.oauthButton,
-                    { backgroundColor: '#4285F4' },
-                    loadingOAuth === 'google' && styles.oauthButtonLoading,
-                    !!loadingOAuth && styles.oauthButtonDisabled,
-                  ]}
+                  className={`rounded-xl py-4 px-5 items-center justify-center min-h-[56px] ${
+                    loadingOAuth === 'google' ? 'opacity-70' : ''
+                  } ${!!loadingOAuth ? 'opacity-50' : ''}`}
+                  style={{ backgroundColor: '#4285F4' }}
                   activeOpacity={0.8}
                 >
                   {loadingOAuth === 'google' ? (
-                    <Text style={styles.oauthButtonText}>Loading...</Text>
+                    <Text className="text-white text-base font-semibold">Loading...</Text>
                   ) : (
-                    <View style={styles.oauthButtonInner}>
+                    <View className="flex-row items-center justify-center">
                       <MaterialCommunityIcons name="google" size={24} color="#FFFFFF" />
-                      <Text style={styles.oauthButtonText}>Continue with Google</Text>
+                      <Text className="text-white text-base font-semibold ml-2.5">Continue with Google</Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -160,35 +175,36 @@ const AuthScreen: React.FC = () => {
                 <TouchableOpacity
                   onPress={() => handleOAuthSignIn('spotify')}
                   disabled={!!loadingOAuth}
-                  style={[
-                    styles.oauthButton,
-                    { backgroundColor: '#1DB954', marginTop: 12 },
-                    loadingOAuth === 'spotify' && styles.oauthButtonLoading,
-                    !!loadingOAuth && styles.oauthButtonDisabled,
-                  ]}
+                  className={`rounded-xl py-4 px-5 items-center justify-center min-h-[56px] mt-3 ${
+                    loadingOAuth === 'spotify' ? 'opacity-70' : ''
+                  } ${!!loadingOAuth ? 'opacity-50' : ''}`}
+                  style={{ backgroundColor: '#1DB954' }}
                   activeOpacity={0.8}
                 >
                   {loadingOAuth === 'spotify' ? (
-                    <Text style={styles.oauthButtonText}>Loading...</Text>
+                    <Text className="text-white text-base font-semibold">Loading...</Text>
                   ) : (
-                    <View style={styles.oauthButtonInner}>
+                    <View className="flex-row items-center justify-center">
                       <Image
                         source={SpotifyLogo}
-                        style={styles.oauthIcon}
+                        className="w-6 h-6"
                         resizeMode="contain"
                       />
-                      <Text style={styles.oauthButtonText}>Continue with Spotify</Text>
+                      <Text className="text-white text-base font-semibold ml-2.5">Continue with Spotify</Text>
                     </View>
                   )}
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.dividerContainer}>
-                <Divider style={styles.divider} />
-                <Text style={[styles.dividerText, { color: theme.colors.onSurfaceVariant }]}>
+              <View className="flex-row items-center my-7">
+                <Divider className="flex-1 h-[1px]" />
+                <Text 
+                  className="mx-3 text-[13px] font-medium lowercase"
+                  style={{ color: theme.colors.onSurfaceVariant }}
+                >
                   or
                 </Text>
-                <Divider style={styles.divider} />
+                <Divider className="flex-1 h-[1px]" />
               </View>
 
               {/* Email/Password Form */}
@@ -198,23 +214,23 @@ const AuthScreen: React.FC = () => {
                     e.preventDefault();
                     handleAuth();
                   }}
-                  style={styles.formSection}
+                  className="mt-1"
                   noValidate
                 >
-                  <View style={styles.tabContainer}>
+                  <View className="flex-row mb-7 gap-3 bg-transparent">
                     <Button
                       mode={isLogin ? 'contained' : 'text'}
                       onPress={() => setIsLogin(true)}
-                      style={[styles.tabButton, isLogin && styles.activeTab]}
-                      labelStyle={isLogin ? styles.activeTabLabel : styles.inactiveTabLabel}
+                      className={`flex-1 ${isLogin ? 'rounded-lg' : ''}`}
+                      labelStyle={isLogin ? { fontWeight: '600' } : { fontWeight: '400' }}
                     >
                       Sign In
                     </Button>
                     <Button
                       mode={!isLogin ? 'contained' : 'text'}
                       onPress={() => setIsLogin(false)}
-                      style={[styles.tabButton, !isLogin && styles.activeTab]}
-                      labelStyle={!isLogin ? styles.activeTabLabel : styles.inactiveTabLabel}
+                      className={`flex-1 ${!isLogin ? 'rounded-lg' : ''}`}
+                      labelStyle={!isLogin ? { fontWeight: '600' } : { fontWeight: '400' }}
                     >
                       Sign Up
                     </Button>
@@ -227,7 +243,7 @@ const AuthScreen: React.FC = () => {
                     mode="outlined"
                     keyboardType="email-address"
                     autoCapitalize="none"
-                    style={styles.input}
+                    className="mb-5"
                     disabled={!!loadingOAuth}
                     autoComplete="email"
                   />
@@ -238,7 +254,7 @@ const AuthScreen: React.FC = () => {
                     onChangeText={setPassword}
                     mode="outlined"
                     secureTextEntry
-                    style={styles.input}
+                    className="mb-5"
                     disabled={!!loadingOAuth}
                     autoComplete={isLogin ? 'current-password' : 'new-password'}
                   />
@@ -250,7 +266,7 @@ const AuthScreen: React.FC = () => {
                       onChangeText={setConfirmPassword}
                       mode="outlined"
                       secureTextEntry
-                      style={styles.input}
+                      className="mb-5"
                       disabled={!!loadingOAuth}
                       autoComplete="new-password"
                     />
@@ -261,29 +277,29 @@ const AuthScreen: React.FC = () => {
                     onPress={handleAuth}
                     loading={loadingAuth}
                     disabled={loadingAuth || !!loadingOAuth}
-                    style={styles.authButton}
-                    contentStyle={styles.authButtonContent}
+                    className="mt-3 rounded-xl"
+                    contentStyle={{ paddingVertical: 10 }}
                     type="submit"
                   >
                     {isLogin ? 'Sign In' : 'Create Account'}
                   </Button>
                 </form>
               ) : (
-                <View style={styles.formSection}>
-                  <View style={styles.tabContainer}>
+                <View className="mt-1">
+                  <View className="flex-row mb-7 gap-3 bg-transparent">
                     <Button
                       mode={isLogin ? 'contained' : 'text'}
                       onPress={() => setIsLogin(true)}
-                      style={[styles.tabButton, isLogin && styles.activeTab]}
-                      labelStyle={isLogin ? styles.activeTabLabel : styles.inactiveTabLabel}
+                      className={`flex-1 ${isLogin ? 'rounded-lg' : ''}`}
+                      labelStyle={isLogin ? { fontWeight: '600' } : { fontWeight: '400' }}
                     >
                       Sign In
                     </Button>
                     <Button
                       mode={!isLogin ? 'contained' : 'text'}
                       onPress={() => setIsLogin(false)}
-                      style={[styles.tabButton, !isLogin && styles.activeTab]}
-                      labelStyle={!isLogin ? styles.activeTabLabel : styles.inactiveTabLabel}
+                      className={`flex-1 ${!isLogin ? 'rounded-lg' : ''}`}
+                      labelStyle={!isLogin ? { fontWeight: '600' } : { fontWeight: '400' }}
                     >
                       Sign Up
                     </Button>
@@ -296,7 +312,7 @@ const AuthScreen: React.FC = () => {
                     mode="outlined"
                     keyboardType="email-address"
                     autoCapitalize="none"
-                    style={styles.input}
+                    className="mb-5"
                     disabled={!!loadingOAuth}
                   />
 
@@ -306,7 +322,7 @@ const AuthScreen: React.FC = () => {
                     onChangeText={setPassword}
                     mode="outlined"
                     secureTextEntry
-                    style={styles.input}
+                    className="mb-5"
                     disabled={!!loadingOAuth}
                   />
 
@@ -317,7 +333,7 @@ const AuthScreen: React.FC = () => {
                       onChangeText={setConfirmPassword}
                       mode="outlined"
                       secureTextEntry
-                      style={styles.input}
+                      className="mb-5"
                       disabled={!!loadingOAuth}
                     />
                   )}
@@ -327,8 +343,8 @@ const AuthScreen: React.FC = () => {
                     onPress={handleAuth}
                     loading={loadingAuth}
                     disabled={loadingAuth || !!loadingOAuth}
-                    style={styles.authButton}
-                    contentStyle={styles.authButtonContent}
+                    className="mt-3 rounded-xl"
+                    contentStyle={{ paddingVertical: 10 }}
                   >
                     {isLogin ? 'Sign In' : 'Create Account'}
                   </Button>
@@ -341,137 +357,5 @@ const AuthScreen: React.FC = () => {
     </KeyboardAvoidingView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    maxWidth: 420,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  card: {
-    elevation: 4,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  cardContent: {
-    padding: 32,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  logo: {
-    width: 56,
-    height: 56,
-    marginBottom: 20,
-  },
-  title: {
-    textAlign: 'center',
-    fontSize: 32,
-    fontWeight: '700',
-    marginBottom: 8,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    textAlign: 'center',
-    fontSize: 15,
-    marginTop: 4,
-  },
-  oauthSection: {
-    marginBottom: 28,
-  },
-  oauthButton: {
-    borderRadius: 12,
-    elevation: 0,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 56,
-  },
-  oauthButtonLoading: {
-    opacity: 0.7,
-  },
-  oauthButtonDisabled: {
-    opacity: 0.5,
-  },
-  oauthButtonInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  oauthButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 10,
-  },
-  oauthIcon: {
-    width: 24,
-    height: 24,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 28,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    fontSize: 13,
-    fontWeight: '500',
-    textTransform: 'lowercase',
-  },
-  formSection: {
-    marginTop: 4,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    marginBottom: 28,
-    gap: 12,
-    backgroundColor: 'transparent',
-  },
-  tabButton: {
-    flex: 1,
-  },
-  activeTab: {
-    borderRadius: 8,
-  },
-  activeTabLabel: {
-    fontWeight: '600',
-  },
-  inactiveTabLabel: {
-    fontWeight: '400',
-  },
-  input: {
-    marginBottom: 20,
-  },
-  authButton: {
-    marginTop: 12,
-    borderRadius: 12,
-    elevation: 0,
-  },
-  authButtonContent: {
-    paddingVertical: 10,
-  },
-});
 
 export default AuthScreen;

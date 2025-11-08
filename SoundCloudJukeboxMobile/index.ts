@@ -1,5 +1,6 @@
 import { registerRootComponent } from 'expo';
 import { Platform } from 'react-native';
+import './global.css';
 import App from './App';
 
 // Enhanced logging to trace warning sources (throttled to prevent spam)

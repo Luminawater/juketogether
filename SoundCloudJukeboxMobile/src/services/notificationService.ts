@@ -6,7 +6,8 @@ export type NotificationType =
   | 'friend_request' 
   | 'friend_collab' 
   | 'collab_request' 
-  | 'collab_accept';
+  | 'collab_accept'
+  | 'tier_change';
 
 export interface Notification {
   id: string;
@@ -33,6 +34,8 @@ export interface NotificationMetadata {
   user_id?: string;
   friend_id?: string;
   collab_request_id?: string;
+  old_tier?: string;
+  new_tier?: string;
   [key: string]: any;
 }
 
@@ -217,5 +220,60 @@ export async function deleteNotification(
     console.error('Error in deleteNotification:', error);
     return { success: false, error: error.message || 'Unknown error' };
   }
+}
+
+/**
+ * Create a tier change notification
+ * Helper function to notify users when their subscription tier changes
+ */
+export async function createTierChangeNotification(
+  supabase: SupabaseClient,
+  userId: string,
+  oldTier: string,
+  newTier: string,
+  oldTierDisplayName?: string,
+  newTierDisplayName?: string
+): Promise<{ success: boolean; error?: string; notificationId?: string }> {
+  // Determine if it's an upgrade or downgrade
+  const tierHierarchy: Record<string, number> = {
+    free: 0,
+    rookie: 1,
+    standard: 2,
+    pro: 3,
+  };
+
+  const oldTierLevel = tierHierarchy[oldTier] ?? 0;
+  const newTierLevel = tierHierarchy[newTier] ?? 0;
+  const isUpgrade = newTierLevel > oldTierLevel;
+  const isDowngrade = newTierLevel < oldTierLevel;
+
+  const oldDisplay = oldTierDisplayName || oldTier.charAt(0).toUpperCase() + oldTier.slice(1);
+  const newDisplay = newTierDisplayName || newTier.charAt(0).toUpperCase() + newTier.slice(1);
+
+  let title: string;
+  let message: string;
+
+  if (isUpgrade) {
+    title = `🎉 Upgraded to ${newDisplay} Tier!`;
+    message = `Your subscription has been upgraded from ${oldDisplay} to ${newDisplay}. Enjoy your new features!`;
+  } else if (isDowngrade) {
+    title = `Subscription Changed to ${newDisplay} Tier`;
+    message = `Your subscription has been changed from ${oldDisplay} to ${newDisplay}.`;
+  } else {
+    title = `Subscription Updated to ${newDisplay} Tier`;
+    message = `Your subscription tier has been updated to ${newDisplay}.`;
+  }
+
+  return createNotification(
+    supabase,
+    userId,
+    'tier_change',
+    title,
+    message,
+    {
+      old_tier: oldTier,
+      new_tier: newTier,
+    }
+  );
 }
 

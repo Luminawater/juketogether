@@ -64,6 +64,11 @@ const DJModeScreen: React.FC = () => {
     djMode: false,
     djPlayers: 0,
   });
+  const [tierSettings, setTierSettings] = useState<{
+    djMode: boolean;
+  }>({ djMode: false });
+  const [isOwner, setIsOwner] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // DJ Mode state
   const [djPlayerTracks, setDjPlayerTracks] = useState<(Track | null)[]>([null, null, null, null]);
@@ -106,6 +111,66 @@ const DJModeScreen: React.FC = () => {
     React.useCallback(() => {
       let mounted = true;
 
+      // Define handlers
+      const handleConnect = () => {
+        if (!mounted) return;
+        setConnected(true);
+        console.log('Connected to room:', roomId);
+        // Join room
+        if (socketService.socket) {
+          socketService.socket.emit('join-room', roomId);
+        }
+      };
+
+      const handleRoomState = (state: RoomState & {
+        roomSettings?: any;
+        isOwner?: boolean;
+        isAdmin?: boolean;
+        tierSettings?: {
+          djMode: boolean;
+        };
+      }) => {
+        if (mounted) {
+          setQueue(state.queue || []);
+          if (state.roomSettings) {
+            setRoomSettings({
+              djMode: state.roomSettings.djMode || false,
+              djPlayers: state.roomSettings.djPlayers || 0,
+            });
+          }
+          if (state.tierSettings) {
+            setTierSettings(state.tierSettings);
+          }
+          if (state.isOwner !== undefined) {
+            setIsOwner(state.isOwner);
+          }
+          if (state.isAdmin !== undefined) {
+            setIsAdmin(state.isAdmin);
+          }
+        }
+      };
+
+      const handleTrackAdded = (track: Track) => {
+        if (mounted) {
+          setQueue(prev => [...prev, track]);
+        }
+      };
+
+      const handleTrackRemoved = (trackId: string) => {
+        if (mounted) {
+          setQueue(prev => prev.filter(t => t.id !== trackId));
+        }
+      };
+
+      const handleRoomSettingsUpdated = (updatedSettings: any) => {
+        if (mounted) {
+          setRoomSettings({
+            djMode: updatedSettings.djMode || false,
+            djPlayers: updatedSettings.djPlayers || 0,
+          });
+        }
+      };
+
       const initializeRoom = async () => {
         try {
           setLoading(true);
@@ -129,27 +194,30 @@ const DJModeScreen: React.FC = () => {
         }
 
         // Connect to socket
-        if (!connected) {
-          await socketService.connect();
-          setConnected(true);
+        const userId = user?.id || `anonymous_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        const authToken = session?.access_token;
+
+        // Only connect if not already connected to this room
+        if (!socketService.isConnected() || socketService.socket === null) {
+          socketService.connect(roomId, userId, authToken);
         }
 
-        // Join room
-        socketService.joinRoom(roomId);
+        // Set up event listeners
+        socketService.on('connect', handleConnect);
+        socketService.on('roomState', handleRoomState);
+        socketService.on('trackAdded', handleTrackAdded);
+        socketService.on('trackRemoved', handleTrackRemoved);
+        socketService.on('roomSettingsUpdated', handleRoomSettingsUpdated);
 
-        // Listen for room state updates
-        socketService.onRoomState((state: RoomState) => {
-          if (mounted) {
-            setQueue(state.queue || []);
-          }
-        });
+        // Check if socket is already connected (handles fast connections)
+        if (socketService.isConnected()) {
+          handleConnect();
+        }
 
-        // Listen for queue updates
-        socketService.onQueueUpdate((updatedQueue: Track[]) => {
-          if (mounted) {
-            setQueue(updatedQueue);
-          }
-        });
+        // Request room state to get tier settings
+        if (socketService.socket) {
+          socketService.socket.emit('join-room', roomId);
+        }
 
         setLoading(false);
       } catch (error) {
@@ -165,9 +233,16 @@ const DJModeScreen: React.FC = () => {
 
       return () => {
         mounted = false;
-        socketService.leaveRoom(roomId);
+        // Clean up event listeners
+        socketService.off('connect', handleConnect);
+        socketService.off('roomState', handleRoomState);
+        socketService.off('trackAdded', handleTrackAdded);
+        socketService.off('trackRemoved', handleTrackRemoved);
+        socketService.off('roomSettingsUpdated', handleRoomSettingsUpdated);
+        // Note: We don't disconnect here as the socket might be used by other screens
+        // The socket will be disconnected when navigating away from all socket-using screens
       };
-    }, [roomId, supabase, connected])
+    }, [roomId, supabase, user, session])
   );
 
   // DJ Mode Handlers
@@ -327,7 +402,70 @@ const DJModeScreen: React.FC = () => {
     );
   }
 
-  if (!roomSettings.djMode) {
+  // Automatically enable DJ mode if user is Pro and room creator has Pro tier
+  useEffect(() => {
+    const isPro = profile && hasTier(profile.subscription_tier, 'pro');
+    if (isPro && tierSettings.djMode && !roomSettings.djMode && (isOwner || isAdmin) && socketService.socket && connected) {
+      socketService.socket.emit('update-room-settings', {
+        roomId,
+        settings: {
+          djMode: true,
+          djPlayers: roomSettings.djPlayers || 1,
+        },
+      });
+    }
+  }, [profile, tierSettings.djMode, roomSettings.djMode, isOwner, isAdmin, roomId, connected]);
+
+  // Show error if DJ mode is not available
+  if (!tierSettings.djMode) {
+    return (
+      <View style={[styles.container, { backgroundColor: DJ_THEME_COLORS.background }]}>
+        <Card style={[styles.card, { backgroundColor: DJ_THEME_COLORS.surface }]}>
+          <Card.Content style={styles.centerContent}>
+            <MaterialCommunityIcons
+              name="equalizer"
+              size={64}
+              color={DJ_THEME_COLORS.primary}
+              style={styles.centerIcon}
+            />
+            <Title style={[styles.title, { color: DJ_THEME_COLORS.onSurface }]}>
+              DJ Mode Not Available
+            </Title>
+            <Text style={[styles.description, { color: DJ_THEME_COLORS.onSurfaceVariant }]}>
+              The room creator needs to have a Pro tier subscription to enable DJ Mode.
+            </Text>
+            <Button
+              mode="contained"
+              onPress={() => navigation.navigate('Room', { roomId, roomName })}
+              style={styles.button}
+              buttonColor={DJ_THEME_COLORS.primary}
+            >
+              Back to Room
+            </Button>
+          </Card.Content>
+        </Card>
+      </View>
+    );
+  }
+
+  // Show loading while DJ mode is being enabled
+  if (!roomSettings.djMode && (isOwner || isAdmin)) {
+    return (
+      <View style={[styles.container, { backgroundColor: DJ_THEME_COLORS.background }]}>
+        <Card style={[styles.card, { backgroundColor: DJ_THEME_COLORS.surface }]}>
+          <Card.Content style={styles.centerContent}>
+            <ActivityIndicator size="large" color={DJ_THEME_COLORS.primary} />
+            <Title style={[styles.title, { color: DJ_THEME_COLORS.onSurface, marginTop: 16 }]}>
+              Enabling DJ Mode...
+            </Title>
+          </Card.Content>
+        </Card>
+      </View>
+    );
+  }
+
+  // If not owner/admin and DJ mode not enabled, show message
+  if (!roomSettings.djMode && !isOwner && !isAdmin) {
     return (
       <View style={[styles.container, { backgroundColor: DJ_THEME_COLORS.background }]}>
         <Card style={[styles.card, { backgroundColor: DJ_THEME_COLORS.surface }]}>
@@ -342,7 +480,7 @@ const DJModeScreen: React.FC = () => {
               DJ Mode Not Enabled
             </Title>
             <Text style={[styles.description, { color: DJ_THEME_COLORS.onSurfaceVariant }]}>
-              The room owner needs to enable DJ Mode in room settings.
+              The room owner needs to enable DJ Mode.
             </Text>
             <Button
               mode="contained"

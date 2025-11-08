@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { Text, Menu, useTheme, Divider } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -135,14 +135,18 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.3)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 5,
+    }),
   },
   selectorButton: {
     flexDirection: 'row',
@@ -166,14 +170,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#1a1a1a',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 10,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.5)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: {
+        width: 0,
+        height: 4,
+      },
+      shadowOpacity: 0.5,
+      shadowRadius: 8,
+      elevation: 10,
+    }),
   },
   menuScroll: {
     maxHeight: 400,

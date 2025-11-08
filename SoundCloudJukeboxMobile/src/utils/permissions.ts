@@ -98,10 +98,25 @@ export function getTierDisplayName(tier: SubscriptionTier): string {
 export function getTierColor(tier: SubscriptionTier): string {
   const colors: Record<SubscriptionTier, string> = {
     free: '#9e9e9e',
+    rookie: '#64b5f6',
     standard: '#4caf50',
     pro: '#667eea',
   };
   return colors[tier] || '#9e9e9e';
+}
+
+/**
+ * Get faded dark header color based on subscription tier
+ * Returns subtle dark colors with a slight tint based on tier
+ */
+export function getTierHeaderColor(tier: SubscriptionTier): string {
+  const colors: Record<SubscriptionTier, string> = {
+    free: '#2a2a2a',      // Neutral dark gray
+    rookie: '#2a2d35',     // Dark with subtle blue tint
+    standard: '#2a322a',   // Dark with subtle green tint
+    pro: '#2a2a35',        // Dark with subtle purple/blue tint
+  };
+  return colors[tier] || '#2a2a2a';
 }
 
 /**
