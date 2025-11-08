@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Platform, Dimensions } from 'react-native';
 import {
   Text,
   IconButton,
@@ -12,9 +12,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { DJModeToggle } from './DJModeToggle';
 import { SubscriptionTier } from '../types';
 import { roomScreenStyles } from '../screens/RoomScreen.styles';
-import { IS_MOBILE } from '../utils/platform';
 import { hasTier } from '../utils/permissions';
 import { isSpotifyUser } from '../services/spotifyService';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const IS_MOBILE = SCREEN_WIDTH < 768;
 
 interface RoomHeaderProps {
   headerColor: string;
@@ -39,10 +41,8 @@ interface RoomHeaderProps {
   unreadChatCount: number;
   user: any;
   tierSettings: any;
-  profile: any;
   isOwner: boolean;
   isAdmin: boolean;
-  isDJModeActive: boolean;
   setShowDJModeConfirmDialog: (show: boolean) => void;
 }
 
@@ -69,10 +69,8 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
   unreadChatCount,
   user,
   tierSettings,
-  profile,
   isOwner,
   isAdmin,
-  isDJModeActive,
   setShowDJModeConfirmDialog,
 }) => {
   const theme = useTheme();
@@ -85,19 +83,6 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
         <View style={styles.headerTop}>
           <View style={styles.headerLeft}>
             <Text style={[styles.roomTitle, { color: theme.colors.onSurface }]}>{roomName}</Text>
-            {/* Play/Pause button - Only visible on web/desktop, positioned AFTER room name */}
-            {Platform.OS === 'web' && !IS_MOBILE && activeTab === 'main' && (
-              <View style={styles.iconButtonWrapper}>
-                <IconButton
-                  icon={isPlaying ? 'pause' : 'play'}
-                  iconColor={theme.colors.onSurface}
-                  size={20}
-                  onPress={playPause}
-                  disabled={!currentTrack || !canControl}
-                  style={styles.iconButton}
-                />
-              </View>
-            )}
             <View style={styles.connectionStatus}>
               <View style={[styles.statusDot, { backgroundColor: connected ? '#4CAF50' : '#FF9800' }]} />
             </View>
@@ -121,6 +106,16 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
                     iconColor={theme.colors.onSurface}
                     size={20}
                     onPress={handlePrevious}
+                    disabled={!currentTrack || !canControl}
+                    style={styles.iconButton}
+                  />
+                </View>
+                <View style={styles.iconButtonWrapper}>
+                  <IconButton
+                    icon={isPlaying ? 'pause' : 'play'}
+                    iconColor={theme.colors.onSurface}
+                    size={20}
+                    onPress={playPause}
                     disabled={!currentTrack || !canControl}
                     style={styles.iconButton}
                   />

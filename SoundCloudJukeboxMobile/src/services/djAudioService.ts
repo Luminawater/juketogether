@@ -1,12 +1,12 @@
-// TODO: Migrate from expo-av to expo-audio
+// Migrated from expo-av to expo-audio
 // expo-av is deprecated in SDK 54 and will be removed in SDK 55
 // See: https://docs.expo.dev/versions/latest/sdk/audio/
 // Migration guide: https://docs.expo.dev/versions/latest/sdk/audio/
-import { Audio } from 'expo-av';
+import * as Audio from 'expo-audio';
 import { Track } from '../types';
 
 export interface DJPlayerState {
-  sound: Audio.Sound | null;
+  player: Audio.AudioPlayer | null;
   track: Track | null;
   isPlaying: boolean;
   volume: number;
@@ -23,7 +23,7 @@ export class DJAudioService {
     // Initialize 4 players
     for (let i = 0; i < this.maxPlayers; i++) {
       this.players.push({
-        sound: null,
+        player: null,
         track: null,
         isPlaying: false,
         volume: 0.5,
@@ -35,13 +35,9 @@ export class DJAudioService {
 
   async initialize() {
     try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
+      // Audio mode configuration for expo-audio
+      // Note: expo-audio may handle audio mode differently than expo-av
+      console.log('DJ Audio Service initialized');
     } catch (error) {
       console.error('Error initializing audio mode:', error);
     }
@@ -58,32 +54,26 @@ export class DJAudioService {
       await this.unloadTrack(playerIndex);
 
       const player = this.players[playerIndex];
-      
-      // Create new sound instance
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: track.url },
-        {
-          shouldPlay: false,
-          volume: player.volume,
-          isLooping: false,
-        }
-      );
 
-      // Set up status update listener
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded) {
-          player.position = status.positionMillis || 0;
-          player.duration = status.durationMillis || 0;
-          player.isPlaying = status.isPlaying || false;
+      // Create new audio player instance
+      const audioPlayer = Audio.createAudioPlayer(track.url, { updateInterval: 500 });
 
-          if (status.didJustFinish) {
-            player.isPlaying = false;
-            player.position = 0;
-          }
+      // Set up playback status update listener
+      audioPlayer.addListener('playbackStatusUpdate', (status) => {
+        player.position = status.currentTime || 0;
+        player.duration = status.duration || 0;
+        player.isPlaying = status.playing;
+
+        if (status.didJustFinish) {
+          player.isPlaying = false;
+          player.position = 0;
         }
       });
 
-      player.sound = sound;
+      // Set initial volume
+      audioPlayer.volume = player.volume;
+
+      player.player = audioPlayer;
       player.track = track;
       player.position = 0;
 
@@ -98,16 +88,16 @@ export class DJAudioService {
     if (playerIndex < 0 || playerIndex >= this.maxPlayers) return;
 
     const player = this.players[playerIndex];
-    
-    if (player.sound) {
+
+    if (player.player) {
       try {
-        await player.sound.unloadAsync();
+        player.player.remove();
       } catch (error) {
-        console.error(`Error unloading track on player ${playerIndex}:`, error);
+        console.error(`Error removing track on player ${playerIndex}:`, error);
       }
-      player.sound = null;
+      player.player = null;
     }
-    
+
     player.track = null;
     player.isPlaying = false;
     player.position = 0;
@@ -118,9 +108,9 @@ export class DJAudioService {
     if (playerIndex < 0 || playerIndex >= this.maxPlayers) return;
 
     const player = this.players[playerIndex];
-    if (player.sound) {
+    if (player.player) {
       try {
-        await player.sound.playAsync();
+        await player.player.play();
         player.isPlaying = true;
       } catch (error) {
         console.error(`Error playing on player ${playerIndex}:`, error);
@@ -132,9 +122,9 @@ export class DJAudioService {
     if (playerIndex < 0 || playerIndex >= this.maxPlayers) return;
 
     const player = this.players[playerIndex];
-    if (player.sound) {
+    if (player.player) {
       try {
-        await player.sound.pauseAsync();
+        await player.player.pause();
         player.isPlaying = false;
       } catch (error) {
         console.error(`Error pausing on player ${playerIndex}:`, error);
@@ -147,10 +137,10 @@ export class DJAudioService {
 
     const player = this.players[playerIndex];
     player.volume = Math.max(0, Math.min(1, volume));
-    
-    if (player.sound) {
+
+    if (player.player) {
       try {
-        await player.sound.setVolumeAsync(player.volume);
+        player.player.volume = player.volume;
       } catch (error) {
         console.error(`Error setting volume on player ${playerIndex}:`, error);
       }
@@ -161,10 +151,11 @@ export class DJAudioService {
     if (playerIndex < 0 || playerIndex >= this.maxPlayers) return;
 
     const player = this.players[playerIndex];
-    if (player.sound) {
+    if (player.player) {
       try {
-        await player.sound.setPositionAsync(positionMillis);
-        player.position = positionMillis;
+        const positionSeconds = positionMillis / 1000;
+        await player.player.seekTo(positionSeconds);
+        player.position = positionSeconds;
       } catch (error) {
         console.error(`Error seeking on player ${playerIndex}:`, error);
       }

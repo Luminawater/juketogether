@@ -558,7 +558,24 @@ const RoomScreen: React.FC = () => {
       // Position updates come from Supabase via room-state
       setPosition(data.position);
     };
-    
+
+  const handleRestartTrack = (data: { position: number; keepPlaying: boolean }) => {
+    // Restart track to beginning
+    setPosition(data.position);
+    // Keep the current playing state as sent by server
+    setIsPlaying(data.keepPlaying);
+  };
+
+  const handleSyncPlaybackState = (data: { isPlaying: boolean; position: number; currentTrack: Track | null }) => {
+    console.log('[handleSyncPlaybackState] Syncing to playback state:', data);
+    setIsPlaying(data.isPlaying);
+    setPosition(data.position);
+    if (data.currentTrack) {
+      setCurrentTrack(data.currentTrack);
+      setTrackUrl(data.currentTrack.url || '');
+    }
+  };
+
     const handleSyncAllUsers = (data: { position: number }) => {
       // Sync all users to this position (from Supabase)
       setPosition(data.position);
@@ -567,6 +584,8 @@ const RoomScreen: React.FC = () => {
     // Listen for seek and sync events from socket
     if (socketService.socket) {
       socketService.socket.on('seek-track', handleSeekTrack);
+      socketService.socket.on('restart-track', handleRestartTrack);
+      socketService.socket.on('sync-playback-state', handleSyncPlaybackState);
       socketService.socket.on('sync-all-users', handleSyncAllUsers);
     }
     
@@ -643,6 +662,8 @@ const RoomScreen: React.FC = () => {
       socketService.off('connectionError', handleConnectionError);
       if (socketService.socket) {
         socketService.socket.off('seek-track', handleSeekTrack);
+        socketService.socket.off('restart-track', handleRestartTrack);
+        socketService.socket.off('sync-playback-state', handleSyncPlaybackState);
         socketService.socket.off('sync-all-users', handleSyncAllUsers);
       }
       // Only disconnect if we're leaving the room
@@ -957,7 +978,7 @@ const RoomScreen: React.FC = () => {
 
   const handleDJPlayerPlayPause = async (playerIndex: number) => {
     const playerState = djAudioService.getPlayerState(playerIndex);
-    if (!playerState || !playerState.sound) {
+    if (!playerState || !playerState.player) {
       Alert.alert('No Track', 'Load a track first');
       return;
     }
@@ -991,7 +1012,7 @@ const RoomScreen: React.FC = () => {
     const state1 = djAudioService.getPlayerState(playerIndex1);
     const state2 = djAudioService.getPlayerState(playerIndex2);
     
-    if (!state1 || !state1.sound || !state2 || !state2.sound) {
+    if (!state1 || !state1.player || !state2 || !state2.player) {
       Alert.alert('Error', 'Both players need tracks loaded');
       return;
     }
@@ -1389,35 +1410,45 @@ const RoomScreen: React.FC = () => {
   };
 
   const handlePrevious = () => {
+    console.log('[handlePrevious] Back button pressed');
+
     if (!canControl) {
+      console.log('[handlePrevious] No control permissions');
       Alert.alert('Permission Denied', 'Only room owner and admins can control playback.');
       return;
     }
 
     if (!connected) {
+      console.log('[handlePrevious] Not connected');
       Alert.alert('Error', 'Not connected to room');
       return;
     }
 
     if (!currentTrack) {
+      console.log('[handlePrevious] No current track');
       Alert.alert('No Track', 'No track is currently playing.');
       return;
     }
 
     const now = Date.now();
     const timeSinceLastClick = now - lastPreviousClickTime.current;
+    console.log('[handlePrevious] Time since last click:', timeSinceLastClick, 'ms, history length:', history.length);
 
     if (timeSinceLastClick < PREVIOUS_DOUBLE_CLICK_WINDOW && history.length > 0) {
       // Second click within window - go to previous track
+      console.log('[handlePrevious] Double-click detected - replaying previous track');
       const previousTrack = history[0]; // Most recent track in history
       if (previousTrack && socketService.socket) {
         socketService.socket.emit('replay-track', { roomId, trackId: previousTrack.id });
+        Alert.alert('Previous Track', `Playing: ${previousTrack.info?.fullTitle || 'Previous track'}`);
       }
       lastPreviousClickTime.current = 0; // Reset
     } else {
       // First click - restart current track
+      console.log('[handlePrevious] Single click - restarting current track');
       if (socketService.socket) {
         socketService.socket.emit('restart-track', { roomId });
+        Alert.alert('Restart', 'Track restarted from beginning');
       }
       lastPreviousClickTime.current = now;
     }

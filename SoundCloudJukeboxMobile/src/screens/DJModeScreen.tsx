@@ -335,7 +335,7 @@ const DJModeScreen: React.FC = () => {
 
   const handleDJPlayerPlayPause = async (playerIndex: number) => {
     const playerState = djAudioService.getPlayerState(playerIndex);
-    if (!playerState || !playerState.sound) return;
+    if (!playerState || !playerState.player) return;
 
     if (playerState.isPlaying) {
       await djAudioService.pause(playerIndex);
@@ -366,7 +366,7 @@ const DJModeScreen: React.FC = () => {
     const state1 = djAudioService.getPlayerState(playerIndex1);
     const state2 = djAudioService.getPlayerState(playerIndex2);
 
-    if (!state1 || !state2 || !state1.sound || !state2.sound) {
+    if (!state1 || !state2 || !state1.player || !state2.player) {
       Alert.alert('Error', 'Both players must have tracks loaded to sync');
       return;
     }

@@ -1,8 +1,7 @@
 import React, { useRef } from 'react';
-import { View, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Alert, Dimensions } from 'react-native';
 import {
   Card,
-  Card.Content,
   Title,
   Text,
   Button,
@@ -17,7 +16,7 @@ import { UpgradePrompt } from './UpgradePrompt';
 import { DJModeInterface } from './DJModeInterface';
 import { YouTubePlayer } from './YouTubePlayer';
 import { SoundCloudPlayer } from './SoundCloudPlayer';
-import { AdsBanner } from './AdsBanner';
+import AdsBanner from './AdsBanner';
 import { AnimatedQueueItem } from './RoomAnimatedQueueItem';
 import { Track, SubscriptionTier } from '../types';
 import { ReactionType } from '../services/trackReactionsService';
@@ -25,7 +24,9 @@ import { RoomSettings, ActiveBoost, TierSettings, BlockedInfo } from '../screens
 import { roomScreenStyles } from '../screens/RoomScreen.styles';
 import { socketService } from '../services/socketService';
 import { getThumbnailUrl } from '../utils/imageUtils';
-import { IS_MOBILE } from '../utils/platform';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const IS_MOBILE = SCREEN_WIDTH < 768;
 
 interface RoomMainTabProps {
   isDJModeActive: boolean;

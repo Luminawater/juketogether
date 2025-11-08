@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, ScrollView, StyleSheet } from 'react-native';
-import { Card, Card.Content, Title, List, Avatar, Button, Chip, Text, useTheme } from 'react-native-paper';
+import { Card, Title, List, Avatar, Button, Chip, Text, useTheme } from 'react-native-paper';
 import { RoomUser, Friend } from '../screens/RoomScreen.types';
 import { roomScreenStyles } from '../screens/RoomScreen.styles';
 

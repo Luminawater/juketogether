@@ -60,14 +60,24 @@ export const SoundCloudPlayer: React.FC<SoundCloudPlayerProps> = ({
   const lastPositionRef = useRef(0);
   const lastSupabasePositionRef = useRef(0);
   const containerRef = useRef<any>(null);
+  const isPlayingRef = useRef(isPlaying); // Track current isPlaying value for use in closures
   
   // Web-specific state (hooks must be called unconditionally)
   const [scWidget, setScWidget] = useState<any>(null);
   const positionIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastLoadedTrackUrlRef = useRef<string>(''); // Track last loaded track URL to avoid reloading
 
+  // Track autoplay attempts to prevent browser autoplay blocking from syncing pauses
+  const [isAutoPlayAttempt, setIsAutoPlayAttempt] = useState(false);
+  const [autoPlayStartTime, setAutoPlayStartTime] = useState(0);
+
   const trackUrl = track?.url || '';
   const embedUrl = trackUrl ? convertToEmbedUrl(trackUrl) : '';
+  
+  // Update ref whenever isPlaying changes
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
 
   const getSoundCloudHTML = (url: string) => {
     const embedUrl = convertToEmbedUrl(url);
@@ -312,6 +322,20 @@ export const SoundCloudPlayer: React.FC<SoundCloudPlayerProps> = ({
             console.log('[SoundCloudPlayer] Syncing to position on ready', { position });
             syncToPosition(position);
           }
+          // If isPlaying is true, start playback after a short delay to ensure widget is fully ready
+          // Use ref to get current value (closure might be stale)
+          if (isPlayingRef.current && webViewRef.current) {
+            setTimeout(() => {
+              if (webViewRef.current && isPlayingRef.current) {
+                console.log('[SoundCloudPlayer] Starting playback on ready (isPlaying=true)');
+                const message = JSON.stringify({
+                  type: 'play',
+                  data: {}
+                });
+                webViewRef.current.postMessage(message);
+              }
+            }, 500);
+          }
           break;
         
         case 'stateChange':
@@ -437,142 +461,225 @@ export const SoundCloudPlayer: React.FC<SoundCloudPlayerProps> = ({
 
   // Web implementation - Initialize SoundCloud Widget API (only once, when trackUrl is available)
   useEffect(() => {
-    if (Platform.OS !== 'web' || !trackUrl || scWidget) return; // Don't initialize if no trackUrl or widget already exists
+    if (Platform.OS !== 'web' || !trackUrl || scWidget) {
+      console.log('[SoundCloudPlayer Web] Skipping initialization', { PlatformOS: Platform.OS, hasTrackUrl: !!trackUrl, hasScWidget: !!scWidget });
+      return; // Don't initialize if no trackUrl or widget already exists
+    }
+
+    // Reset autoplay state when initializing a new track
+    setIsAutoPlayAttempt(false);
+    setAutoPlayStartTime(0);
+
+    console.log('[SoundCloudPlayer Web] Starting widget initialization', { trackUrl });
 
     // Load SoundCloud Widget API script if not already loaded
     if (!(window as any).SC) {
+      console.log('[SoundCloudPlayer Web] Loading SoundCloud API script');
       const tag = document.createElement('script');
       tag.src = 'https://w.soundcloud.com/player/api.js';
+      tag.onload = () => {
+        console.log('[SoundCloudPlayer Web] SoundCloud API script loaded');
+        // Try to initialize immediately after script loads
+        if ((window as any).SC && (window as any).SC.Widget) {
+          console.log('[SoundCloudPlayer Web] API ready after script load, initializing widget');
+          initializeWidget();
+        }
+      };
       const firstScriptTag = document.getElementsByTagName('script')[0];
       firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
     }
 
     // Initialize widget when API is ready
     const initializeWidget = () => {
-      if (!containerRef.current || scWidget) return; // Don't recreate if widget exists
+      console.log('[SoundCloudPlayer Web] initializeWidget called', { hasContainerRef: !!containerRef.current, hasScWidget: !!scWidget });
+
+      if (!containerRef.current || scWidget) {
+        console.log('[SoundCloudPlayer Web] Skipping widget creation', { hasContainerRef: !!containerRef.current, hasScWidget: !!scWidget });
+        return; // Don't recreate if widget exists
+      }
 
       const containerElement = containerRef.current as any;
-      const domNode = containerElement?._internalFiberInstanceHandleDEV?.stateNode || 
-                     containerElement?.base || 
+      const domNode = containerElement?._internalFiberInstanceHandleDEV?.stateNode ||
+                     containerElement?.base ||
                      containerElement;
 
-      if (!domNode) return;
+      console.log('[SoundCloudPlayer Web] DOM node available:', !!domNode);
 
-      // Clear any existing widget
-      domNode.innerHTML = '';
+      if (!domNode) {
+        console.error('[SoundCloudPlayer Web] No DOM node available for widget');
+        return;
+      }
 
-      const widgetId = `soundcloud-widget-${Date.now()}`;
-      const widgetDiv = document.createElement('div');
-      widgetDiv.id = widgetId;
-      widgetDiv.style.width = '100%';
-      widgetDiv.style.height = '400px';
-      domNode.appendChild(widgetDiv);
+      try {
+        // Clear any existing widget
+        domNode.innerHTML = '';
+        console.log('[SoundCloudPlayer Web] Cleared existing content');
 
-      // Create iframe with initial track
-      const iframe = document.createElement('iframe');
-      iframe.width = '100%';
-      iframe.height = '400';
-      iframe.scrolling = 'no';
-      iframe.frameBorder = 'no';
-      iframe.allow = 'autoplay; encrypted-media';
-      iframe.setAttribute('allowfullscreen', '');
-      
-      const embedUrl = convertToEmbedUrl(trackUrl);
-      iframe.src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(embedUrl)}&color=%23667eea&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=false&visual=true&buying=false&sharing=false&download=false&show_artwork=true&single_active=false`;
-      
-      widgetDiv.appendChild(iframe);
+        const widgetId = `soundcloud-widget-${Date.now()}`;
+        const widgetDiv = document.createElement('div');
+        widgetDiv.id = widgetId;
+        widgetDiv.style.width = '100%';
+        widgetDiv.style.height = '400px';
+        domNode.appendChild(widgetDiv);
+        console.log('[SoundCloudPlayer Web] Created widget div');
 
-      // Initialize widget API after iframe loads
-      iframe.onload = () => {
-        try {
-          const widget = (window as any).SC.Widget(iframe);
-          
-          widget.bind((window as any).SC.Widget.Events.READY, () => {
-            console.log('[SoundCloudPlayer Web] Widget ready');
-            setPlayerReady(true);
-            setScWidget(widget);
-            // Update last loaded track URL when widget becomes ready
-            if (trackUrl) {
-              lastLoadedTrackUrlRef.current = trackUrl;
-            }
-            if (onReady) onReady();
-            
-            // Get duration when ready
-            try {
-              widget.getDuration((duration: number) => {
-                const durationMs = duration;
-                console.log('[SoundCloudPlayer Web] Duration', { duration: durationMs });
-                if (onDurationUpdate) {
-                  onDurationUpdate(durationMs);
-                }
-              });
-            } catch (e) {
-              console.error('[SoundCloudPlayer Web] Error getting duration:', e);
-            }
-            
-            // Start position update interval
-            if (positionIntervalRef.current) {
-              clearInterval(positionIntervalRef.current);
-            }
-            positionIntervalRef.current = setInterval(() => {
-              if (widget && !isSyncing) {
-                try {
-                  widget.getPosition((currentPos: number) => {
-                    const positionMs = currentPos;
-                    if (onPositionUpdate && Math.abs(positionMs - lastPositionRef.current) > 500) {
-                      lastPositionRef.current = positionMs;
-                      onPositionUpdate(positionMs);
-                    }
-                  });
-                } catch (e) {
-                  // Widget might not be ready
-                }
+        // Create iframe with initial track
+        const iframe = document.createElement('iframe');
+        iframe.width = '100%';
+        iframe.height = '400';
+        iframe.scrolling = 'no';
+        iframe.frameBorder = 'no';
+        iframe.allow = 'autoplay; encrypted-media';
+        iframe.setAttribute('allowfullscreen', '');
+
+        const embedUrl = convertToEmbedUrl(trackUrl);
+        iframe.src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(embedUrl)}&color=%23667eea&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=false&visual=true&buying=false&sharing=false&download=false&show_artwork=true&single_active=false`;
+
+        console.log('[SoundCloudPlayer Web] Created iframe with src:', iframe.src);
+        widgetDiv.appendChild(iframe);
+
+        // Initialize widget API after iframe loads
+        iframe.onload = () => {
+          console.log('[SoundCloudPlayer Web] Iframe loaded, initializing SC.Widget');
+          try {
+            const widget = (window as any).SC.Widget(iframe);
+            console.log('[SoundCloudPlayer Web] SC.Widget created successfully');
+
+            widget.bind((window as any).SC.Widget.Events.READY, () => {
+              console.log('[SoundCloudPlayer Web] Widget ready');
+              setPlayerReady(true);
+              setScWidget(widget);
+              // Update last loaded track URL when widget becomes ready
+              if (trackUrl) {
+                lastLoadedTrackUrlRef.current = trackUrl;
               }
-            }, 1000);
-            
-            // Sync to position if needed
-            if (position > 0 && !isSyncing) {
+              if (onReady) onReady();
+
+              // Get duration when ready
               try {
-                widget.seekTo(position);
+                widget.getDuration((duration: number) => {
+                  const durationMs = duration;
+                  console.log('[SoundCloudPlayer Web] Duration', { duration: durationMs });
+                  if (onDurationUpdate) {
+                    onDurationUpdate(durationMs);
+                  }
+                });
               } catch (e) {
-                console.error('[SoundCloudPlayer Web] Error seeking on ready:', e);
+                console.error('[SoundCloudPlayer Web] Error getting duration:', e);
               }
-            }
-          });
 
-          widget.bind((window as any).SC.Widget.Events.PLAY, () => {
-            console.log('[SoundCloudPlayer Web] Playing');
-            if (onStateChange) onStateChange('playing');
-          });
+              // Start position update interval
+              if (positionIntervalRef.current) {
+                clearInterval(positionIntervalRef.current);
+              }
+              positionIntervalRef.current = setInterval(() => {
+                if (widget && !isSyncing) {
+                  try {
+                    widget.getPosition((currentPos: number) => {
+                      const positionMs = currentPos;
+                      if (onPositionUpdate && Math.abs(positionMs - lastPositionRef.current) > 500) {
+                        lastPositionRef.current = positionMs;
+                        onPositionUpdate(positionMs);
+                      }
+                    });
+                  } catch (e) {
+                    // Widget might not be ready
+                  }
+                }
+              }, 1000);
 
-          widget.bind((window as any).SC.Widget.Events.PAUSE, () => {
-            console.log('[SoundCloudPlayer Web] Paused');
-            if (onStateChange) onStateChange('paused');
-          });
+              // Sync to position if needed
+              if (position > 0 && !isSyncing) {
+                try {
+                  widget.seekTo(position);
+                } catch (e) {
+                  console.error('[SoundCloudPlayer Web] Error seeking on ready:', e);
+                }
+              }
 
-          widget.bind((window as any).SC.Widget.Events.FINISH, () => {
-            console.log('[SoundCloudPlayer Web] Finished');
-            if (onStateChange) onStateChange('ended');
-          });
+                // If isPlaying is true, start playback after a short delay to ensure widget is fully ready
+                // Use ref to get current value (closure might be stale)
+                if (isPlayingRef.current) {
+                  setTimeout(() => {
+                    try {
+                      if (widget && typeof widget.play === 'function' && isPlayingRef.current) {
+                        console.log('[SoundCloudPlayer Web] Starting playback on ready (isPlaying=true)');
+                        setIsAutoPlayAttempt(true);
+                        setAutoPlayStartTime(Date.now());
+                        widget.play();
+                        // Reset autoplay attempt after a reasonable time
+                        setTimeout(() => {
+                          setIsAutoPlayAttempt(false);
+                        }, 2000);
+                      }
+                    } catch (e) {
+                      console.error('[SoundCloudPlayer Web] Error starting playback on ready:', e);
+                      setIsAutoPlayAttempt(false);
+                    }
+                  }, 500);
+                }
+            });
 
-          widget.bind((window as any).SC.Widget.Events.ERROR, (error: any) => {
-            console.error('[SoundCloudPlayer Web] Error', error);
+            widget.bind((window as any).SC.Widget.Events.PLAY, () => {
+              console.log('[SoundCloudPlayer Web] Playing');
+              // Reset autoplay attempt when playback actually starts
+              setIsAutoPlayAttempt(false);
+              if (onStateChange) onStateChange('playing');
+            });
+
+            widget.bind((window as any).SC.Widget.Events.PAUSE, () => {
+              console.log('[SoundCloudPlayer Web] Paused');
+
+              // Don't sync pauses that happen during autoplay attempts (browser autoplay blocking)
+              const now = Date.now();
+              const timeSinceAutoPlayStart = now - autoPlayStartTime;
+
+              if (isAutoPlayAttempt && timeSinceAutoPlayStart < 3000) {
+                console.log('[SoundCloudPlayer Web] Ignoring pause during autoplay attempt (browser blocking)');
+                return;
+              }
+
+              if (onStateChange) onStateChange('paused');
+            });
+
+            widget.bind((window as any).SC.Widget.Events.FINISH, () => {
+              console.log('[SoundCloudPlayer Web] Finished');
+              if (onStateChange) onStateChange('ended');
+            });
+
+            widget.bind((window as any).SC.Widget.Events.ERROR, (error: any) => {
+              console.error('[SoundCloudPlayer Web] Error', error);
+              if (onError) {
+                onError(`SoundCloud player error: ${error || 'Unknown error'}`);
+              }
+            });
+          } catch (error) {
+            console.error('[SoundCloudPlayer Web] Error initializing widget:', error);
             if (onError) {
-              onError(`SoundCloud player error: ${error || 'Unknown error'}`);
+              onError(`Failed to initialize SoundCloud widget: ${error}`);
             }
-          });
-        } catch (error) {
-          console.error('[SoundCloudPlayer Web] Error initializing widget:', error);
-          if (onError) {
-            onError(`Failed to initialize SoundCloud widget: ${error}`);
           }
+        };
+
+        iframe.onerror = (error) => {
+          console.error('[SoundCloudPlayer Web] Iframe failed to load:', error);
+          if (onError) {
+            onError('Failed to load SoundCloud iframe');
+          }
+        };
+      } catch (error) {
+        console.error('[SoundCloudPlayer Web] Error creating widget elements:', error);
+        if (onError) {
+          onError(`Failed to create SoundCloud widget: ${error}`);
         }
-      };
+      }
     };
 
     if ((window as any).SC && (window as any).SC.Widget) {
+      console.log('[SoundCloudPlayer Web] API already ready, initializing widget');
       initializeWidget();
     } else {
+      console.log('[SoundCloudPlayer Web] API not ready, setting callback');
       (window as any).onSoundCloudAPIReady = initializeWidget;
     }
 
@@ -650,9 +757,13 @@ export const SoundCloudPlayer: React.FC<SoundCloudPlayerProps> = ({
       
       if (isPlaying) {
         console.log('[SoundCloudPlayer Web] Calling play()');
+        // Reset autoplay attempt when user manually controls playback
+        setIsAutoPlayAttempt(false);
         scWidget.play();
       } else {
         console.log('[SoundCloudPlayer Web] Calling pause()');
+        // Reset autoplay attempt when user manually controls playback
+        setIsAutoPlayAttempt(false);
         scWidget.pause();
       }
     } catch (error) {
@@ -765,12 +876,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginVertical: 8,
     // Hide the player visually but keep it functional
-    position: 'absolute',
-    left: -9999,
-    width: 1,
-    height: 1,
-    opacity: 0,
-    pointerEvents: 'none',
+    ...(Platform.OS === 'web' ? {
+      position: 'absolute',
+      left: -9999,
+      width: 400, // Give proper width for widget initialization
+      height: 400, // Give proper height for widget initialization
+      opacity: 0,
+      pointerEvents: 'none',
+    } : {}),
   },
   webview: {
     width: '100%',

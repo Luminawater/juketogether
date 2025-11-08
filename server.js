@@ -492,7 +492,7 @@ io.on('connection', (socket) => {
       // Create new room from Supabase data
       // If no host exists, first user becomes host
       const hostUserId = latestState?.hostUserId || (latestState ? null : socket.id);
-      
+
       room = {
         queue: latestState?.queue || [],
         history: latestState?.history || [],
@@ -522,12 +522,21 @@ io.on('connection', (socket) => {
         console.log(`👑 User ${socket.id} set as host for room "${roomId}"`);
       }
     } else {
-      // Update existing room with latest Supabase data (always sync from Supabase)
+      // Update existing room with latest Supabase data, but preserve playback state for active rooms
       if (latestState) {
         room.queue = latestState.queue || [];
         room.history = latestState.history || [];
         room.currentTrack = latestState.currentTrack || null;
-        room.isPlaying = latestState.isPlaying || false;
+
+        // Only update isPlaying if the room is empty (no active users)
+        // If there are users in the room, preserve the current playback state
+        // This prevents reloads from pausing music for other users
+        if (room.users.size === 0) {
+          room.isPlaying = latestState.isPlaying || false;
+        } else {
+          console.log(`Preserving playback state for room ${roomId} (${room.users.size} active users): isPlaying=${room.isPlaying}`);
+        }
+
         // Round position values to integers (handle any existing decimal values in DB)
         room.position = Math.round(Number(latestState.position) || 0);
         room.lastBroadcastPosition = Math.round(Number(latestState.lastBroadcastPosition) || 0);
@@ -663,6 +672,18 @@ io.on('connection', (socket) => {
     });
 
     console.log(`📤 Room "${roomId}" state sent to user (synced from Supabase)`);
+
+    // If room is actively playing, broadcast current state to ensure sync
+    if (authoritativeIsPlaying && room.currentTrack && room.users.size > 1) {
+      setTimeout(() => {
+        io.to(roomId).emit('sync-playback-state', {
+          isPlaying: authoritativeIsPlaying,
+          position: authoritativePosition,
+          currentTrack: room.currentTrack
+        });
+        console.log(`🔄 Broadcasting playback sync to room ${roomId}: playing=${authoritativeIsPlaying}, position=${authoritativePosition}ms`);
+      }, 500); // Small delay to let the new user load the track
+    }
 
     // Send current user volumes to the new user
     const userVolumes = Array.from(room.userVolumes.entries()).map(([userId, volume]) => ({

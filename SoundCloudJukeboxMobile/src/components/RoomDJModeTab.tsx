@@ -2,7 +2,6 @@ import React from 'react';
 import { ScrollView, View, Alert } from 'react-native';
 import {
   Card,
-  Card.Content,
   Title,
   Text,
   ActivityIndicator,
