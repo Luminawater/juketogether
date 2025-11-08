@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS subscription_tier_settings (
   dj_mode BOOLEAN NOT NULL DEFAULT false,
   listed_on_discovery BOOLEAN NOT NULL DEFAULT false,
   listed_on_leaderboard BOOLEAN NOT NULL DEFAULT false,
+  ads BOOLEAN NOT NULL DEFAULT true,
   description TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -18,14 +19,15 @@ ALTER TABLE subscription_tier_settings
   ADD COLUMN IF NOT EXISTS queue_limit INTEGER,
   ADD COLUMN IF NOT EXISTS dj_mode BOOLEAN NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS listed_on_discovery BOOLEAN NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS listed_on_leaderboard BOOLEAN NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS listed_on_leaderboard BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS ads BOOLEAN NOT NULL DEFAULT true;
 
 -- Insert default tier settings
-INSERT INTO subscription_tier_settings (tier, display_name, price, max_songs, queue_limit, dj_mode, listed_on_discovery, listed_on_leaderboard, description)
+INSERT INTO subscription_tier_settings (tier, display_name, price, max_songs, queue_limit, dj_mode, listed_on_discovery, listed_on_leaderboard, ads, description)
 VALUES 
-  ('free', 'Free', 0, 1, 1, false, false, false, 'Basic access with limited features'),
-  ('standard', 'Standard', 1, 10, 10, false, true, true, 'Standard access with more features'),
-  ('pro', 'Pro', 5, NULL, NULL, true, true, true, 'Premium access with unlimited features')
+  ('free', 'Free', 0, 1, 1, false, false, false, true, 'Basic access with limited features'),
+  ('standard', 'Standard', 1, 10, 10, false, true, true, true, 'Standard access with more features'),
+  ('pro', 'Pro', 5, NULL, NULL, true, true, true, false, 'Premium access with unlimited features')
 ON CONFLICT (tier) DO UPDATE SET
   display_name = EXCLUDED.display_name,
   price = EXCLUDED.price,
@@ -34,6 +36,7 @@ ON CONFLICT (tier) DO UPDATE SET
   dj_mode = EXCLUDED.dj_mode,
   listed_on_discovery = EXCLUDED.listed_on_discovery,
   listed_on_leaderboard = EXCLUDED.listed_on_leaderboard,
+  ads = EXCLUDED.ads,
   description = EXCLUDED.description,
   updated_at = NOW();
 

@@ -931,18 +931,8 @@ const RoomScreen: React.FC = () => {
               // If not logged in, navigate to auth screen
               navigation.navigate('Auth');
             } else {
-              // Navigate to profile or upgrade screen
-              Alert.alert(
-                'Upgrade to PRO',
-                'Upgrade to PRO to remove ads and unlock premium features!',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Learn More', onPress: () => {
-                    // Navigate to profile screen
-                    navigation.navigate('Profile');
-                  }},
-                ]
-              );
+              // Navigate to subscription screen
+              navigation.navigate('Subscription');
             }
           }}
         />

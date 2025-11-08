@@ -117,6 +117,7 @@ const AdminScreen: React.FC = () => {
       djMode: false,
       listedOnDiscovery: false,
       listedOnLeaderboard: false,
+      ads: true,
       description: 'Basic access with limited features',
     },
     standard: {
@@ -127,6 +128,7 @@ const AdminScreen: React.FC = () => {
       djMode: false,
       listedOnDiscovery: true,
       listedOnLeaderboard: true,
+      ads: true,
       description: 'Standard access with more features',
     },
     pro: {
@@ -137,6 +139,7 @@ const AdminScreen: React.FC = () => {
       djMode: true,
       listedOnDiscovery: true,
       listedOnLeaderboard: true,
+      ads: false,
       description: 'Premium access with unlimited features',
     },
   });
@@ -542,6 +545,7 @@ const AdminScreen: React.FC = () => {
             djMode: item.dj_mode || false,
             listedOnDiscovery: item.listed_on_discovery || false,
             listedOnLeaderboard: item.listed_on_leaderboard || false,
+            ads: item.ads !== undefined ? item.ads : true,
             description: item.description || '',
           };
         });
@@ -569,6 +573,7 @@ const AdminScreen: React.FC = () => {
             dj_mode: config.djMode,
             listed_on_discovery: config.listedOnDiscovery,
             listed_on_leaderboard: config.listedOnLeaderboard,
+            ads: config.ads,
             description: config.description,
             updated_at: new Date().toISOString(),
           }, {
@@ -716,6 +721,14 @@ const AdminScreen: React.FC = () => {
                 <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Listed on Leaderboard</Text>
               </View>
               
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.free.ads ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('free', 'ads', !subscriptionTiers.free.ads)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Ads</Text>
+              </View>
+              
               <TextInput
                 label="Description"
                 value={subscriptionTiers.free.description}
@@ -787,6 +800,14 @@ const AdminScreen: React.FC = () => {
                 <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Listed on Leaderboard</Text>
               </View>
               
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.standard.ads ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('standard', 'ads', !subscriptionTiers.standard.ads)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Ads</Text>
+              </View>
+              
               <TextInput
                 label="Description"
                 value={subscriptionTiers.standard.description}
@@ -856,6 +877,14 @@ const AdminScreen: React.FC = () => {
                   onPress={() => updateTier('pro', 'listedOnLeaderboard', !subscriptionTiers.pro.listedOnLeaderboard)}
                 />
                 <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Listed on Leaderboard</Text>
+              </View>
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.pro.ads ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('pro', 'ads', !subscriptionTiers.pro.ads)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Ads</Text>
               </View>
               
               <TextInput

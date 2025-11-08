@@ -258,6 +258,24 @@ const ProfileScreen: React.FC = () => {
           )}
         </View>
 
+        {/* Public Profile Button */}
+        <View style={[styles.publicProfileContainer, { marginHorizontal: 20, marginBottom: 20 }]}>
+          <Button
+            mode="contained"
+            onPress={() => {
+              if (user?.id) {
+                navigation.navigate('PublicProfile', { id: user.id });
+              }
+            }}
+            style={styles.publicProfileButton}
+            icon="account-circle"
+            contentStyle={styles.publicProfileButtonContent}
+            disabled={!user?.id}
+          >
+            Public Profile
+          </Button>
+        </View>
+
         {/* Statistics Card */}
         {permissions && (
           <Card style={[styles.card, { marginHorizontal: 20, marginBottom: 20 }]}>
@@ -755,6 +773,19 @@ const styles = StyleSheet.create({
   },
   countryButtonContent: {
     justifyContent: 'flex-start',
+  },
+  publicProfileContainer: {
+    marginTop: 8,
+  },
+  publicProfileButton: {
+    borderRadius: 12,
+    elevation: 2,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+    } : {}),
+  },
+  publicProfileButtonContent: {
+    paddingVertical: 8,
   },
 });
 

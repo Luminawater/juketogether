@@ -19,6 +19,7 @@ import FriendsScreen from './src/screens/FriendsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import PublicProfileScreen from './src/screens/PublicProfileScreen';
+import SubscriptionScreen from './src/screens/SubscriptionScreen';
 
 // Import context
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -40,6 +41,7 @@ export type RootStackParamList = {
   Friends: undefined;
   Profile: undefined;
   Leaderboard: undefined;
+  Subscription: undefined;
   PublicProfile: { id: string };
 };
 
@@ -63,6 +65,7 @@ const linking = {
       Friends: 'friends',
       Profile: 'profile',
       Leaderboard: 'leaderboard',
+      Subscription: 'subscription',
       PublicProfile: 'profile/:id',
     },
   },
@@ -172,6 +175,13 @@ const AuthenticatedStack = () => {
         component={ProfileScreen}
         options={{
           title: 'Edit Profile',
+        }}
+      />
+      <Drawer.Screen
+        name="Subscription"
+        component={SubscriptionScreen}
+        options={{
+          title: 'Subscription',
         }}
       />
       <Drawer.Screen
