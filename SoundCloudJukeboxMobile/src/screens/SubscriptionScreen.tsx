@@ -346,39 +346,60 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 12,
   },
+  tierHeader: {
+    borderBottomWidth: 1,
+    paddingBottom: 12,
+    marginBottom: 16,
+  },
   tierTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 8,
   },
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 16,
   },
   price: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: 'bold',
+    letterSpacing: -1,
   },
   pricePeriod: {
     fontSize: 14,
     marginLeft: 4,
+    opacity: 0.7,
   },
   featuresContainer: {
-    marginBottom: 12,
+    marginBottom: 16,
     flex: 1,
   },
-  featureText: {
+  featureRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingVertical: 4,
+  },
+  featureLabel: {
     fontSize: 14,
-    marginBottom: 6,
+    flex: 1,
+  },
+  featureValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
   },
   description: {
     fontSize: 12,
     marginBottom: 16,
     fontStyle: 'italic',
+    lineHeight: 16,
   },
   upgradeButton: {
     marginTop: 'auto',
+    borderRadius: 8,
   },
 });
 
