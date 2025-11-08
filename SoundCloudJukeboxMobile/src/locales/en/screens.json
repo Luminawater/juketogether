@@ -1,0 +1,54 @@
+{
+  "home": {
+    "title": "Welcome to JukeTogether",
+    "subtitle": "Listen to music together with friends",
+    "getStarted": "Get Started"
+  },
+  "dashboard": {
+    "title": "My Rooms",
+    "noRooms": "You don't have any rooms yet",
+    "createFirstRoom": "Create your first room to get started"
+  },
+  "room": {
+    "title": "Room",
+    "queue": "Queue",
+    "history": "History",
+    "users": "Users",
+    "chat": "Chat",
+    "settings": "Settings",
+    "noTracks": "No tracks in queue",
+    "addTrack": "Add a track to get started",
+    "nowPlaying": "Now Playing",
+    "nextUp": "Next Up"
+  },
+  "profile": {
+    "title": "Profile",
+    "editProfile": "Edit Profile",
+    "username": "Username",
+    "displayName": "Display Name",
+    "email": "Email",
+    "joined": "Joined",
+    "subscription": "Subscription",
+    "tier": "Tier"
+  },
+  "friends": {
+    "title": "Friends",
+    "noFriends": "No friends yet",
+    "addFriends": "Add friends to see them here",
+    "requests": "Friend Requests",
+    "pending": "Pending"
+  },
+  "leaderboard": {
+    "title": "Leaderboard",
+    "topUsers": "Top Users",
+    "rank": "Rank",
+    "points": "Points"
+  },
+  "discovery": {
+    "title": "Discover Rooms",
+    "publicRooms": "Public Rooms",
+    "noRooms": "No public rooms available",
+    "joinRoom": "Join Room"
+  }
+}
+

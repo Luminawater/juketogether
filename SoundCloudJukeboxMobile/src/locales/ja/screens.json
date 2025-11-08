@@ -1,0 +1,54 @@
+{
+  "home": {
+    "title": "JukeTogetherへようこそ",
+    "subtitle": "友達と一緒に音楽を聴く",
+    "getStarted": "始める"
+  },
+  "dashboard": {
+    "title": "マイルーム",
+    "noRooms": "まだルームがありません",
+    "createFirstRoom": "最初のルームを作成して始めましょう"
+  },
+  "room": {
+    "title": "ルーム",
+    "queue": "キュー",
+    "history": "履歴",
+    "users": "ユーザー",
+    "chat": "チャット",
+    "settings": "設定",
+    "noTracks": "キューにトラックがありません",
+    "addTrack": "トラックを追加して始めましょう",
+    "nowPlaying": "再生中",
+    "nextUp": "次"
+  },
+  "profile": {
+    "title": "プロフィール",
+    "editProfile": "プロフィールを編集",
+    "username": "ユーザー名",
+    "displayName": "表示名",
+    "email": "メール",
+    "joined": "参加日",
+    "subscription": "購読",
+    "tier": "レベル"
+  },
+  "friends": {
+    "title": "友達",
+    "noFriends": "まだ友達がいません",
+    "addFriends": "友達を追加してここで確認しましょう",
+    "requests": "友達リクエスト",
+    "pending": "保留中"
+  },
+  "leaderboard": {
+    "title": "リーダーボード",
+    "topUsers": "トップユーザー",
+    "rank": "ランク",
+    "points": "ポイント"
+  },
+  "discovery": {
+    "title": "ルームを発見",
+    "publicRooms": "公開ルーム",
+    "noRooms": "利用可能な公開ルームがありません",
+    "joinRoom": "ルームに参加"
+  }
+}
+

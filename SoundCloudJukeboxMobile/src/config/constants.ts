@@ -89,6 +89,9 @@ export const SOCKET_URL = getSocketUrl();
 export const SUPABASE_URL = Constants.expoConfig?.extra?.supabaseUrl || 'https://smryjxchwbfpjvpecffg.supabase.co';
 export const SUPABASE_ANON_KEY = Constants.expoConfig?.extra?.supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtcnlqeGNod2JmcGp2cGVjZmZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1MzcxOTAsImV4cCI6MjA3ODExMzE5MH0.M1jQK3TSWMaAspSOkR-x8FkIi_EECgSZjTpb9lks0hQ';
 
+// RapidAPI is now handled server-side via /api/soundcloud-rapidapi endpoint
+// The API key is stored in server environment variables (XRAPID_API_KEY)
+
 // App configuration
 export const APP_NAME = 'JukeTogether';
 export const APP_VERSION = '1.0.0';

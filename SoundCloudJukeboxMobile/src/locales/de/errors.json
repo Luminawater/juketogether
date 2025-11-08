@@ -1,0 +1,28 @@
+{
+  "generic": "Ein Fehler ist aufgetreten. Bitte versuche es erneut.",
+  "network": "Netzwerkfehler. Bitte überprüfe deine Verbindung.",
+  "auth": {
+    "invalidCredentials": "Ungültige E-Mail oder Passwort",
+    "emailInUse": "Diese E-Mail wird bereits verwendet",
+    "weakPassword": "Das Passwort ist zu schwach",
+    "userNotFound": "Benutzer nicht gefunden",
+    "sessionExpired": "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an."
+  },
+  "room": {
+    "notFound": "Raum nicht gefunden",
+    "accessDenied": "Du hast keinen Zugriff auf diesen Raum",
+    "full": "Der Raum ist voll",
+    "alreadyJoined": "Du bist bereits in diesem Raum"
+  },
+  "track": {
+    "invalidUrl": "Ungültige Titel-URL",
+    "notFound": "Titel nicht gefunden",
+    "unavailable": "Titel ist nicht verfügbar",
+    "addFailed": "Fehler beim Hinzufügen des Titels zur Warteschlange"
+  },
+  "permission": {
+    "denied": "Du hast keine Berechtigung, diese Aktion auszuführen",
+    "requiresPro": "Diese Funktion erfordert ein Pro-Abonnement",
+    "requiresStandard": "Diese Funktion erfordert ein Standard-Abonnement"
+  }
+}

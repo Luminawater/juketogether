@@ -333,6 +333,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     overflow: 'hidden',
     ...(Platform.OS === 'web' ? { pointerEvents: 'none' as const } : {}),
+    // pointerEvents moved to style (already handled above)
   },
   orb: {
     position: 'absolute',

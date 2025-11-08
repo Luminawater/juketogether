@@ -1,0 +1,28 @@
+{
+  "generic": "エラーが発生しました。もう一度お試しください。",
+  "network": "ネットワークエラー。接続を確認してください。",
+  "auth": {
+    "invalidCredentials": "メールまたはパスワードが無効です",
+    "emailInUse": "このメールは既に使用されています",
+    "weakPassword": "パスワードが弱すぎます",
+    "userNotFound": "ユーザーが見つかりません",
+    "sessionExpired": "セッションの有効期限が切れました。再度ログインしてください。"
+  },
+  "room": {
+    "notFound": "ルームが見つかりません",
+    "accessDenied": "このルームにアクセスする権限がありません",
+    "full": "ルームが満員です",
+    "alreadyJoined": "既にこのルームに参加しています"
+  },
+  "track": {
+    "invalidUrl": "無効なトラックURL",
+    "notFound": "トラックが見つかりません",
+    "unavailable": "トラックが利用できません",
+    "addFailed": "キューにトラックを追加できませんでした"
+  },
+  "permission": {
+    "denied": "この操作を実行する権限がありません",
+    "requiresPro": "この機能にはPro購読が必要です",
+    "requiresStandard": "この機能にはStandard購読が必要です"
+  }
+}

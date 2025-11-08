@@ -1,0 +1,29 @@
+{
+  "generic": "En feil oppstod. Vennligst prøv igjen.",
+  "network": "Nettverksfeil. Vennligst sjekk tilkoblingen din.",
+  "auth": {
+    "invalidCredentials": "Ugyldig e-post eller passord",
+    "emailInUse": "Denne e-posten er allerede i bruk",
+    "weakPassword": "Passordet er for svakt",
+    "userNotFound": "Bruker ikke funnet",
+    "sessionExpired": "Økten din har utløpt. Vennligst logg inn igjen."
+  },
+  "room": {
+    "notFound": "Rom ikke funnet",
+    "accessDenied": "Du har ikke tilgang til dette rommet",
+    "full": "Rommet er fullt",
+    "alreadyJoined": "Du er allerede i dette rommet"
+  },
+  "track": {
+    "invalidUrl": "Ugyldig spor-URL",
+    "notFound": "Spor ikke funnet",
+    "unavailable": "Spor er utilgjengelig",
+    "addFailed": "Kunne ikke legge til spor i køen"
+  },
+  "permission": {
+    "denied": "Du har ikke tillatelse til å utføre denne handlingen",
+    "requiresPro": "Denne funksjonen krever et Pro-abonnement",
+    "requiresStandard": "Denne funksjonen krever et Standard-abonnement"
+  }
+}
+

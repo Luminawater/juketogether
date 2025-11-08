@@ -1,0 +1,28 @@
+{
+  "generic": "Une erreur s'est produite. Veuillez réessayer.",
+  "network": "Erreur réseau. Veuillez vérifier votre connexion.",
+  "auth": {
+    "invalidCredentials": "E-mail ou mot de passe invalide",
+    "emailInUse": "Cet e-mail est déjà utilisé",
+    "weakPassword": "Le mot de passe est trop faible",
+    "userNotFound": "Utilisateur non trouvé",
+    "sessionExpired": "Votre session a expiré. Veuillez vous reconnecter."
+  },
+  "room": {
+    "notFound": "Salle non trouvée",
+    "accessDenied": "Vous n'avez pas accès à cette salle",
+    "full": "La salle est pleine",
+    "alreadyJoined": "Vous êtes déjà dans cette salle"
+  },
+  "track": {
+    "invalidUrl": "URL de piste invalide",
+    "notFound": "Piste non trouvée",
+    "unavailable": "La piste n'est pas disponible",
+    "addFailed": "Échec de l'ajout de la piste à la file"
+  },
+  "permission": {
+    "denied": "Vous n'avez pas la permission d'effectuer cette action",
+    "requiresPro": "Cette fonctionnalité nécessite un abonnement Pro",
+    "requiresStandard": "Cette fonctionnalité nécessite un abonnement Standard"
+  }
+}

@@ -32,6 +32,7 @@ import {
 import { RouteProp, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { Track } from '../types';
@@ -57,6 +58,7 @@ import {
   SpotifyPlaylist,
   SpotifyTrack,
 } from '../services/spotifyService';
+import { fetchSoundCloudTrackMetadata } from '../services/soundcloudService';
 import {
   getTrackReactions,
   setTrackReaction,
@@ -122,6 +124,231 @@ interface AnimatedQueueItemProps {
   getThumbnailUrl: (thumbnail: string | null | undefined, size: number) => string;
 }
 
+// Animated FAB Component
+interface AnimatedFABProps {
+  isPlaying: boolean;
+  sessionEnabled: boolean;
+  hasQueue: boolean;
+  pulseAnim: Animated.Value;
+  colorAnim: Animated.Value;
+  onPress: () => void;
+  miniPlayerVisible: boolean;
+  theme: any;
+}
+
+const AnimatedFAB: React.FC<AnimatedFABProps> = ({
+  isPlaying,
+  sessionEnabled,
+  hasQueue,
+  pulseAnim,
+  colorAnim,
+  onPress,
+  miniPlayerVisible,
+  theme,
+}) => {
+  // Determine icon based on state
+  const getIcon = () => {
+    if (!sessionEnabled || !hasQueue) {
+      return 'music-note';
+    }
+    return 'play';
+  };
+
+  // Gradient colors for border and background
+  const defaultBorderColors = ['#4c63d2', '#667eea', '#9b59b6']; // Blue to purple gradient
+  const playingBorderColors = [theme.colors.primary, '#9b59b6', '#e74c3c']; // Primary to purple to red gradient
+  const defaultBgColors = ['#4c63d2', '#667eea']; // Background gradient
+  const playingBgColors = [theme.colors.primary, '#9b59b6']; // Playing background gradient
+  
+  // Animated gradient colors - ensure proper typing for LinearGradient
+  const [borderGradientColors, setBorderGradientColors] = React.useState<[string, string, string]>(defaultBorderColors as [string, string, string]);
+  const [bgGradientColors, setBgGradientColors] = React.useState<[string, string]>(defaultBgColors as [string, string]);
+  const [glowOpacity, setGlowOpacity] = React.useState(0.5);
+
+  // Start pulse animation when playing
+  React.useEffect(() => {
+    if (isPlaying) {
+      // Pulse animation
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.15,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+
+      // Color animation for gradient border and background
+      const colorListener = colorAnim.addListener(({ value }) => {
+        // Interpolate border gradient colors
+        const borderColor1 = interpolateColor(
+          value,
+          [0, 1],
+          defaultBorderColors[0],
+          playingBorderColors[0]
+        );
+        const borderColor2 = interpolateColor(
+          value,
+          [0, 1],
+          defaultBorderColors[1],
+          playingBorderColors[1]
+        );
+        const borderColor3 = interpolateColor(
+          value,
+          [0, 1],
+          defaultBorderColors[2],
+          playingBorderColors[2]
+        );
+        setBorderGradientColors([borderColor1, borderColor2, borderColor3] as [string, string, string]);
+        
+        // Interpolate background gradient colors
+        const bgColor1 = interpolateColor(
+          value,
+          [0, 1],
+          defaultBgColors[0],
+          playingBgColors[0]
+        );
+        const bgColor2 = interpolateColor(
+          value,
+          [0, 1],
+          defaultBgColors[1],
+          playingBgColors[1]
+        );
+        setBgGradientColors([bgColor1, bgColor2] as [string, string]);
+        
+        // Animate glow opacity
+        setGlowOpacity(0.5 + value * 0.5); // 0.5 to 1.0
+      });
+
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(colorAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: false,
+          }),
+          Animated.timing(colorAnim, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: false,
+          }),
+        ])
+      ).start();
+
+      return () => {
+        colorAnim.removeListener(colorListener);
+      };
+    } else {
+      // Reset animations when not playing
+      pulseAnim.setValue(1);
+      colorAnim.setValue(0);
+      setBorderGradientColors(defaultBorderColors as [string, string, string]);
+      setBgGradientColors(defaultBgColors as [string, string]);
+      setGlowOpacity(0.5);
+    }
+  }, [isPlaying, pulseAnim, colorAnim, theme.colors.primary]);
+
+  // Helper function to interpolate colors
+  const interpolateColor = (value: number, inputRange: number[], color1: string, color2: string): string => {
+    const ratio = (value - inputRange[0]) / (inputRange[1] - inputRange[0]);
+    const clampedRatio = Math.max(0, Math.min(1, ratio));
+    
+    // Convert hex to RGB
+    const hex1 = color1.replace('#', '');
+    const hex2 = color2.replace('#', '');
+    const r1 = parseInt(hex1.substring(0, 2), 16);
+    const g1 = parseInt(hex1.substring(2, 4), 16);
+    const b1 = parseInt(hex1.substring(4, 6), 16);
+    const r2 = parseInt(hex2.substring(0, 2), 16);
+    const g2 = parseInt(hex2.substring(2, 4), 16);
+    const b2 = parseInt(hex2.substring(4, 6), 16);
+    
+    // Interpolate
+    const r = Math.round(r1 + (r2 - r1) * clampedRatio);
+    const g = Math.round(g1 + (g2 - g1) * clampedRatio);
+    const b = Math.round(b1 + (b2 - b1) * clampedRatio);
+    
+    // Convert back to hex
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  };
+
+  const animatedScaleStyle = {
+    transform: [{ scale: pulseAnim }],
+  };
+
+  // Get RGB values for glow effect
+  const getRgbValues = (hex: string): [number, number, number] => {
+    const hexColor = hex.replace('#', '');
+    const r = parseInt(hexColor.substring(0, 2), 16);
+    const g = parseInt(hexColor.substring(2, 4), 16);
+    const b = parseInt(hexColor.substring(4, 6), 16);
+    return [r, g, b];
+  };
+
+  const [primaryR, primaryG, primaryB] = getRgbValues(borderGradientColors[0]);
+  const [secondaryR, secondaryG, secondaryB] = getRgbValues(borderGradientColors[1]);
+
+  return (
+    <Animated.View style={[animatedScaleStyle, styles.fabAnimatedContainer]}>
+      {/* Outer glow layer */}
+      <Animated.View
+        style={[
+          styles.fabGlowLayer,
+          {
+            opacity: glowOpacity,
+            ...(Platform.OS === 'web' ? {
+              boxShadow: `0 0 20px rgba(${primaryR}, ${primaryG}, ${primaryB}, ${glowOpacity * 0.8}), 0 0 40px rgba(${secondaryR}, ${secondaryG}, ${secondaryB}, ${glowOpacity * 0.6}), 0 0 60px rgba(${primaryR}, ${primaryG}, ${primaryB}, ${glowOpacity * 0.4})`,
+            } : {
+              shadowColor: `rgb(${primaryR}, ${primaryG}, ${primaryB})`,
+              shadowOffset: { width: 0, height: 0 },
+              shadowRadius: 30,
+              shadowOpacity: glowOpacity * 0.8,
+              elevation: 20,
+            }),
+          },
+        ]}
+      />
+      
+      {/* Gradient border wrapper */}
+      <View style={styles.fabGradientWrapper}>
+        <LinearGradient
+          colors={borderGradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fabBorderGradient}
+        >
+          {/* Inner background gradient */}
+          <LinearGradient
+            colors={bgGradientColors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.fabInnerGradient}
+          >
+            <FAB
+              icon={getIcon()}
+              style={[
+                styles.fab,
+                {
+                  backgroundColor: 'transparent',
+                },
+              ]}
+              onPress={onPress}
+              label={miniPlayerVisible ? 'Hide' : 'Player'}
+              color={theme.colors.onPrimary}
+            />
+          </LinearGradient>
+        </LinearGradient>
+      </View>
+    </Animated.View>
+  );
+};
+
 const AnimatedQueueItem: React.FC<AnimatedQueueItemProps> = ({
   track,
   index,
@@ -144,7 +371,7 @@ const AnimatedQueueItem: React.FC<AnimatedQueueItemProps> = ({
           useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(slideAnim, {
-          toValue: -100,
+          toValue: 100, // Slide to the right (where the remove button is)
           duration: 300,
           useNativeDriver: Platform.OS !== 'web',
         }),
@@ -301,6 +528,7 @@ const RoomScreen: React.FC = () => {
   const [showDJModeConfirmDialog, setShowDJModeConfirmDialog] = useState(false);
   const [showSessionExitDialog, setShowSessionExitDialog] = useState(false);
   const [miniPlayerVisible, setMiniPlayerVisible] = useState(false);
+  const [floatingPlayerVisible, setFloatingPlayerVisible] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
   const [shortCode, setShortCode] = useState<string | undefined>(undefined);
   const [creatorTier, setCreatorTier] = useState<'free' | 'standard' | 'pro'>('free');
@@ -344,6 +572,11 @@ const RoomScreen: React.FC = () => {
   const [showHeaderControls, setShowHeaderControls] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const nowPlayingRef = useRef<View>(null);
+  
+  // FAB animation
+  const fabTranslateX = useRef(new Animated.Value(0)).current;
+  const fabPulseAnim = useRef(new Animated.Value(1)).current;
+  const fabColorAnim = useRef(new Animated.Value(0)).current;
 
   // Playback blocking state
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
@@ -370,10 +603,16 @@ const RoomScreen: React.FC = () => {
 
   // Connect to Socket.io when component mounts
   useEffect(() => {
+    // Only connect if we have a valid roomId
+    if (!roomId) return;
+
     const userId = user?.id || `anonymous_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     const authToken = session?.access_token;
 
-    socketService.connect(roomId, userId, authToken);
+    // Only connect if not already connected to this room
+    if (!socketService.isConnected() || socketService.socket === null) {
+      socketService.connect(roomId, userId, authToken);
+    }
 
     const handleConnect = () => {
       setConnected(true);
@@ -481,21 +720,6 @@ const RoomScreen: React.FC = () => {
           return next;
         });
       }, 300); // Match animation duration
-    };
-
-    const handleRemoveTrack = (trackId: string) => {
-      if (!socketService.socket) return;
-      
-      // Check if user can remove tracks
-      const canRemove = isOwner || isAdmin || roomSettings.allowQueueRemoval || 
-        (queue.find(t => t.id === trackId)?.addedBy === user?.id);
-      
-      if (!canRemove) {
-        Alert.alert('Permission Denied', 'You do not have permission to remove tracks from the queue.');
-        return;
-      }
-      
-      socketService.removeTrack(trackId, roomId);
     };
 
     const handlePlay = () => {
@@ -759,9 +983,29 @@ const RoomScreen: React.FC = () => {
         socketService.socket.off('seek-track', handleSeekTrack);
         socketService.socket.off('sync-all-users', handleSyncAllUsers);
       }
-      socketService.disconnect();
+      // Only disconnect if we're leaving the room
+      // Don't disconnect if just navigating away temporarily
+      if (socketService.isConnected()) {
+        socketService.disconnect();
+      }
     };
-  }, [roomId, user?.id, navigation]);
+  }, [roomId, user?.id, session?.access_token]);
+
+  // Handle removing tracks from queue
+  const handleRemoveTrack = useCallback((trackId: string) => {
+    if (!socketService.socket) return;
+    
+    // Check if user can remove tracks
+    const canRemove = isOwner || isAdmin || roomSettings.allowQueueRemoval || 
+      (queue.find(t => t.id === trackId)?.addedBy === user?.id);
+    
+    if (!canRemove) {
+      Alert.alert('Permission Denied', 'You do not have permission to remove tracks from the queue.');
+      return;
+    }
+    
+    socketService.removeTrack(trackId, roomId);
+  }, [isOwner, isAdmin, roomSettings.allowQueueRemoval, queue, user?.id, roomId]);
 
   // Boost countdown timer
   useEffect(() => {
@@ -866,6 +1110,10 @@ const RoomScreen: React.FC = () => {
     }
     // Ensure we're on the main tab
     setActiveTab('main');
+  };
+
+  const handleToggleMiniPlayer = () => {
+    setMiniPlayerVisible(prev => !prev);
   };
 
   const loadTrackReactions = async () => {
@@ -1253,9 +1501,40 @@ const RoomScreen: React.FC = () => {
       
       for (const url of urls) {
         try {
+          // Detect platform and fetch metadata if needed
+          const normalizedUrl = url.toLowerCase();
+          const isSoundCloud = normalizedUrl.includes('soundcloud.com');
+          const isSpotify = normalizedUrl.includes('spotify.com') || normalizedUrl.includes('open.spotify.com') || normalizedUrl.startsWith('spotify:');
+          const isYouTube = normalizedUrl.includes('youtube.com') || normalizedUrl.includes('youtu.be');
+
+          let trackInfo = null;
+          let platform: 'soundcloud' | 'spotify' | 'youtube' | undefined = undefined;
+
+          // Fetch metadata for SoundCloud URLs
+          if (isSoundCloud) {
+            try {
+              trackInfo = await fetchSoundCloudTrackMetadata(url);
+              platform = 'soundcloud';
+            } catch (error) {
+              console.error('Error fetching SoundCloud metadata:', error);
+              // Continue with null trackInfo - server will use fallback
+            }
+          } else if (isSpotify) {
+            platform = 'spotify';
+            // Spotify tracks should be added via the Spotify search/playlist interface
+            // For direct URLs, we'll let the server handle it
+          } else if (isYouTube) {
+            platform = 'youtube';
+            // YouTube tracks should be added via the YouTube search interface
+            // For direct URLs, we'll let the server handle it
+          }
+
+          // Emit add-track event with metadata if available
           socketService.socket.emit('add-track', {
             roomId,
             trackUrl: url,
+            trackInfo: trackInfo || undefined,
+            platform: platform || undefined,
           });
           successCount++;
         } catch (error) {
@@ -3360,8 +3639,8 @@ const RoomScreen: React.FC = () => {
       {activeTab === 'djmode' && renderDJModeTab()}
       {activeTab === 'settings' && renderSettingsTab()}
 
-      {/* Floating Player */}
-      {currentTrack && (
+      {/* Floating Player - Hidden by default, only show when explicitly requested */}
+      {currentTrack && floatingPlayerVisible && !miniPlayerVisible && (
         <FloatingPlayer
           currentTrack={currentTrack}
           isPlaying={isPlaying}
@@ -3424,12 +3703,15 @@ const RoomScreen: React.FC = () => {
             },
           ]}
         >
-          <FAB
-            icon="music-note"
-            style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+          <AnimatedFAB
+            isPlaying={isPlaying}
+            sessionEnabled={roomSettings.sessionEnabled}
+            hasQueue={queue.length > 0}
+            pulseAnim={fabPulseAnim}
+            colorAnim={fabColorAnim}
             onPress={handleToggleMiniPlayer}
-            label={miniPlayerVisible ? 'Hide' : 'Player'}
-            color={theme.colors.onPrimary}
+            miniPlayerVisible={miniPlayerVisible}
+            theme={theme}
           />
         </Animated.View>
       )}
@@ -4276,22 +4558,40 @@ const styles = StyleSheet.create({
   fabContainer: {
     position: 'absolute',
     bottom: IS_MOBILE ? 16 : 24,
-    left: 0,
+    left: IS_MOBILE ? 16 : 24,
     zIndex: 999,
     ...(Platform.OS === 'web' ? {
       position: 'fixed',
     } : {}),
   },
+  fabAnimatedContainer: {
+    position: 'relative',
+  },
   fab: {
-    ...(Platform.OS === 'web' ? {
-      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.3)',
-    } : {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 8,
-    }),
+    backgroundColor: 'transparent',
+  },
+  fabGlowLayer: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    right: -8,
+    bottom: -8,
+    borderRadius: 36, // Slightly larger than FAB
+    backgroundColor: 'transparent',
+    zIndex: -1,
+  },
+  fabGradientWrapper: {
+    borderRadius: 28,
+    overflow: 'hidden',
+    padding: 2, // This creates the border width
+  },
+  fabBorderGradient: {
+    borderRadius: 28,
+    padding: 0,
+  },
+  fabInnerGradient: {
+    borderRadius: 26, // Slightly smaller to show the border
+    overflow: 'hidden',
   },
 });
 

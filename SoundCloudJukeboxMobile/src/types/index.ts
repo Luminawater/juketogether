@@ -18,6 +18,7 @@ export interface UserProfile {
   subscription_tier: SubscriptionTier;
   songs_played_count: number;
   country?: string;
+  language?: string;
   show_in_leaderboard?: boolean;
   show_in_discovery?: boolean;
   is_private_account?: boolean;

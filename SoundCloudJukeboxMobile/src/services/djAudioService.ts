@@ -1,3 +1,7 @@
+// TODO: Migrate from expo-av to expo-audio
+// expo-av is deprecated in SDK 54 and will be removed in SDK 55
+// See: https://docs.expo.dev/versions/latest/sdk/audio/
+// Migration guide: https://docs.expo.dev/versions/latest/sdk/audio/
 import { Audio } from 'expo-av';
 import { Track } from '../types';
 
@@ -192,4 +196,3 @@ export class DJAudioService {
 
 // Singleton instance
 export const djAudioService = new DJAudioService();
-

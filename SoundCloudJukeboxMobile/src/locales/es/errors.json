@@ -1,0 +1,28 @@
+{
+  "generic": "Ocurrió un error. Por favor, inténtalo de nuevo.",
+  "network": "Error de red. Por favor, verifica tu conexión.",
+  "auth": {
+    "invalidCredentials": "Correo electrónico o contraseña inválidos",
+    "emailInUse": "Este correo electrónico ya está en uso",
+    "weakPassword": "La contraseña es demasiado débil",
+    "userNotFound": "Usuario no encontrado",
+    "sessionExpired": "Tu sesión ha expirado. Por favor, inicia sesión nuevamente."
+  },
+  "room": {
+    "notFound": "Sala no encontrada",
+    "accessDenied": "No tienes acceso a esta sala",
+    "full": "La sala está llena",
+    "alreadyJoined": "Ya estás en esta sala"
+  },
+  "track": {
+    "invalidUrl": "URL de pista inválida",
+    "notFound": "Pista no encontrada",
+    "unavailable": "La pista no está disponible",
+    "addFailed": "Error al añadir pista a la cola"
+  },
+  "permission": {
+    "denied": "No tienes permiso para realizar esta acción",
+    "requiresPro": "Esta función requiere una suscripción Pro",
+    "requiresStandard": "Esta función requiere una suscripción Estándar"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "home": {
+    "title": "Bem-vindo ao JukeTogether",
+    "subtitle": "Ouça música junto com amigos",
+    "getStarted": "Começar"
+  },
+  "dashboard": {
+    "title": "Minhas Salas",
+    "noRooms": "Você ainda não tem salas",
+    "createFirstRoom": "Crie sua primeira sala para começar"
+  },
+  "room": {
+    "title": "Sala",
+    "queue": "Fila",
+    "history": "Histórico",
+    "users": "Usuários",
+    "chat": "Chat",
+    "settings": "Configurações",
+    "noTracks": "Nenhuma faixa na fila",
+    "addTrack": "Adicione uma faixa para começar",
+    "nowPlaying": "Reproduzindo",
+    "nextUp": "Próximo"
+  },
+  "profile": {
+    "title": "Perfil",
+    "editProfile": "Editar Perfil",
+    "username": "Nome de Usuário",
+    "displayName": "Nome de Exibição",
+    "email": "E-mail",
+    "joined": "Entrou",
+    "subscription": "Assinatura",
+    "tier": "Nível"
+  },
+  "friends": {
+    "title": "Amigos",
+    "noFriends": "Ainda não tem amigos",
+    "addFriends": "Adicione amigos para vê-los aqui",
+    "requests": "Solicitações de Amizade",
+    "pending": "Pendente"
+  },
+  "leaderboard": {
+    "title": "Classificação",
+    "topUsers": "Principais Usuários",
+    "rank": "Posição",
+    "points": "Pontos"
+  },
+  "discovery": {
+    "title": "Descobrir Salas",
+    "publicRooms": "Salas Públicas",
+    "noRooms": "Nenhuma sala pública disponível",
+    "joinRoom": "Entrar na Sala"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "generic": "An error occurred. Please try again.",
+  "network": "Network error. Please check your connection.",
+  "auth": {
+    "invalidCredentials": "Invalid email or password",
+    "emailInUse": "This email is already in use",
+    "weakPassword": "Password is too weak",
+    "userNotFound": "User not found",
+    "sessionExpired": "Your session has expired. Please sign in again."
+  },
+  "room": {
+    "notFound": "Room not found",
+    "accessDenied": "You don't have access to this room",
+    "full": "Room is full",
+    "alreadyJoined": "You are already in this room"
+  },
+  "track": {
+    "invalidUrl": "Invalid track URL",
+    "notFound": "Track not found",
+    "unavailable": "Track is unavailable",
+    "addFailed": "Failed to add track to queue"
+  },
+  "permission": {
+    "denied": "You don't have permission to perform this action",
+    "requiresPro": "This feature requires a Pro subscription",
+    "requiresStandard": "This feature requires a Standard subscription"
+  }
+}
+

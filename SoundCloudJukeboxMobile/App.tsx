@@ -27,6 +27,9 @@ import DJModeScreen from './src/screens/DJModeScreen';
 
 // Import context
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { LanguageProvider } from './src/context/LanguageContext';
+// Initialize i18n
+import './src/config/i18n';
 
 // Import theme
 import darkTheme from './src/config/theme';
@@ -218,11 +221,12 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <PaperProvider theme={darkTheme}>
-          <NavigationContainer 
-            theme={CustomNavigationDarkTheme}
-            linking={linking}
-          >
+        <LanguageProvider>
+          <PaperProvider theme={darkTheme}>
+            <NavigationContainer 
+              theme={CustomNavigationDarkTheme}
+              linking={linking}
+            >
           <Stack.Navigator
             initialRouteName="Home"
             screenOptions={{
@@ -307,9 +311,10 @@ export default function App() {
             />
           </Stack.Navigator>
           <StatusBar style="light" />
-        </NavigationContainer>
-      </PaperProvider>
-    </AuthProvider>
+          </NavigationContainer>
+        </PaperProvider>
+        </LanguageProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

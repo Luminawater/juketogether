@@ -1,0 +1,28 @@
+{
+  "generic": "发生错误。请重试。",
+  "network": "网络错误。请检查您的连接。",
+  "auth": {
+    "invalidCredentials": "无效的电子邮件或密码",
+    "emailInUse": "此电子邮件已被使用",
+    "weakPassword": "密码太弱",
+    "userNotFound": "找不到用户",
+    "sessionExpired": "您的会话已过期。请重新登录。"
+  },
+  "room": {
+    "notFound": "找不到房间",
+    "accessDenied": "您无权访问此房间",
+    "full": "房间已满",
+    "alreadyJoined": "您已在此房间中"
+  },
+  "track": {
+    "invalidUrl": "无效的曲目URL",
+    "notFound": "找不到曲目",
+    "unavailable": "曲目不可用",
+    "addFailed": "将曲目添加到队列失败"
+  },
+  "permission": {
+    "denied": "您没有执行此操作的权限",
+    "requiresPro": "此功能需要Pro订阅",
+    "requiresStandard": "此功能需要Standard订阅"
+  }
+}

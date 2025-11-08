@@ -2008,6 +2008,60 @@ app.get('/api/soundcloud-oembed', async (req, res) => {
   }
 });
 
+// RapidAPI endpoint for SoundCloud tracks (primary method)
+// Uses RapidAPI to fetch track metadata
+app.post('/api/soundcloud-rapidapi', async (req, res) => {
+  if (!fetch) {
+    return res.status(500).json({ error: 'Fetch not available. Please install node-fetch' });
+  }
+  
+  const rapidApiKey = process.env.XRAPID_API_KEY;
+  const rapidApiApp = process.env.XRAPID_APP;
+  
+  if (!rapidApiKey) {
+    return res.status(503).json({ error: 'RapidAPI key not configured. Set XRAPID_API_KEY environment variable.' });
+  }
+  
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: 'URL parameter is required' });
+    }
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-rapidapi-host': 'soundcloud-track-information-api.p.rapidapi.com',
+      'x-rapidapi-key': rapidApiKey,
+    };
+    
+    // Add app header if configured
+    if (rapidApiApp) {
+      headers['x-rapidapi-app'] = rapidApiApp;
+    }
+    
+    const response = await fetch('https://soundcloud-track-information-api.p.rapidapi.com/soundcloud', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({ url }),
+    });
+    
+    if (!response.ok) {
+      // If rate limited, return error so client can fallback
+      if (response.status === 429) {
+        return res.status(429).json({ error: 'Rate limit reached', details: 'RapidAPI monthly limit exceeded' });
+      }
+      throw new Error(`RapidAPI error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('RapidAPI response for', url, ':', JSON.stringify(data).substring(0, 200));
+    res.json(data);
+  } catch (error) {
+    console.error('Error proxying RapidAPI request:', error);
+    res.status(500).json({ error: 'Failed to fetch track metadata from RapidAPI', details: error.message });
+  }
+});
+
 // Resolve endpoint for SoundCloud tracks (requires client_id)
 // This is a fallback when oEmbed doesn't return metadata
 app.post('/api/soundcloud-resolve', async (req, res) => {

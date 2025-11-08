@@ -1,0 +1,53 @@
+{
+  "home": {
+    "title": "مرحباً بك في JukeTogether",
+    "subtitle": "استمع إلى الموسيقى مع الأصدقاء",
+    "getStarted": "ابدأ"
+  },
+  "dashboard": {
+    "title": "غرفي",
+    "noRooms": "ليس لديك أي غرف بعد",
+    "createFirstRoom": "أنشئ غرفتك الأولى للبدء"
+  },
+  "room": {
+    "title": "غرفة",
+    "queue": "قائمة الانتظار",
+    "history": "السجل",
+    "users": "المستخدمون",
+    "chat": "الدردشة",
+    "settings": "الإعدادات",
+    "noTracks": "لا توجد مسارات في قائمة الانتظار",
+    "addTrack": "أضف مساراً للبدء",
+    "nowPlaying": "قيد التشغيل",
+    "nextUp": "التالي"
+  },
+  "profile": {
+    "title": "الملف الشخصي",
+    "editProfile": "تعديل الملف الشخصي",
+    "username": "اسم المستخدم",
+    "displayName": "اسم العرض",
+    "email": "البريد الإلكتروني",
+    "joined": "انضم",
+    "subscription": "الاشتراك",
+    "tier": "المستوى"
+  },
+  "friends": {
+    "title": "الأصدقاء",
+    "noFriends": "لا توجد أصدقاء بعد",
+    "addFriends": "أضف أصدقاء لرؤيتهم هنا",
+    "requests": "طلبات الصداقة",
+    "pending": "قيد الانتظار"
+  },
+  "leaderboard": {
+    "title": "لوحة المتصدرين",
+    "topUsers": "أفضل المستخدمين",
+    "rank": "الترتيب",
+    "points": "النقاط"
+  },
+  "discovery": {
+    "title": "اكتشاف الغرف",
+    "publicRooms": "الغرف العامة",
+    "noRooms": "لا توجد غرف عامة متاحة",
+    "joinRoom": "الانضمام إلى غرفة"
+  }
+}

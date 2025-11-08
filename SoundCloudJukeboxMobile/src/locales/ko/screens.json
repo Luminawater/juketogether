@@ -1,0 +1,53 @@
+{
+  "home": {
+    "title": "JukeTogether에 오신 것을 환영합니다",
+    "subtitle": "친구들과 함께 음악 듣기",
+    "getStarted": "시작하기"
+  },
+  "dashboard": {
+    "title": "내 방",
+    "noRooms": "아직 방이 없습니다",
+    "createFirstRoom": "첫 번째 방을 만들어 시작하세요"
+  },
+  "room": {
+    "title": "방",
+    "queue": "대기열",
+    "history": "히스토리",
+    "users": "사용자",
+    "chat": "채팅",
+    "settings": "설정",
+    "noTracks": "대기열에 트랙이 없습니다",
+    "addTrack": "트랙을 추가하여 시작하세요",
+    "nowPlaying": "재생 중",
+    "nextUp": "다음"
+  },
+  "profile": {
+    "title": "프로필",
+    "editProfile": "프로필 편집",
+    "username": "사용자 이름",
+    "displayName": "표시 이름",
+    "email": "이메일",
+    "joined": "가입일",
+    "subscription": "구독",
+    "tier": "등급"
+  },
+  "friends": {
+    "title": "친구",
+    "noFriends": "아직 친구가 없습니다",
+    "addFriends": "친구를 추가하여 여기서 확인하세요",
+    "requests": "친구 요청",
+    "pending": "대기 중"
+  },
+  "leaderboard": {
+    "title": "리더보드",
+    "topUsers": "상위 사용자",
+    "rank": "순위",
+    "points": "포인트"
+  },
+  "discovery": {
+    "title": "방 찾기",
+    "publicRooms": "공개 방",
+    "noRooms": "사용 가능한 공개 방이 없습니다",
+    "joinRoom": "방 참가"
+  }
+}

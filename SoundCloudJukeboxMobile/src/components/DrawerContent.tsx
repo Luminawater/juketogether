@@ -15,6 +15,7 @@ import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { hasRole, getTierDisplayName, getTierColor, getRoleDisplayName, getRoleColor } from '../utils/permissions';
 import AdsBanner from './AdsBanner';
+import { LanguageSelector } from './LanguageSelector';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -264,6 +265,12 @@ export const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props
         </View>
       )}
 
+      {/* Language Selector */}
+      <View style={styles.languageSection}>
+        <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+        <LanguageSelector />
+      </View>
+
       {/* Footer with Contact Email */}
       <View style={styles.footer}>
         <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
@@ -374,8 +381,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     height: 1,
   },
-  footer: {
+  languageSection: {
     marginTop: 'auto',
+    paddingTop: 8,
+  },
+  footer: {
     paddingBottom: Platform.OS === 'web' ? 20 : 16,
   },
   footerContact: {

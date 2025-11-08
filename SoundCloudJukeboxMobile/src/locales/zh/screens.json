@@ -1,0 +1,53 @@
+{
+  "home": {
+    "title": "欢迎使用JukeTogether",
+    "subtitle": "与朋友一起听音乐",
+    "getStarted": "开始"
+  },
+  "dashboard": {
+    "title": "我的房间",
+    "noRooms": "您还没有房间",
+    "createFirstRoom": "创建您的第一个房间开始使用"
+  },
+  "room": {
+    "title": "房间",
+    "queue": "队列",
+    "history": "历史记录",
+    "users": "用户",
+    "chat": "聊天",
+    "settings": "设置",
+    "noTracks": "队列中没有曲目",
+    "addTrack": "添加曲目开始使用",
+    "nowPlaying": "正在播放",
+    "nextUp": "下一个"
+  },
+  "profile": {
+    "title": "个人资料",
+    "editProfile": "编辑个人资料",
+    "username": "用户名",
+    "displayName": "显示名称",
+    "email": "电子邮件",
+    "joined": "加入时间",
+    "subscription": "订阅",
+    "tier": "等级"
+  },
+  "friends": {
+    "title": "朋友",
+    "noFriends": "还没有朋友",
+    "addFriends": "添加朋友以在此查看",
+    "requests": "好友请求",
+    "pending": "待处理"
+  },
+  "leaderboard": {
+    "title": "排行榜",
+    "topUsers": "顶级用户",
+    "rank": "排名",
+    "points": "积分"
+  },
+  "discovery": {
+    "title": "发现房间",
+    "publicRooms": "公共房间",
+    "noRooms": "没有可用的公共房间",
+    "joinRoom": "加入房间"
+  }
+}

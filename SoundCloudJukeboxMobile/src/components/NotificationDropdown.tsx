@@ -317,9 +317,15 @@ const styles = StyleSheet.create({
     maxHeight: 600,
     borderRadius: 12,
     elevation: 8,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    ...(Platform.OS === 'web'
+      ? {
+          boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+        }
+      : {
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+        }),
     zIndex: 1001,
   },
   header: {

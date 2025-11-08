@@ -1,0 +1,53 @@
+{
+  "home": {
+    "title": "Willkommen bei JukeTogether",
+    "subtitle": "Höre Musik zusammen mit Freunden",
+    "getStarted": "Loslegen"
+  },
+  "dashboard": {
+    "title": "Meine Räume",
+    "noRooms": "Du hast noch keine Räume",
+    "createFirstRoom": "Erstelle deinen ersten Raum, um zu beginnen"
+  },
+  "room": {
+    "title": "Raum",
+    "queue": "Warteschlange",
+    "history": "Verlauf",
+    "users": "Benutzer",
+    "chat": "Chat",
+    "settings": "Einstellungen",
+    "noTracks": "Keine Titel in der Warteschlange",
+    "addTrack": "Füge einen Titel hinzu, um zu beginnen",
+    "nowPlaying": "Wird abgespielt",
+    "nextUp": "Als Nächstes"
+  },
+  "profile": {
+    "title": "Profil",
+    "editProfile": "Profil Bearbeiten",
+    "username": "Benutzername",
+    "displayName": "Anzeigename",
+    "email": "E-Mail",
+    "joined": "Beigetreten",
+    "subscription": "Abonnement",
+    "tier": "Stufe"
+  },
+  "friends": {
+    "title": "Freunde",
+    "noFriends": "Noch keine Freunde",
+    "addFriends": "Füge Freunde hinzu, um sie hier zu sehen",
+    "requests": "Freundschaftsanfragen",
+    "pending": "Ausstehend"
+  },
+  "leaderboard": {
+    "title": "Rangliste",
+    "topUsers": "Top-Benutzer",
+    "rank": "Rang",
+    "points": "Punkte"
+  },
+  "discovery": {
+    "title": "Räume Entdecken",
+    "publicRooms": "Öffentliche Räume",
+    "noRooms": "Keine öffentlichen Räume verfügbar",
+    "joinRoom": "Raum Beitreten"
+  }
+}

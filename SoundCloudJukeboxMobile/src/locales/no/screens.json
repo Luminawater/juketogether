@@ -1,0 +1,54 @@
+{
+  "home": {
+    "title": "Velkommen til JukeTogether",
+    "subtitle": "Lytt til musikk sammen med venner",
+    "getStarted": "Kom i gang"
+  },
+  "dashboard": {
+    "title": "Mine Rom",
+    "noRooms": "Du har ingen rom ennå",
+    "createFirstRoom": "Opprett ditt første rom for å komme i gang"
+  },
+  "room": {
+    "title": "Rom",
+    "queue": "Kø",
+    "history": "Historikk",
+    "users": "Brukere",
+    "chat": "Chat",
+    "settings": "Innstillinger",
+    "noTracks": "Ingen spor i køen",
+    "addTrack": "Legg til et spor for å komme i gang",
+    "nowPlaying": "Spiller nå",
+    "nextUp": "Neste opp"
+  },
+  "profile": {
+    "title": "Profil",
+    "editProfile": "Rediger Profil",
+    "username": "Brukernavn",
+    "displayName": "Visningsnavn",
+    "email": "E-post",
+    "joined": "Ble med",
+    "subscription": "Abonnement",
+    "tier": "Nivå"
+  },
+  "friends": {
+    "title": "Venner",
+    "noFriends": "Ingen venner ennå",
+    "addFriends": "Legg til venner for å se dem her",
+    "requests": "Venneforespørsler",
+    "pending": "Venter"
+  },
+  "leaderboard": {
+    "title": "Rangliste",
+    "topUsers": "Toppbrukere",
+    "rank": "Rang",
+    "points": "Poeng"
+  },
+  "discovery": {
+    "title": "Oppdag Rom",
+    "publicRooms": "Offentlige Rom",
+    "noRooms": "Ingen offentlige rom tilgjengelig",
+    "joinRoom": "Bli Med i Rom"
+  }
+}
+
