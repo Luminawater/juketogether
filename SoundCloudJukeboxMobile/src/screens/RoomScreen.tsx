@@ -1774,8 +1774,26 @@ const RoomScreen: React.FC = () => {
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
         <View style={styles.headerTop}>
-          <Text style={[styles.roomTitle, { color: theme.colors.onSurface }]}>{roomName}</Text>
+          <View style={styles.headerLeft}>
+            <IconButton
+              icon="arrow-left"
+              iconColor={theme.colors.onSurface}
+              size={24}
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            />
+            <Text style={[styles.roomTitle, { color: theme.colors.onSurface }]}>{roomName}</Text>
+          </View>
           <View style={styles.headerRight}>
+            {(isOwner || isAdmin) && (
+              <IconButton
+                icon="cog"
+                iconColor={theme.colors.onSurface}
+                size={24}
+                onPress={() => setActiveTab('settings')}
+                style={styles.settingsButton}
+              />
+            )}
             <IconButton
               icon="share-variant"
               iconColor={theme.colors.onSurface}
@@ -1996,12 +2014,21 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     flexWrap: IS_MOBILE ? 'wrap' : 'nowrap',
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: IS_MOBILE ? 8 : 12,
+    minWidth: 0,
+  },
+  backButton: {
+    margin: 0,
+  },
   roomTitle: {
     fontSize: IS_MOBILE ? 22 : 26,
     fontWeight: '700',
     flex: 1,
-    minWidth: IS_MOBILE ? '100%' : 'auto',
-    marginBottom: IS_MOBILE ? 8 : 0,
+    minWidth: 0,
     letterSpacing: -0.5,
   },
   headerRight: {
@@ -2009,6 +2036,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: IS_MOBILE ? 4 : 8,
     flexWrap: 'wrap',
+  },
+  settingsButton: {
+    margin: 0,
   },
   shareButton: {
     margin: 0,
