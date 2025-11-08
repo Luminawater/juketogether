@@ -1,9 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 
-// Copy _redirects file to web-build directory for Cloudflare Pages SPA routing
+// Copy _redirects and _headers files to web-build directory for Cloudflare Pages
 const redirectsSource = path.join(__dirname, '..', '_redirects.template');
 const redirectsDest = path.join(__dirname, '..', 'web-build', '_redirects');
+
+const headersSource = path.join(__dirname, '..', '_headers.template');
+const headersDest = path.join(__dirname, '..', 'web-build', '_headers');
 
 // Ensure web-build directory exists
 const webBuildDir = path.join(__dirname, '..', 'web-build');
@@ -24,5 +27,13 @@ if (fs.existsSync(redirectsSource)) {
 `;
   fs.writeFileSync(redirectsDest, redirectsContent, 'utf8');
   console.log('✓ _redirects file created in web-build directory');
+}
+
+// Copy _headers file from template
+if (fs.existsSync(headersSource)) {
+  fs.copyFileSync(headersSource, headersDest);
+  console.log('✓ _headers file copied to web-build directory');
+} else {
+  console.log('⚠ _headers.template not found, skipping headers file');
 }
 

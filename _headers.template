@@ -1,0 +1,71 @@
+# Cloudflare Pages headers configuration
+# This ensures fonts and assets are served with correct MIME types
+
+# Font files
+/*.ttf
+  Access-Control-Allow-Origin: *
+  Content-Type: font/ttf
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.woff
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.woff2
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.eot
+  Access-Control-Allow-Origin: *
+  Content-Type: application/vnd.ms-fontobject
+  Cache-Control: public, max-age=31536000, immutable
+
+# Static assets
+/*.js
+  Access-Control-Allow-Origin: *
+  Content-Type: application/javascript
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.css
+  Access-Control-Allow-Origin: *
+  Content-Type: text/css
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.json
+  Access-Control-Allow-Origin: *
+  Content-Type: application/json
+  Cache-Control: public, max-age=31536000, immutable
+
+# Images
+/*.png
+  Access-Control-Allow-Origin: *
+  Content-Type: image/png
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.jpg
+  Access-Control-Allow-Origin: *
+  Content-Type: image/jpeg
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.jpeg
+  Access-Control-Allow-Origin: *
+  Content-Type: image/jpeg
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.svg
+  Access-Control-Allow-Origin: *
+  Content-Type: image/svg+xml
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.gif
+  Access-Control-Allow-Origin: *
+  Content-Type: image/gif
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.ico
+  Access-Control-Allow-Origin: *
+  Content-Type: image/x-icon
+  Cache-Control: public, max-age=31536000, immutable
+

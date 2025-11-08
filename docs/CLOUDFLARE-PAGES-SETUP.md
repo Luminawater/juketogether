@@ -60,20 +60,24 @@ The project includes build scripts for Cloudflare Pages:
 
 ```json
 "build:cloudflare": "npm run build:web && node scripts/copy-redirects.js",
-"build:cloudflare:direct": "cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build && cd .. && node scripts/copy-redirects.js"
+"build:cloudflare:direct": "cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build && cd .. && node scripts/copy-redirects.js && echo \"/*    /index.html   200\" > web-build/_redirects"
 ```
 
-### 4. SPA Routing
+### 4. SPA Routing and Headers
 
-The `_redirects` file in the `web-build` directory ensures that all routes serve `index.html` for client-side routing:
+The build process automatically creates two files in `web-build`:
 
-```
-/*    /index.html   200
-```
+1. **`_redirects`**: Ensures all routes serve `index.html` for client-side routing:
+   ```
+   /*    /index.html   200
+   ```
 
-This is automatically created during the build process.
+2. **`_headers`**: Sets correct MIME types for fonts and assets (fixes icon display issues):
+   - Font files (`.ttf`, `.woff`, `.woff2`) with proper `Content-Type`
+   - CORS headers for cross-origin requests
+   - Cache headers for optimal performance
 
-**Note:** If using the direct build command, the `_redirects` file is created inline with `echo "/*    /index.html   200" > web-build/_redirects`.
+These files are automatically created during the build process from templates.
 
 ## Deployment Process
 
