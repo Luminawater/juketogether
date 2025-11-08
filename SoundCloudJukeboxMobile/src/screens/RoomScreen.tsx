@@ -1921,6 +1921,7 @@ const RoomScreen: React.FC = () => {
       )}
     </ScrollView>
   );
+  };
 
   const renderUsersTab = () => (
     <ScrollView style={styles.tabContent}>
