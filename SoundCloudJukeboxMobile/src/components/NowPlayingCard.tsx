@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { Card, Text, Title, Button, Avatar, useTheme, Switch } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Track } from '../types';
 import { TrackReactionCounts, ReactionType } from '../services/trackReactionsService';
 import { Dimensions } from 'react-native';
@@ -69,18 +70,33 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
   // Calculate progress percentage
   const progress = duration > 0 ? (position / duration) * 100 : 0;
 
+  // Dark-themed gradient colors - subtle gradient from dark to slightly lighter dark
+  const gradientColors = [
+    theme.colors.surface, // Start with surface color
+    `${theme.colors.primary}08`, // Very subtle primary color tint
+    theme.colors.surfaceVariant || theme.colors.surface, // End with surface variant or surface
+    `${theme.colors.primary}12`, // Slight accent at the end
+  ];
+
   return (
-    <Card style={[styles.card, styles.nowPlayingCard, { 
-      backgroundColor: theme.colors.surface,
-      borderColor: Platform.OS === 'web' ? `${theme.colors.primary}40` : 'transparent',
-    }]}>
-      <Card.Content style={styles.content}>
+    <View style={styles.cardWrapper}>
+      <LinearGradient
+        colors={gradientColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradient}
+      >
+        <Card style={[styles.card, styles.nowPlayingCard, { 
+          backgroundColor: 'transparent',
+          borderColor: Platform.OS === 'web' ? `${theme.colors.primary}40` : 'transparent',
+        }]}>
+          <Card.Content style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={[styles.iconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
               <MaterialCommunityIcons 
-                name="music-note" 
+                name={isPlaying ? "play" : "music-note"} 
                 size={24} 
                 color={theme.colors.primary} 
               />
@@ -360,17 +376,18 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
         ) : (
           <Text style={[styles.noTrack, { color: theme.colors.onSurfaceVariant }]}>No track playing</Text>
         )}
-      </Card.Content>
-    </Card>
+          </Card.Content>
+        </Card>
+      </LinearGradient>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
+  cardWrapper: {
     margin: IS_MOBILE ? 12 : 16,
     marginTop: IS_MOBILE ? 12 : 16,
     borderRadius: 24,
-    elevation: 8,
     overflow: 'hidden',
     ...(Platform.OS === 'web' ? {
       boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.25)',
@@ -380,7 +397,16 @@ const styles = StyleSheet.create({
       shadowOffset: { width: 0, height: 6 },
       shadowOpacity: 0.2,
       shadowRadius: 12,
+      elevation: 8,
     }),
+  },
+  gradient: {
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  card: {
+    borderRadius: 24,
+    overflow: 'hidden',
   },
   nowPlayingCard: {
     borderWidth: Platform.OS === 'web' ? 1 : 0,
