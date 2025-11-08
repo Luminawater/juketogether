@@ -68,8 +68,7 @@ const AdminScreen: React.FC = () => {
   const { supabase, profile, refreshProfile } = useAuth();
   const theme = useTheme();
 
-  const [activeTab, setActiveTab] = useState<0 | 1 | 2>(0);
-  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'subscription'>('general');
+  const [activeTab, setActiveTab] = useState<0 | 1 | 2 | 3>(0);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -180,6 +179,9 @@ const AdminScreen: React.FC = () => {
     }
     if (activeTab === 0) {
       loadUsers();
+    } else if (activeTab === 1) {
+      loadSubscriptionTiers();
+      loadBoosterPacks();
     } else if (activeTab === 2) {
       loadAds();
     }
@@ -702,32 +704,38 @@ const AdminScreen: React.FC = () => {
     }
   };
 
-  const renderSettingsTab = () => (
-    <View style={styles.settingsContainer}>
-      <View style={[styles.subTabContainer, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.outline }]}>
-        <Button
-          mode={settingsSubTab === 'general' ? 'contained' : 'outlined'}
-          onPress={() => setSettingsSubTab('general')}
-          style={styles.subTabButton}
-          icon="cog-outline"
-        >
-          General
-        </Button>
-        <Button
-          mode={settingsSubTab === 'subscription' ? 'contained' : 'outlined'}
-          onPress={() => setSettingsSubTab('subscription')}
-          style={styles.subTabButton}
-          icon="credit-card-outline"
-        >
-          Subscription
-        </Button>
-      </View>
+  const loadAds = async () => {
+    // TODO: Implement ads loading functionality
+    try {
+      // Ads configuration will be loaded here
+    } catch (error) {
+      console.error('Error loading ads:', error);
+    }
+  };
 
-      <ScrollView style={styles.tabContent}>
-        {settingsSubTab === 'general' && renderGeneralSettings()}
-        {settingsSubTab === 'subscription' && renderSubscriptionSettings()}
-      </ScrollView>
-    </View>
+  const renderSubscriptionTab = () => (
+    <ScrollView style={styles.tabContent}>
+      {renderSubscriptionSettings()}
+    </ScrollView>
+  );
+
+  const renderAdsTab = () => (
+    <ScrollView style={styles.tabContent}>
+      <Card style={[styles.settingsCard, { backgroundColor: theme.colors.surface }]}>
+        <Card.Content>
+          <Title style={{ color: theme.colors.onSurface }}>Ads Configuration</Title>
+          <Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+            Ads management and configuration will be available here.
+          </Text>
+        </Card.Content>
+      </Card>
+    </ScrollView>
+  );
+
+  const renderSettingsTab = () => (
+    <ScrollView style={styles.tabContent}>
+      {renderGeneralSettings()}
+    </ScrollView>
   );
 
   const renderGeneralSettings = () => (
@@ -1303,9 +1311,9 @@ const AdminScreen: React.FC = () => {
           mode={activeTab === 1 ? 'contained' : 'outlined'}
           onPress={() => setActiveTab(1)}
           style={styles.tabButton}
-          icon="cog"
+          icon="credit-card-outline"
         >
-          Settings
+          Subscription
         </Button>
         <Button
           mode={activeTab === 2 ? 'contained' : 'outlined'}
@@ -1315,11 +1323,20 @@ const AdminScreen: React.FC = () => {
         >
           Ads
         </Button>
+        <Button
+          mode={activeTab === 3 ? 'contained' : 'outlined'}
+          onPress={() => setActiveTab(3)}
+          style={styles.tabButton}
+          icon="cog"
+        >
+          Settings
+        </Button>
       </View>
 
       {activeTab === 0 && renderUsersTab()}
-      {activeTab === 1 && renderSettingsTab()}
+      {activeTab === 1 && renderSubscriptionTab()}
       {activeTab === 2 && renderAdsTab()}
+      {activeTab === 3 && renderSettingsTab()}
 
       {/* User Detail Dialog */}
       <Portal>

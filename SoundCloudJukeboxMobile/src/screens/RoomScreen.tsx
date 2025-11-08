@@ -41,6 +41,8 @@ import { UpgradePrompt } from '../components/UpgradePrompt';
 import { AdDialog } from '../components/AdDialog';
 import { DJModeInterface } from '../components/DJModeInterface';
 import { DJModeToggle } from '../components/DJModeToggle';
+import { DJModeUpgradeAd } from '../components/DJModeUpgradeAd';
+import { DJModeConfirmDialog } from '../components/DJModeConfirmDialog';
 import { YouTubePlayer } from '../components/YouTubePlayer';
 import { djAudioService } from '../services/djAudioService';
 import { bpmDetectionService } from '../services/bpmDetectionService';
@@ -110,7 +112,7 @@ const RoomScreen: React.FC = () => {
   const { roomId, roomName } = route.params;
 
   // Main state
-  const [activeTab, setActiveTab] = useState<'main' | 'users' | 'settings' | 'spotify' | 'chat'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'users' | 'settings' | 'spotify' | 'chat' | 'djmode'>('main');
   const [queue, setQueue] = useState<Track[]>([]);
   const [history, setHistory] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
@@ -145,6 +147,7 @@ const RoomScreen: React.FC = () => {
   const [addAdminInput, setAddAdminInput] = useState('');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [showDJModeConfirmDialog, setShowDJModeConfirmDialog] = useState(false);
   const [shortCode, setShortCode] = useState<string | undefined>(undefined);
   const [creatorTier, setCreatorTier] = useState<'free' | 'standard' | 'pro'>('free');
   const [tierSettings, setTierSettings] = useState<{
@@ -461,6 +464,11 @@ const RoomScreen: React.FC = () => {
     socketService.on('connect', handleConnect);
     socketService.on('disconnect', handleDisconnect);
     socketService.on('roomState', handleRoomState);
+    
+    // Check if socket is already connected (handles fast connections)
+    if (socketService.isConnected()) {
+      handleConnect();
+    }
     socketService.on('trackAdded', handleTrackAdded);
     socketService.on('trackRemoved', handleTrackRemoved);
     socketService.on('play', handlePlay);
@@ -2321,6 +2329,138 @@ const RoomScreen: React.FC = () => {
     );
   };
 
+  const renderDJModeTab = () => {
+    const isPro = profile && hasTier(profile.subscription_tier, 'pro');
+
+    if (!isPro) {
+      return (
+        <ScrollView
+          style={styles.tabContent}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <DJModeUpgradeAd
+            onUpgrade={() => {
+              navigation.navigate('Subscription');
+            }}
+          />
+        </ScrollView>
+      );
+    }
+
+    // If user is pro and DJ mode is active, show the DJ interface
+    if (isDJModeActive && roomSettings.djMode) {
+      return (
+        <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+          <DJModeInterface
+            djMode={roomSettings.djMode}
+            djPlayers={roomSettings.djPlayers}
+            playerTracks={djPlayerTracks}
+            playerPlayingStates={djPlayerPlayingStates}
+            playerVolumes={djPlayerVolumes}
+            playerBPMs={djPlayerBPMs}
+            playerPositions={djPlayerPositions}
+            playerDurations={djPlayerDurations}
+            onPlayerPlayPause={handleDJPlayerPlayPause}
+            onPlayerLoadTrack={handleDJPlayerLoadTrack}
+            onPlayerVolumeChange={handleDJPlayerVolumeChange}
+            onPlayerSeek={handleDJPlayerSeek}
+            onSyncTracks={handleDJPlayerSync}
+          />
+          
+          {/* Queue for loading tracks into DJ players */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <View style={styles.sectionHeader}>
+                <MaterialCommunityIcons name="playlist-music" size={22} color={theme.colors.primary} />
+                <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+                  Queue (Load to Players)
+                </Title>
+              </View>
+              {queue.length === 0 ? (
+                <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>
+                  No tracks in queue
+                </Text>
+              ) : (
+                <ScrollView style={styles.queueList}>
+                  {queue.map((track, index) => (
+                    <Card
+                      key={index}
+                      style={[styles.queueItem, { backgroundColor: theme.colors.surfaceVariant }]}
+                      onPress={() => {
+                        // Track can be loaded to a player from here
+                        Alert.alert('Load Track', `Select a player to load "${track.title}"`, [
+                          { text: 'Cancel', style: 'cancel' },
+                          ...Array.from({ length: roomSettings.djPlayers }, (_, i) => ({
+                            text: `Player ${i + 1}`,
+                            onPress: async () => {
+                              // Set the track for the selected player
+                              const newTracks = [...djPlayerTracks];
+                              newTracks[i] = track;
+                              setDjPlayerTracks(newTracks);
+                              // Load the track
+                              await handleDJPlayerLoadTrack(i);
+                            },
+                          })),
+                        ]);
+                      }}
+                    >
+                      <Card.Content style={styles.queueItemContent}>
+                        <MaterialCommunityIcons name="music" size={20} color={theme.colors.primary} />
+                        <View style={styles.queueItemDetails}>
+                          <Text style={[styles.queueItemTitle, { color: theme.colors.onSurface }]} numberOfLines={1}>
+                            {track.title}
+                          </Text>
+                          <View style={styles.queueItemMeta}>
+                            <MaterialCommunityIcons 
+                              name="account" 
+                              size={12} 
+                              color={theme.colors.onSurfaceVariant} 
+                            />
+                            <Text style={[styles.queueItemDescription, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
+                              {track.artist || 'Unknown Artist'}
+                            </Text>
+                          </View>
+                        </View>
+                        <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.onSurfaceVariant} />
+                      </Card.Content>
+                    </Card>
+                  ))}
+                </ScrollView>
+              )}
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      );
+    }
+
+    // If user is pro but DJ mode is not active, show message
+    return (
+      <ScrollView
+        style={styles.tabContent}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+          <Card.Content style={styles.centerContent}>
+            <MaterialCommunityIcons
+              name="turntable"
+              size={64}
+              color={theme.colors.primary}
+              style={styles.centerIcon}
+            />
+            <Text style={[styles.noAccess, { color: theme.colors.onSurface, fontSize: 18, marginBottom: 8 }]}>
+              DJ Mode is not active
+            </Text>
+            <Text style={[styles.noAccessSubtext, { color: theme.colors.onSurfaceVariant }]}>
+              Click the DJ Mode tab to activate DJ Mode
+            </Text>
+          </Card.Content>
+        </Card>
+      </ScrollView>
+    );
+  };
+
   const renderSettingsTab = () => {
     if (!isOwner && !isAdmin) {
       return (
@@ -2580,23 +2720,16 @@ const RoomScreen: React.FC = () => {
                 disabled={!roomSettings.djMode}
               />
             )}
-            {(isOwner || isAdmin) && (
+            <View style={styles.iconButtonWrapper}>
               <IconButton
-                icon="cog"
+                icon="share-variant"
                 iconColor={theme.colors.onSurface}
-                size={24}
-                onPress={() => setActiveTab('settings')}
-                style={styles.settingsButton}
+                size={20}
+                onPress={shareRoom}
+                style={styles.iconButton}
               />
-            )}
-            <IconButton
-              icon="share-variant"
-              iconColor={theme.colors.onSurface}
-              size={24}
-              onPress={shareRoom}
-              style={styles.shareButton}
-            />
-            <View style={styles.connectionStatus}>
+            </View>
+            <View style={[styles.connectionStatus, { backgroundColor: connected ? 'rgba(76, 175, 80, 0.15)' : 'rgba(255, 152, 0, 0.15)' }]}>
               <View style={[styles.statusDot, { backgroundColor: connected ? theme.colors.primary : theme.colors.error }]} />
               <Text style={[styles.statusText, { color: theme.colors.onSurface }]}>{connected ? 'Connected' : 'Connecting...'}</Text>
             </View>
@@ -2718,6 +2851,39 @@ const RoomScreen: React.FC = () => {
             </Text>
           </TouchableOpacity>
         )}
+        <TouchableOpacity
+          onPress={() => {
+            if (profile && hasTier(profile.subscription_tier, 'pro') && !isDJModeActive) {
+              setShowDJModeConfirmDialog(true);
+            } else {
+              setActiveTab('djmode');
+            }
+          }}
+          style={[
+            styles.tabButton,
+            (activeTab === 'djmode' || isDJModeActive) && {
+              backgroundColor: theme.colors.primary,
+            },
+          ]}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons
+            name="turntable"
+            size={20}
+            color={(activeTab === 'djmode' || isDJModeActive) ? theme.colors.onPrimary : theme.colors.onSurface}
+            style={styles.tabIcon}
+          />
+          <Text
+            style={[
+              styles.tabButtonText,
+              {
+                color: (activeTab === 'djmode' || isDJModeActive) ? theme.colors.onPrimary : theme.colors.onSurface,
+              },
+            ]}
+          >
+            DJ Mode
+          </Text>
+        </TouchableOpacity>
         {(isOwner || isAdmin) && (
           <TouchableOpacity
             onPress={() => setActiveTab('settings')}
@@ -2754,6 +2920,7 @@ const RoomScreen: React.FC = () => {
       {activeTab === 'users' && renderUsersTab()}
       {activeTab === 'chat' && renderChatTab()}
       {activeTab === 'spotify' && renderSpotifyTab()}
+      {activeTab === 'djmode' && renderDJModeTab()}
       {activeTab === 'settings' && renderSettingsTab()}
 
       {/* Floating Player */}
@@ -2779,6 +2946,18 @@ const RoomScreen: React.FC = () => {
         }}
         onCopyCode={() => {
           Alert.alert('Success', 'Join code copied to clipboard!');
+        }}
+      />
+
+      <DJModeConfirmDialog
+        visible={showDJModeConfirmDialog}
+        onConfirm={() => {
+          setShowDJModeConfirmDialog(false);
+          setIsDJModeActive(true);
+          setActiveTab('djmode');
+        }}
+        onDismiss={() => {
+          setShowDJModeConfirmDialog(false);
         }}
       />
 
@@ -2898,8 +3077,22 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: IS_MOBILE ? 4 : 8,
+    gap: IS_MOBILE ? 6 : 10,
     flexWrap: 'wrap',
+  },
+  iconButtonWrapper: {
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    overflow: 'hidden',
+    ...(Platform.OS === 'web' ? {
+      transition: 'background-color 0.2s ease',
+      cursor: 'pointer',
+    } : {}),
+  },
+  iconButton: {
+    margin: 0,
+    width: 40,
+    height: 40,
   },
   settingsButton: {
     margin: 0,
@@ -2910,22 +3103,30 @@ const styles = StyleSheet.create({
   connectionStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+    gap: 6,
+    paddingHorizontal: IS_MOBILE ? 10 : 12,
+    paddingVertical: IS_MOBILE ? 6 : 7,
+    borderRadius: 20,
+    minHeight: 40,
+    justifyContent: 'center',
   },
   statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     ...(Platform.OS === 'web' ? {
-      boxShadow: '0px 0px 8px currentColor',
-    } : {}),
+      boxShadow: '0px 0px 6px currentColor',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 2,
+    }),
   },
   statusText: {
     fontSize: IS_MOBILE ? 11 : 12,
+    fontWeight: '500',
   },
   connectingIndicator: {
     marginTop: 8,
@@ -3299,6 +3500,14 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     marginTop: IS_MOBILE ? 12 : 16,
+  },
+  centerContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  centerIcon: {
+    marginBottom: 16,
   },
   noAccess: {
     textAlign: 'center',
