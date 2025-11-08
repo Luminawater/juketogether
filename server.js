@@ -2555,7 +2555,8 @@ function extractSpotifyId(url) {
 }
 
 // Fetch individual Spotify track metadata
-app.post('/api/spotify/playlists/tracks/metadata', async (req, res) => {
+// Support both paths for backwards compatibility
+const handleSpotifyTrackMetadata = async (req, res) => {
   if (!fetch) {
     return res.status(500).json({ error: 'Fetch not available' });
   }
