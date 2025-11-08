@@ -40,6 +40,7 @@ class SocketService {
 
   connect(roomId: string, userId: string, authToken?: string, providerToken?: string) {
     if (this._socket?.connected && this.roomId === roomId) {
+      console.log(`[SocketService] Already connected to room ${roomId}`);
       return; // Already connected to this room
     }
 
@@ -48,7 +49,13 @@ class SocketService {
     this.reconnectAttempts = 0;
     this.shouldReconnect = true;
 
-    console.log(`[SocketService] Connecting to ${SOCKET_URL} for room ${roomId}`);
+    console.log(`[SocketService] Connecting to ${SOCKET_URL} for room ${roomId}`, {
+      socketUrl: SOCKET_URL,
+      roomId,
+      userId: userId.substring(0, 8) + '...', // Log partial userId for privacy
+      hasAuthToken: !!authToken,
+      hasProviderToken: !!providerToken,
+    });
 
     this._socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],

@@ -151,6 +151,7 @@ export const RoomMainTab: React.FC<RoomMainTabProps> = ({
   setCreatePlaylistDialogVisible,
   setPlaybackBlocked,
   setBlockedInfo,
+  onMark,
 }) => {
   const theme = useTheme();
   const styles = roomScreenStyles;
