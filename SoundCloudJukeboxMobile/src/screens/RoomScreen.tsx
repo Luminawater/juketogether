@@ -295,6 +295,7 @@ const RoomScreen: React.FC = () => {
       setQueue(state.queue || []);
       setHistory(state.history || []);
       setCurrentTrack(state.currentTrack || null);
+      // Always sync to Supabase state (single source of truth)
       setIsPlaying(state.isPlaying || false);
       setPosition(state.position || 0);
       setUsers(state.users || []);
@@ -370,7 +371,7 @@ const RoomScreen: React.FC = () => {
     const handlePlay = () => {
       console.log('[handlePlay] Received play event, setting isPlaying to true', { 
         currentTrack: currentTrack?.url, 
-        wasPlaying: isPlaying 
+        wasPlaying: isPlaying
       });
       setIsPlaying(true);
     };
@@ -378,7 +379,7 @@ const RoomScreen: React.FC = () => {
     const handlePause = () => {
       console.log('[handlePause] Received pause event, setting isPlaying to false', { 
         currentTrack: currentTrack?.url, 
-        wasPlaying: isPlaying 
+        wasPlaying: isPlaying
       });
       setIsPlaying(false);
     };

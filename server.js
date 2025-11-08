@@ -3,6 +3,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
 const cors = require('cors');
+const fs = require('fs');
 
 // Use node-fetch for older Node versions, or built-in fetch for Node 18+
 let fetch;
@@ -720,8 +721,8 @@ io.on('connection', (socket) => {
 
     console.log(`📤 Room "${roomId}" state sent to user (synced from Supabase)`);
 
-    // If room is actively playing, broadcast current state to ensure sync
-    if (authoritativeIsPlaying && room.currentTrack && room.users.size > 1) {
+    // If room is actively playing, broadcast current state to ensure sync (including to the new user)
+    if (authoritativeIsPlaying && room.currentTrack) {
       setTimeout(() => {
         io.to(roomId).emit('sync-playback-state', {
           isPlaying: authoritativeIsPlaying,
@@ -977,9 +978,30 @@ io.on('connection', (socket) => {
     room.isPlaying = true;
     scheduleSave(roomId);
     
-    // Broadcast to ALL users in the room (including the sender to ensure sync)
-    io.to(roomId).emit('play-track');
-    console.log(`▶️ Play command in room ${roomId} by user ${socket.id}`);
+    // If there are other users in the room, sync everyone to current position before playing
+    // This ensures new users sync to existing playback when they hit play
+    // If user is alone, they start from beginning (no sync needed)
+    const hasOtherUsers = room.users.size > 1;
+    
+    if (hasOtherUsers && room.currentTrack) {
+      // Sync all users to current position before playing
+      io.to(roomId).emit('sync-playback-state', {
+        isPlaying: true,
+        position: room.position,
+        currentTrack: room.currentTrack
+      });
+      console.log(`🔄 Syncing playback state before play (${room.users.size} users in room): position=${room.position}ms`);
+      
+      // Small delay to allow position sync to complete before starting playback
+      setTimeout(() => {
+        io.to(roomId).emit('play-track');
+        console.log(`▶️ Play command in room ${roomId} by user ${socket.id}`);
+      }, 300);
+    } else {
+      // User is alone or no current track, just play from beginning
+      io.to(roomId).emit('play-track');
+      console.log(`▶️ Play command in room ${roomId} by user ${socket.id} (${hasOtherUsers ? 'no current track' : 'user alone, starting from beginning'})`);
+    }
   });
 
   socket.on('pause', async (data) => {
@@ -4305,9 +4327,82 @@ app.get('/api/status', async (req, res) => {
   }
 });
 
-// Root route removed - Expo web app handles routing
-// For local development, serve the Expo web build if available
-// For Vercel, static build serves the Expo app
+// Serve Expo web build static files if available
+const webBuildPath = path.join(__dirname, 'web-build');
+if (fs.existsSync(webBuildPath)) {
+  // Serve static assets (JS, CSS, images, etc.)
+  app.use(express.static(webBuildPath, {
+    maxAge: '1d', // Cache static assets for 1 day
+  }));
+  
+  // Catch-all route: serve index.html for all non-API routes
+  // This allows React Navigation to handle client-side routing
+  app.get('*', (req, res, next) => {
+    // Skip API routes
+    if (req.path.startsWith('/api/') || req.path.startsWith('/socket.io/')) {
+      return next();
+    }
+    
+    // Serve index.html for all other routes (client-side routing)
+    const indexPath = path.join(webBuildPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(404).send('Expo web build not found. Please run: cd SoundCloudJukeboxMobile && npm run build:web');
+    }
+  });
+} else {
+  // If web-build doesn't exist, provide helpful message
+  app.get('*', (req, res, next) => {
+    // Skip API routes
+    if (req.path.startsWith('/api/') || req.path.startsWith('/socket.io/')) {
+      return next();
+    }
+    
+    res.status(200).send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>SoundCloud Jukebox</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              margin: 0;
+              background: #121212;
+              color: #fff;
+            }
+            .container {
+              text-align: center;
+              padding: 2rem;
+              max-width: 600px;
+            }
+            h1 { color: #1DB954; }
+            code {
+              background: #1e1e1e;
+              padding: 0.5rem 1rem;
+              border-radius: 4px;
+              display: block;
+              margin: 1rem 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>Server is up and running.</h1>
+            <p>To view the web app, please build the Expo web app first:</p>
+            <code>cd SoundCloudJukeboxMobile && npm run build:web</code>
+            <p>Or run the Expo dev server for development:</p>
+            <code>cd SoundCloudJukeboxMobile && npm run web</code>
+          </div>
+        </body>
+      </html>
+    `);
+  });
+}
 
 // Periodic check for expired boosts (every 5 minutes)
 setInterval(async () => {
