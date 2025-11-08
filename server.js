@@ -1395,19 +1395,41 @@ io.on('connection', (socket) => {
     }
 
     const userId = socket.userId;
-    const success = await addFriendRequest(userId, friendId, userId);
-    
-    if (success) {
-      socket.emit('friend-request-sent', { friendId });
-      // Notify the friend
-      const friendSocket = Array.from(io.sockets.sockets.values())
-        .find(s => s.isAuthenticated && s.userId === friendId);
-      if (friendSocket) {
-        const friends = await loadFriends(friendId);
-        friendSocket.emit('friends-list', friends);
+
+    // Validate friendId
+    if (!friendId) {
+      socket.emit('error', { message: 'Friend ID is required' });
+      return;
+    }
+
+    // Prevent adding yourself as a friend
+    if (userId === friendId) {
+      socket.emit('error', { message: 'Cannot add yourself as a friend' });
+      return;
+    }
+
+    try {
+      const result = await addFriendRequest(userId, friendId, userId);
+      
+      if (result.success) {
+        socket.emit('friend-request-sent', { friendId });
+        // Notify the friend
+        const friendSocket = Array.from(io.sockets.sockets.values())
+          .find(s => s.isAuthenticated && s.userId === friendId);
+        if (friendSocket) {
+          const friends = await loadFriends(friendId);
+          friendSocket.emit('friends-list', friends);
+        }
+      } else {
+        socket.emit('error', { 
+          message: result.error || 'Failed to send friend request' 
+        });
       }
-    } else {
-      socket.emit('error', { message: 'Failed to send friend request' });
+    } catch (error) {
+      console.error('Error in add-friend handler:', error);
+      socket.emit('error', { 
+        message: error.message || 'Failed to send friend request' 
+      });
     }
   });
 

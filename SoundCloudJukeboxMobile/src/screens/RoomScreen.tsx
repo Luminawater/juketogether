@@ -27,6 +27,7 @@ import {
   Dialog,
   Paragraph,
   IconButton,
+  Badge,
   useTheme,
 } from 'react-native-paper';
 import { RouteProp, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -69,6 +70,13 @@ import { getRoomUrl, getRoomShareMessage, extractMusicUrls, isValidMusicUrl } fr
 import RoomChat from '../components/RoomChat';
 import AdsBanner from '../components/AdsBanner';
 import { hasTier, getTierHeaderColor } from '../utils/permissions';
+import {
+  getUnreadMessageCount,
+  updateLastReadTimestamp,
+  subscribeToChatMessages,
+  unsubscribeFromChatMessages,
+  RealtimeChannel,
+} from '../services/chatService';
 import { ShareRoomDialog } from '../components/ShareRoomDialog';
 import { QueueDialog } from '../components/QueueDialog';
 import { CreatePlaylistDialog } from '../components/CreatePlaylistDialog';
@@ -508,6 +516,8 @@ const RoomScreen: React.FC = () => {
   const [userCount, setUserCount] = useState(0);
   const [playerMinimized, setPlayerMinimized] = useState(false);
   const [isUserSyncedToSession, setIsUserSyncedToSession] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const chatUnreadChannelRef = useRef<RealtimeChannel | null>(null);
 
   // Users & Friends state
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -826,6 +836,14 @@ const RoomScreen: React.FC = () => {
       setFriendRequests(friendsList.filter(f => f.status === 'pending'));
     };
 
+    const handleFriendRequestSent = (data: { friendId: string }) => {
+      Alert.alert('Success', 'Friend request sent!');
+      // Refresh friends list
+      if (socketService.socket && user) {
+        socketService.socket.emit('get-friends');
+      }
+    };
+
     const handleHistoryUpdated = (updatedHistory: Track[]) => {
       setHistory(updatedHistory);
     };
@@ -851,7 +869,15 @@ const RoomScreen: React.FC = () => {
 
     const handleError = (error: any) => {
       console.error('Socket error:', error);
-      Alert.alert('Connection Error', 'Failed to connect to room. Please try again.');
+      // Show specific error message if available, otherwise show generic message
+      const errorMessage = error?.message || 'An error occurred';
+      // Only show generic connection error for actual connection issues
+      if (errorMessage.includes('connect') || errorMessage.includes('Connection')) {
+        Alert.alert('Connection Error', 'Failed to connect to room. Please try again.');
+      } else {
+        // Show the specific error message for other errors (like friend requests)
+        Alert.alert('Error', errorMessage);
+      }
     };
 
     const handleConnectionError = (error: any) => {
@@ -897,6 +923,7 @@ const RoomScreen: React.FC = () => {
     socketService.on('userLeft', handleUserLeft);
     socketService.on('userCount', handleUserCount);
     socketService.on('friendsList', handleFriendsList);
+    socketService.on('friendRequestSent', handleFriendRequestSent);
     socketService.on('historyUpdated', handleHistoryUpdated);
     socketService.on('roomSettingsUpdated', handleRoomSettingsUpdated);
     socketService.on('roomAdminsUpdated', handleRoomAdminsUpdated);
@@ -980,6 +1007,7 @@ const RoomScreen: React.FC = () => {
       socketService.off('userLeft', handleUserLeft);
       socketService.off('userCount', handleUserCount);
       socketService.off('friendsList', handleFriendsList);
+      socketService.off('friendRequestSent', handleFriendRequestSent);
       socketService.off('historyUpdated', handleHistoryUpdated);
       socketService.off('roomSettingsUpdated', handleRoomSettingsUpdated);
       socketService.off('roomAdminsUpdated', handleRoomAdminsUpdated);
@@ -998,6 +1026,62 @@ const RoomScreen: React.FC = () => {
       }
     };
   }, [roomId, user?.id, session?.access_token]);
+
+  // Track unread chat messages
+  useEffect(() => {
+    if (!user || !supabase || !roomId) return;
+
+    // Fetch initial unread count
+    const fetchUnreadCount = async () => {
+      try {
+        const count = await getUnreadMessageCount(supabase, roomId, user.id);
+        setUnreadChatCount(count);
+      } catch (error) {
+        console.error('Error fetching unread chat count:', error);
+      }
+    };
+
+    fetchUnreadCount();
+
+    // Subscribe to new chat messages to update unread count
+    chatUnreadChannelRef.current = subscribeToChatMessages(
+      supabase,
+      roomId,
+      async (message) => {
+        // Only increment if chat tab is not active and message is not from current user
+        if (activeTab !== 'chat' && message.user_id !== user.id) {
+          setUnreadChatCount((prev) => prev + 1);
+        }
+      },
+      (error) => {
+        console.error('Error in chat unread subscription:', error);
+      }
+    );
+
+    return () => {
+      if (chatUnreadChannelRef.current) {
+        unsubscribeFromChatMessages(supabase, chatUnreadChannelRef.current);
+        chatUnreadChannelRef.current = null;
+      }
+    };
+  }, [roomId, user, supabase, activeTab]);
+
+  // Update last read timestamp when chat tab is opened
+  useEffect(() => {
+    if (activeTab === 'chat' && user && supabase && roomId) {
+      const updateReadStatus = async () => {
+        try {
+          await updateLastReadTimestamp(supabase, roomId, user.id);
+          // Reset unread count
+          setUnreadChatCount(0);
+        } catch (error) {
+          console.error('Error updating last read timestamp:', error);
+        }
+      };
+
+      updateReadStatus();
+    }
+  }, [activeTab, user, supabase, roomId]);
 
   // Handle removing tracks from queue
   const handleRemoveTrack = useCallback((trackId: string) => {
@@ -3509,12 +3593,26 @@ const RoomScreen: React.FC = () => {
           ]}
           activeOpacity={0.7}
         >
-          <MaterialCommunityIcons
-            name="chat"
-            size={20}
-            color={activeTab === 'chat' ? theme.colors.onPrimary : theme.colors.onSurface}
-            style={styles.tabIcon}
-          />
+          <View style={styles.tabIconContainer}>
+            <MaterialCommunityIcons
+              name="chat"
+              size={20}
+              color={activeTab === 'chat' ? theme.colors.onPrimary : theme.colors.onSurface}
+              style={styles.tabIcon}
+            />
+            {unreadChatCount > 0 && (
+              <Badge
+                visible={unreadChatCount > 0}
+                size={18}
+                style={[
+                  styles.chatBadge,
+                  { backgroundColor: theme.colors.error }
+                ]}
+              >
+                {unreadChatCount > 99 ? '99+' : unreadChatCount}
+              </Badge>
+            )}
+          </View>
           <Text
             style={[
               styles.tabButtonText,
@@ -3895,6 +3993,18 @@ const styles = StyleSheet.create({
   },
   tabIcon: {
     marginRight: 6,
+  },
+  tabIconContainer: {
+    position: 'relative',
+    marginRight: 6,
+  },
+  chatBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
   },
   tabButtonText: {
     fontSize: IS_MOBILE ? 13 : 14,

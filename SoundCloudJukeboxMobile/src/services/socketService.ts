@@ -138,6 +138,10 @@ class SocketService {
       this.emit('friendsList', friends);
     });
 
+    this._socket.on('friend-request-sent', (data: any) => {
+      this.emit('friendRequestSent', data);
+    });
+
     // Position sync
     this._socket.on('seek-track', (position: number) => {
       this.emit('positionUpdate', position);

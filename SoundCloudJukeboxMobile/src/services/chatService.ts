@@ -205,3 +205,104 @@ export function unsubscribeFromChatMessages(
   supabase.removeChannel(channel);
 }
 
+/**
+ * Get the last read timestamp for a user in a room
+ */
+export async function getLastReadTimestamp(
+  supabase: SupabaseClient,
+  roomId: string,
+  userId: string
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('chat_read_status')
+      .select('last_read_at')
+      .eq('room_id', roomId)
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No record found, return null
+        return null;
+      }
+      console.error('Error getting last read timestamp:', error);
+      return null;
+    }
+
+    return data?.last_read_at || null;
+  } catch (error) {
+    console.error('Error in getLastReadTimestamp:', error);
+    return null;
+  }
+}
+
+/**
+ * Update the last read timestamp for a user in a room
+ */
+export async function updateLastReadTimestamp(
+  supabase: SupabaseClient,
+  roomId: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('chat_read_status')
+      .upsert({
+        room_id: roomId,
+        user_id: userId,
+        last_read_at: new Date().toISOString(),
+      }, {
+        onConflict: 'room_id,user_id'
+      });
+
+    if (error) {
+      console.error('Error updating last read timestamp:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error in updateLastReadTimestamp:', error);
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+/**
+ * Get the count of unread messages for a user in a room
+ */
+export async function getUnreadMessageCount(
+  supabase: SupabaseClient,
+  roomId: string,
+  userId: string
+): Promise<number> {
+  try {
+    // Get last read timestamp
+    const lastRead = await getLastReadTimestamp(supabase, roomId, userId);
+
+    // Build query
+    let query = supabase
+      .from('chat_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('room_id', roomId)
+      .neq('user_id', userId); // Don't count user's own messages
+
+    // If user has a last read timestamp, only count messages after that
+    if (lastRead) {
+      query = query.gt('created_at', lastRead);
+    }
+
+    const { count, error } = await query;
+
+    if (error) {
+      console.error('Error getting unread message count:', error);
+      return 0;
+    }
+
+    return count || 0;
+  } catch (error) {
+    console.error('Error in getUnreadMessageCount:', error);
+    return 0;
+  }
+}
+

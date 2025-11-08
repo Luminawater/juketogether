@@ -539,10 +539,56 @@ async function loadFriends(userId) {
 // Add friend request
 async function addFriendRequest(userId, friendId, requestedBy) {
   if (!supabaseConfig) {
-    return false;
+    return { success: false, error: 'Supabase not configured' };
+  }
+  
+  // Validate inputs
+  if (!userId || !friendId) {
+    return { success: false, error: 'User ID and Friend ID are required' };
+  }
+
+  if (userId === friendId) {
+    return { success: false, error: 'Cannot add yourself as a friend' };
   }
   
   try {
+    // Check if a friend request already exists
+    const existing1 = await restRequest('GET', 'friends', null, { 
+      user_id: userId, 
+      friend_id: friendId 
+    });
+    const existing2 = await restRequest('GET', 'friends', null, { 
+      user_id: friendId, 
+      friend_id: userId 
+    });
+
+    // Handle array or single object response
+    const checkExisting = (result) => {
+      if (!result) return null;
+      if (Array.isArray(result)) {
+        return result.length > 0 ? result[0] : null;
+      }
+      return result;
+    };
+
+    const existing1Record = checkExisting(existing1);
+    if (existing1Record) {
+      if (existing1Record.status === 'pending') {
+        return { success: false, error: 'Friend request already pending' };
+      } else if (existing1Record.status === 'accepted') {
+        return { success: false, error: 'Already friends with this user' };
+      }
+    }
+
+    const existing2Record = checkExisting(existing2);
+    if (existing2Record) {
+      if (existing2Record.status === 'pending') {
+        return { success: false, error: 'This user has already sent you a friend request' };
+      } else if (existing2Record.status === 'accepted') {
+        return { success: false, error: 'Already friends with this user' };
+      }
+    }
+
     const friendData = {
       user_id: userId,
       friend_id: friendId,
@@ -550,11 +596,27 @@ async function addFriendRequest(userId, friendId, requestedBy) {
       requested_by: requestedBy,
       created_at: new Date().toISOString()
     };
+    
     await restRequest('POST', 'friends', friendData);
-    return true;
+    return { success: true };
   } catch (error) {
     console.error('Error adding friend request:', error);
-    return false;
+    
+    // Provide more specific error messages
+    let errorMessage = 'Failed to send friend request';
+    if (error.message) {
+      if (error.message.includes('duplicate') || error.message.includes('unique')) {
+        errorMessage = 'Friend request already exists';
+      } else if (error.message.includes('foreign key') || error.message.includes('violates')) {
+        errorMessage = 'Invalid user ID';
+      } else if (error.message.includes('permission') || error.message.includes('RLS')) {
+        errorMessage = 'Permission denied. Please check your account settings.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
+    return { success: false, error: errorMessage };
   }
 }
 
