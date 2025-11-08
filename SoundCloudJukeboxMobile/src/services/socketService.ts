@@ -39,6 +39,15 @@ class SocketService {
   }
 
   connect(roomId: string, userId: string, authToken?: string, providerToken?: string) {
+    // Skip Socket.io connection if SOCKET_URL is empty (Cloudflare Pages static hosting)
+    if (!SOCKET_URL || SOCKET_URL.trim() === '') {
+      console.log(`[SocketService] Socket.io disabled - using Supabase Realtime instead for room ${roomId}`);
+      this.roomId = roomId;
+      // Emit a mock connect event so components don't break
+      setTimeout(() => this.emit('connect'), 0);
+      return;
+    }
+
     if (this._socket?.connected && this.roomId === roomId) {
       console.log(`[SocketService] Already connected to room ${roomId}`);
       return; // Already connected to this room
