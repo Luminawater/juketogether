@@ -23,7 +23,7 @@ class SocketService {
     return this._socket;
   }
 
-  connect(roomId: string, userId: string) {
+  connect(roomId: string, userId: string, authToken?: string) {
     if (this._socket?.connected && this.roomId === roomId) {
       return; // Already connected to this room
     }
@@ -36,10 +36,16 @@ class SocketService {
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      timeout: 20000, // 20 second timeout
       query: {
         room: roomId,
         userId: userId,
       },
+      auth: {
+        token: authToken,
+      },
+      // Add error handling for connection failures
+      autoConnect: true,
     });
 
     this.setupEventHandlers();
@@ -53,9 +59,15 @@ class SocketService {
       this.emit('listeners', 'connect');
     });
 
-    this._socket.on('disconnect', () => {
-      console.log('Socket disconnected');
-      this.emit('listeners', 'disconnect');
+    this._socket.on('disconnect', (reason) => {
+      console.log('Socket disconnected:', reason);
+      this.emit('listeners', 'disconnect', reason);
+    });
+
+    this._socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+      // Emit a more specific error for connection failures
+      this.emit('listeners', 'connectionError', error);
     });
 
     this._socket.on('error', (error) => {

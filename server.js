@@ -293,6 +293,17 @@ io.on('connection', (socket) => {
     // Check if user is owner or admin
     const isOwner = room.hostUserId === userId;
     const isAdmin = roomAdmins.includes(userId);
+    
+    // Debug logging for owner check
+    console.log(`🔍 Owner check for room "${roomId}":`, {
+      hostUserId: room.hostUserId,
+      userId: userId,
+      userIdType: typeof userId,
+      hostUserIdType: typeof room.hostUserId,
+      isOwner: isOwner,
+      isAuthenticated: socket.isAuthenticated,
+      socketUserId: socket.userId,
+    });
 
     // Load room settings with defaults
     const settings = roomSettings ? {

@@ -162,8 +162,9 @@ const RoomScreen: React.FC = () => {
   // Connect to Socket.io when component mounts
   useEffect(() => {
     const userId = user?.id || `anonymous_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const authToken = session?.access_token;
 
-    socketService.connect(roomId, userId);
+    socketService.connect(roomId, userId, authToken);
 
     const handleConnect = () => {
       setConnected(true);
@@ -271,6 +272,31 @@ const RoomScreen: React.FC = () => {
       Alert.alert('Connection Error', 'Failed to connect to room. Please try again.');
     };
 
+    const handleConnectionError = (error: any) => {
+      console.error('Socket connection error:', error);
+      // Check if it's a connection refused error (server not running)
+      const errorMessage = error?.message || String(error);
+      if (errorMessage.includes('ECONNREFUSED') || errorMessage.includes('failed')) {
+        Alert.alert(
+          'Server Not Available',
+          'Unable to connect to the server. Please make sure the server is running on port 8080.',
+          [
+            { text: 'OK', style: 'default' },
+            { 
+              text: 'Retry', 
+              onPress: () => {
+                // Retry connection
+                const userId = user?.id || `anonymous_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+                socketService.connect(roomId, userId);
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Connection Error', `Failed to connect: ${errorMessage}`);
+      }
+    };
+
     // Register event listeners
     socketService.on('connect', handleConnect);
     socketService.on('disconnect', handleDisconnect);
@@ -288,6 +314,7 @@ const RoomScreen: React.FC = () => {
     socketService.on('roomSettingsUpdated', handleRoomSettingsUpdated);
     socketService.on('roomAdminsUpdated', handleRoomAdminsUpdated);
     socketService.on('error', handleError);
+    socketService.on('connectionError', handleConnectionError);
 
     // Request friends list
     if (socketService.socket && user) {
@@ -311,6 +338,7 @@ const RoomScreen: React.FC = () => {
       socketService.off('roomSettingsUpdated', handleRoomSettingsUpdated);
       socketService.off('roomAdminsUpdated', handleRoomAdminsUpdated);
       socketService.off('error', handleError);
+      socketService.off('connectionError', handleConnectionError);
       socketService.disconnect();
     };
   }, [roomId, user?.id, navigation]);

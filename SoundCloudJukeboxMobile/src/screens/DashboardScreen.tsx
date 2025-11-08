@@ -208,7 +208,7 @@ const DashboardScreen: React.FC = () => {
       const startTime = Date.now();
       const queryPromise = supabase
         .from('rooms')
-        .select('id, host_user_id, updated_at')
+        .select('id, host_user_id, updated_at, short_code')
         .eq('host_user_id', userId)
         .order('updated_at', { ascending: false })
         .limit(50);
