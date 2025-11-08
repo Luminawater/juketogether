@@ -304,9 +304,12 @@ export const RoomMainTab: React.FC<RoomMainTabProps> = ({
         />
       )}
 
-      {/* YouTube Player - Show for YouTube tracks (separate from NowPlayingCard) */}
-      {showMediaPlayer && currentTrack && (currentTrack.url?.includes('youtube') || currentTrack.url?.includes('youtu.be')) && (
-        <View style={styles.youtubePlayerContainer}>
+      {/* YouTube Player - Always render but hide when showMediaPlayer is false */}
+      {currentTrack && (currentTrack.url?.includes('youtube') || currentTrack.url?.includes('youtu.be')) && (
+        <View style={[
+          styles.youtubePlayerContainer,
+          !showMediaPlayer && styles.hiddenPlayer
+        ]}>
           <YouTubePlayer
             track={currentTrack}
             isPlaying={isPlaying}
@@ -347,9 +350,12 @@ export const RoomMainTab: React.FC<RoomMainTabProps> = ({
         </View>
       )}
 
-      {/* SoundCloud Player - Show for SoundCloud tracks (separate from NowPlayingCard) */}
-      {showMediaPlayer && currentTrack && currentTrack.url?.includes('soundcloud.com') && (
-        <View style={styles.youtubePlayerContainer}>
+      {/* SoundCloud Player - Always render but hide when showMediaPlayer is false */}
+      {currentTrack && currentTrack.url?.includes('soundcloud.com') && (
+        <View style={[
+          styles.youtubePlayerContainer,
+          !showMediaPlayer && styles.hiddenPlayer
+        ]}>
           <SoundCloudPlayer
             track={currentTrack}
             isPlaying={isPlaying}

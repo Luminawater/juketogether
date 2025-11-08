@@ -8,6 +8,17 @@ export const roomScreenStyles = StyleSheet.create({
     marginBottom: IS_MOBILE ? 12 : 16,
     width: '100%',
   },
+  hiddenPlayer: {
+    position: 'absolute',
+    left: -9999,
+    width: 1,
+    height: 1,
+    opacity: 0,
+    overflow: 'hidden',
+    pointerEvents: 'none',
+    zIndex: -1,
+    marginBottom: 0,
+  },
   container: {
     flex: 1,
   },
