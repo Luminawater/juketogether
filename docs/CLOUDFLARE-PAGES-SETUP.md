@@ -27,13 +27,14 @@ Configure the following settings in Cloudflare Pages:
   - Note: Cloudflare doesn't have a specific Expo preset, so use a generic static site preset
 
 #### Build Settings
-- **Build command**: 
+- **Build command** (recommended):
   ```bash
-  npm install && npm run build:cloudflare
+  cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build && cd .. && echo "/*    /index.html   200" > web-build/_redirects
   ```
-  Or if you prefer the direct command:
+
+- **Alternative build command** (if the above fails):
   ```bash
-  cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build
+  npm run build:cloudflare:direct
   ```
 
 - **Build output directory**: `web-build`
@@ -50,14 +51,16 @@ Add the following environment variables in Cloudflare Pages:
   - If you need full WebSocket support, deploy a separate WebSocket server (e.g., on Railway, Render, or Fly.io)
   - Then set this variable to your WebSocket server URL
 
-### 3. Build Script
+### 3. Build Scripts
 
-The project includes a `build:cloudflare` script that:
-1. Builds the Expo web app
-2. Copies the `_redirects` file for SPA routing support
+The project includes build scripts for Cloudflare Pages:
+
+- `build:cloudflare`: Standard build (may have npm chaining issues on Cloudflare)
+- `build:cloudflare:direct`: Direct build command (recommended for Cloudflare Pages)
 
 ```json
-"build:cloudflare": "npm run build:web && node scripts/copy-redirects.js"
+"build:cloudflare": "npm run build:web && node scripts/copy-redirects.js",
+"build:cloudflare:direct": "cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build && cd .. && node scripts/copy-redirects.js"
 ```
 
 ### 4. SPA Routing
@@ -69,6 +72,8 @@ The `_redirects` file in the `web-build` directory ensures that all routes serve
 ```
 
 This is automatically created during the build process.
+
+**Note:** If using the direct build command, the `_redirects` file is created inline with `echo "/*    /index.html   200" > web-build/_redirects`.
 
 ## Deployment Process
 

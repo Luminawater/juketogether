@@ -17,14 +17,14 @@ When setting up the project in Cloudflare Pages, use these exact settings:
 - **Framework preset**: `None` or `Create React App`
   - ⚠️ **Note**: This is an Expo app, not Next.js. Do not use the Next.js preset.
 
-- **Build command**: 
+- **Build command** (recommended):
   ```
-  npm install && npm run build:cloudflare
+  cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build && cd .. && echo "/*    /index.html   200" > web-build/_redirects
   ```
-  
-  Or alternatively (direct command):
+
+  Or alternative:
   ```
-  cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build
+  npm run build:cloudflare:direct
   ```
 
 - **Build output directory**: `web-build`
@@ -44,9 +44,9 @@ Add these if needed for build-time configuration:
 
 ## Build Command Breakdown
 
-The `build:cloudflare` script does:
-1. `npm run build:web` - Builds the Expo web app to `web-build/`
-2. `node scripts/copy-redirects.js` - Copies `_redirects` file for SPA routing
+Build commands:
+1. Direct command: Builds Expo web app and creates `_redirects` inline
+2. `build:cloudflare:direct`: Same as direct command but using npm script
 
 ## After Setup
 
