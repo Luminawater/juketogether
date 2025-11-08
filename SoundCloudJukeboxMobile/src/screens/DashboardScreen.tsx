@@ -168,73 +168,92 @@ const DashboardScreen: React.FC = () => {
           });
           if (setError) {
             console.error('[DashboardScreen] Failed to set session:', setError);
-            throw new Error('Session restoration failed. Please sign in again.');
+            // Don't throw - let the query fail gracefully instead of redirecting
+            console.warn('[DashboardScreen] Session restoration failed, but continuing anyway');
+            // The query will likely fail, but we'll handle it gracefully
+          } else {
+            console.log('[DashboardScreen] Session manually restored, retrying query...');
           }
-          console.log('[DashboardScreen] Session manually restored, retrying query...');
         } else {
-          throw new Error('No active session. Please sign in again.');
+          // No session at all - this is a real auth issue
+          console.error('[DashboardScreen] No session in context either - user needs to sign in');
+          // Don't throw here - let the query fail and handle it in error handling
+          // The App.tsx will handle redirect if user is actually null
         }
       }
       
-      // First, test basic connectivity with a simple query
-      console.log('[DashboardScreen] Testing Supabase connectivity...');
-
-      try {
-        const { data: testData, error: testError } = await Promise.race([
-          supabase.from('rooms').select('count').limit(1),
-          new Promise<{ data: null; error: any }>((resolve) =>
-            setTimeout(() => resolve({
-              data: null,
-              error: { message: 'Connection test timeout after 3 seconds', code: 'TIMEOUT' }
-            }), 3000)
-          )
-        ]);
-
-        if (testError && testError.code === 'TIMEOUT') {
-          console.error('[DashboardScreen] Supabase connection test failed - network issue');
-          throw new Error('Cannot connect to database. Please check your internet connection.');
-        }
-
-        console.log('[DashboardScreen] Supabase connection OK, test result:', testData, testError);
-      } catch (error) {
-        console.error('[DashboardScreen] Connection test failed:', error);
-        // Continue anyway - might be a temporary issue
-      }
-
       console.log('[DashboardScreen] Querying rooms for user:', userId);
+      console.log('[DashboardScreen] Session check:', {
+        hasSession: !!session,
+        sessionUser: session?.user?.id,
+        accessToken: session?.access_token ? 'present' : 'missing'
+      });
 
-      // For now, let's use a hardcoded test with the known user ID to bypass any auth issues
-      const testUserId = '0482b609-cf0a-4742-84b6-405615e80fc9'; // Known user ID from database
+      // Note: We don't throw here if session is missing - let the query fail gracefully
+      // The App.tsx will handle redirect if user is actually null
 
-      console.log('[DashboardScreen] Using test user ID for debugging:', testUserId);
-
+      // Query rooms with timeout protection
+      console.log('[DashboardScreen] Executing rooms query with 8s timeout...');
+      
+      const startTime = Date.now();
+      const queryPromise = supabase
+        .from('rooms')
+        .select('id, host_user_id, updated_at')
+        .eq('host_user_id', userId)
+        .order('updated_at', { ascending: false })
+        .limit(50);
+      
+      // Add timeout wrapper
+      const timeoutPromise = new Promise<{ data: null; error: any }>((resolve) =>
+        setTimeout(() => resolve({
+          data: null,
+          error: { message: 'Query timeout after 8 seconds', code: 'TIMEOUT' }
+        }), 8000)
+      );
+      
       const { data: roomsData, error: roomsError } = await Promise.race([
-        supabase
-          .from('rooms')
-          .select('id, host_user_id, updated_at')
-          .eq('host_user_id', testUserId) // Use test user ID
-          .order('updated_at', { ascending: false })
-          .limit(50),
-        new Promise<{ data: null; error: any }>((resolve) =>
-          setTimeout(() => resolve({
-            data: null,
-            error: { message: 'Rooms query timeout after 5 seconds', code: 'TIMEOUT' }
-          }), 5000)
-        )
+        queryPromise,
+        timeoutPromise
       ]);
+      
+      const queryTime = Date.now() - startTime;
+      console.log('[DashboardScreen] Query completed in', queryTime, 'ms. Data:', roomsData?.length || 0, 'Error:', roomsError);
 
       if (roomsError) {
         console.error('[DashboardScreen] Rooms query error:', roomsError);
+        console.error('[DashboardScreen] Error details:', JSON.stringify(roomsError, null, 2));
+        
+        // Handle timeout errors gracefully - don't throw, just show empty state
         if (roomsError.code === 'TIMEOUT') {
-          throw new Error('Query timed out. Please check your connection and try again.');
+          console.warn('[DashboardScreen] Query timed out, showing empty state');
+          setRooms([]);
+          Alert.alert(
+            'Connection Timeout',
+            'Unable to load rooms. Please check your connection and try again.',
+            [{ text: 'OK' }]
+          );
+          return;
         }
-        throw roomsError;
+        
+        // For other errors, check if it's an auth error
+        if (roomsError.message?.includes('JWT') || roomsError.message?.includes('session') || roomsError.message?.includes('unauthorized')) {
+          console.error('[DashboardScreen] Auth error detected, will redirect to login');
+          throw roomsError;
+        }
+        
+        // For other errors, show empty state instead of crashing
+        console.warn('[DashboardScreen] Non-critical error, showing empty state');
+        setRooms([]);
+        Alert.alert('Error', 'Failed to load rooms. Please try again later.');
+        return;
       }
 
       console.log('[DashboardScreen] Basic rooms query successful, found:', roomsData?.length || 0, 'rooms');
+      console.log('[DashboardScreen] Rooms data:', roomsData);
 
       if (!roomsData || roomsData.length === 0) {
-        console.log('[DashboardScreen] No rooms found for user');
+        console.log('[DashboardScreen] No rooms found for user:', userId);
+        console.log('[DashboardScreen] This might be normal if the user hasn\'t created any rooms yet');
         setRooms([]);
         return;
       }
@@ -242,7 +261,7 @@ const DashboardScreen: React.FC = () => {
       console.log('[DashboardScreen] Found', roomsData.length, 'rooms, fetching settings...');
 
       // Get room settings separately
-      const roomIds = roomsData.map(r => r.id);
+      const roomIds = roomsData.map((r: any) => r.id);
       console.log('[DashboardScreen] Fetching settings for rooms:', roomIds);
 
       const settingsResult = await Promise.race([
@@ -289,7 +308,7 @@ const DashboardScreen: React.FC = () => {
           name: settings?.name || 'Unnamed Room',
           description: settings?.description || null,
           type: (settings?.is_private ? 'private' : 'public') as 'public' | 'private',
-          created_by: testUserId, // Use test user ID for consistency
+          created_by: userId,
           created_at: settings?.created_at || room.updated_at || new Date().toISOString(),
           short_code: room.short_code || null,
         };

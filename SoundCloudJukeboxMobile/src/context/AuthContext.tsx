@@ -1,109 +1,34 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
-import { Platform } from 'react-native';
+import { createClient, SupabaseClient, User, Session, processLock } from '@supabase/supabase-js';
+import { Platform, AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/constants';
 import { UserProfile, UserPermissions } from '../types';
 
-// Conditionally import SecureStore only on mobile
-let SecureStore: typeof import('expo-secure-store') | null = null;
-if (Platform.OS !== 'web') {
-  try {
-    SecureStore = require('expo-secure-store');
-  } catch (e) {
-    console.warn('expo-secure-store not available');
-  }
-}
-
-// localStorage helper functions for web
-const localStorageHelpers = {
-  get: (key: string): string | null => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
-    try {
-      return window.localStorage.getItem(key);
-    } catch (error) {
-      console.error('[localStorage] Error getting item:', error);
-      return null;
-    }
-  },
-  set: (key: string, value: string): void => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-    try {
-      window.localStorage.setItem(key, value);
-    } catch (error) {
-      console.error('[localStorage] Error setting item:', error);
-    }
-  },
-  remove: (key: string): void => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-    try {
-      window.localStorage.removeItem(key);
-    } catch (error) {
-      console.error('[localStorage] Error removing item:', error);
-    }
-  },
-};
-
-// Storage adapter for Supabase - uses SecureStore on mobile, localStorage on web
-const getStorage = () => {
-  if (Platform.OS === 'web') {
-    // Use localStorage for web with proper error handling
-    return {
-      getItem: (key: string) => {
-        const value = localStorageHelpers.get(key);
-        return Promise.resolve(value);
-      },
-      setItem: (key: string, value: string) => {
-        localStorageHelpers.set(key, value);
-        return Promise.resolve();
-      },
-      removeItem: (key: string) => {
-        localStorageHelpers.remove(key);
-        return Promise.resolve();
-      },
-    };
-  }
-  // Use SecureStore for mobile (secure encrypted storage)
-  if (!SecureStore) {
-    // Fallback to AsyncStorage if SecureStore is not available
-    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-    return AsyncStorage;
-  }
-  
-  return {
-    getItem: async (key: string) => {
-      try {
-        return await SecureStore!.getItemAsync(key);
-      } catch (error) {
-        console.error('[SecureStore] Error getting item:', error);
-        return null;
-      }
-    },
-    setItem: async (key: string, value: string) => {
-      try {
-        await SecureStore!.setItemAsync(key, value);
-      } catch (error) {
-        console.error('[SecureStore] Error setting item:', error);
-      }
-    },
-    removeItem: async (key: string) => {
-      try {
-        await SecureStore!.deleteItemAsync(key);
-      } catch (error) {
-        console.error('[SecureStore] Error removing item:', error);
-      }
-    },
-  };
-};
-
-// Initialize Supabase client
+// Initialize Supabase client following official React Native guide
+// https://supabase.com/docs/guides/auth/quickstarts/react-native
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    storage: getStorage(),
+    // Use AsyncStorage for React Native, default localStorage for web
+    ...(Platform.OS !== 'web' ? { storage: AsyncStorage } : {}),
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: Platform.OS === 'web',
+    detectSessionInUrl: false, // Disable for React Native
+    lock: processLock,
   },
 });
+
+// Tells Supabase Auth to continuously refresh the session automatically
+// if the app is in the foreground. This should only be registered once.
+if (Platform.OS !== 'web') {
+  AppState.addEventListener('change', (state) => {
+    if (state === 'active') {
+      supabase.auth.startAutoRefresh();
+    } else {
+      supabase.auth.stopAutoRefresh();
+    }
+  });
+}
 
 interface AuthContextType {
   user: User | null;
