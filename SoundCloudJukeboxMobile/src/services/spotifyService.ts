@@ -141,12 +141,111 @@ export const fetchPlaylistTracks = async (
   }
 };
 
+
+/**
+ * Extract Spotify track ID from URL
+ */
+export const extractSpotifyTrackId = (url: string): string | null => {
+  try {
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/').filter(p => p);
+    
+    if (pathParts.length >= 2 && pathParts[0] === 'track') {
+      const id = pathParts[1];
+      return id.split('?')[0];
+    }
+  } catch (e) {
+    // Try regex fallback
+    const match = url.match(/spotify\.com\/track\/([a-zA-Z0-9]{22})/);
+    if (match) {
+      return match[1];
+    }
+  }
+  return null;
+};
+
+export interface SpotifyTrackInfo {
+  title: string;
+  artist: string | null;
+  fullTitle: string;
+  url: string;
+  thumbnail: string | null;
+  duration: number | null;
+}
+
+/**
+ * Fetch Spotify track metadata from a URL
+ */
+export const fetchSpotifyTrackMetadata = async (
+  url: string,
+  session: any
+): Promise<SpotifyTrackInfo> => {
+  try {
+    if (!session?.access_token) {
+      throw new Error('No session token available');
+    }
+
+    const trackId = extractSpotifyTrackId(url);
+    if (!trackId) {
+      throw new Error('Invalid Spotify URL');
+    }
+
+    const response = await fetch(`${API_URL}/api/spotify/playlists/tracks/metadata`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ trackId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(errorData.error || 'Spotify authentication required. Please sign in with Spotify.');
+      }
+      throw new Error(errorData.error || `Failed to fetch track metadata: ${response.status}`);
+    }
+
+    const track = await response.json();
+
+    // Ensure we have at least a title
+    if (!track.name) {
+      throw new Error('Track name not found in response');
+    }
+
+    const artistNames = track.artists?.map((a: any) => a.name).join(', ') || null;
+    const title = track.name;
+
+    return {
+      title: title,
+      artist: artistNames,
+      fullTitle: artistNames ? `${artistNames} - ${title}` : title,
+      url: track.external_urls?.spotify || url,
+      thumbnail: track.album?.images?.[0]?.url || null,
+      duration: track.duration_ms ? Math.floor(track.duration_ms / 1000) : null,
+    };
+  } catch (error: any) {
+    console.error('Error fetching Spotify track metadata:', error);
+    
+    // Return fallback info
+    return {
+      title: 'Unknown Track',
+      artist: null,
+      fullTitle: 'Unknown Track',
+      url: url,
+      thumbnail: null,
+      duration: null,
+    };
+  }
+};
+
 /**
  * Convert Spotify track to queue track format
  */
 export const spotifyTrackToQueueTrack = (track: SpotifyTrack, addedBy: string) => {
   const trackUrl = track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`;
-  
+
   return {
     id: `spotify-${track.id}`,
     url: trackUrl,

@@ -56,6 +56,7 @@ import {
   fetchUserPlaylists,
   fetchPlaylistTracks,
   spotifyTrackToQueueTrack,
+  fetchSpotifyTrackMetadata,
   SpotifyPlaylist,
   SpotifyTrack,
 } from '../services/spotifyService';
@@ -179,7 +180,7 @@ const RoomScreen: React.FC = () => {
     likes: 0,
     dislikes: 0,
     fantastic: 0,
-    userReaction: null,
+    userReactions: [],
   });
   const [loadingReaction, setLoadingReaction] = useState(false);
 
@@ -801,7 +802,7 @@ const RoomScreen: React.FC = () => {
     if (currentTrack && user) {
       loadTrackReactions();
     } else {
-      setTrackReactions({ likes: 0, dislikes: 0, fantastic: 0, userReaction: null });
+      setTrackReactions({ likes: 0, dislikes: 0, fantastic: 0, userReactions: [] });
     }
   }, [currentTrack?.id, roomId, user?.id]);
 
@@ -903,8 +904,11 @@ const RoomScreen: React.FC = () => {
         currentTrack // Pass the full track object to save to user preferences
       );
 
-      if (result.success) {
-        // Reload reactions to get updated counts
+      if (result.success && result.reactions) {
+        // Use the returned reaction counts instead of making another database call
+        setTrackReactions(result.reactions);
+      } else if (result.success) {
+        // Fallback: reload reactions if counts weren't returned
         await loadTrackReactions();
       } else {
         Alert.alert('Error', result.error || 'Failed to update reaction');
@@ -1265,9 +1269,14 @@ const RoomScreen: React.FC = () => {
               // Continue with null trackInfo - server will use fallback
             }
           } else if (isSpotify) {
-            platform = 'spotify';
-            // Spotify tracks should be added via the Spotify search/playlist interface
-            // For direct URLs, we'll let the server handle it
+            try {
+              trackInfo = await fetchSpotifyTrackMetadata(url, session);
+              platform = 'spotify';
+            } catch (error) {
+              console.error('Error fetching Spotify metadata:', error);
+              platform = 'spotify';
+              // Continue with null trackInfo - server will use fallback
+            }
           } else if (isYouTube) {
             try {
               trackInfo = await fetchYouTubeTrackMetadata(url);

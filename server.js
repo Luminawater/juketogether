@@ -760,23 +760,36 @@ io.on('connection', (socket) => {
     const creatorTier = await getRoomCreatorTier(roomId);
     const tierSettings = await getTierSettings(creatorTier);
     const queueLimit = tierSettings.queue_limit;
-    
+
     // Check if queue limit is reached (null means unlimited)
     if (queueLimit !== null && room.queue.length >= queueLimit) {
-      socket.emit('error', { 
-        message: `Queue limit reached (${queueLimit} songs). The room creator needs to upgrade to ${creatorTier === 'free' ? 'Standard or Pro' : 'Pro'} tier to increase the limit.` 
+      socket.emit('error', {
+        message: `Queue limit reached (${queueLimit} songs). The room creator needs to upgrade to ${creatorTier === 'free' ? 'Standard or Pro' : 'Pro'} tier to increase the limit.`
       });
       return;
     }
-    
+
+    // Fetch Spotify metadata if not provided
+    let finalTrackInfo = trackInfo;
+    if (platform === 'spotify' && (!trackInfo || !trackInfo.title || trackInfo.title === 'Unknown Track')) {
+      try {
+        console.log(`Fetching Spotify metadata for track: ${trackUrl}`);
+        finalTrackInfo = await fetchSpotifyMetadata(trackUrl, socket);
+        console.log(`Fetched Spotify metadata:`, finalTrackInfo?.title);
+      } catch (error) {
+        console.error('Failed to fetch Spotify metadata:', error);
+        // Continue with null trackInfo - will use fallbacks
+      }
+    }
+
     // Ensure trackInfo has required fields with fallbacks
     const normalizedTrackInfo = {
-      title: trackInfo?.title || 'Unknown Track',
-      artist: trackInfo?.artist || 'Unknown Artist',
-      fullTitle: trackInfo?.fullTitle || trackInfo?.title || 'Unknown Track',
-      url: trackInfo?.url || trackUrl,
-      thumbnail: trackInfo?.thumbnail || null,
-      duration: trackInfo?.duration || null
+      title: finalTrackInfo?.title || 'Unknown Track',
+      artist: finalTrackInfo?.artist || 'Unknown Artist',
+      fullTitle: finalTrackInfo?.fullTitle || finalTrackInfo?.title || 'Unknown Track',
+      url: finalTrackInfo?.url || trackUrl,
+      thumbnail: finalTrackInfo?.thumbnail || null,
+      duration: finalTrackInfo?.duration || null
     };
     
     const track = {
@@ -2455,6 +2468,152 @@ app.post('/api/spotify-metadata', async (req, res) => {
   } catch (error) {
     console.error('Error proxying Spotify API request:', error);
     res.status(500).json({ error: 'Failed to fetch Spotify data', details: error.message });
+  }
+});
+
+// Helper function to fetch Spotify metadata for a track URL
+async function fetchSpotifyMetadata(trackUrl, socket) {
+  try {
+    // Extract Spotify ID from URL
+    const spotifyId = extractSpotifyId(trackUrl);
+    if (!spotifyId) {
+      throw new Error('Invalid Spotify URL');
+    }
+
+    // Get the user's Spotify access token from the socket session
+    if (!socket.isAuthenticated || !socket.supabaseToken) {
+      throw new Error('User not authenticated with Supabase');
+    }
+
+    // Get user's Spotify token by calling the user-token endpoint
+    // We need to construct the URL manually since we're not in a request context
+    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+    const host = process.env.HOST || 'localhost:3000';
+    const baseUrl = `${protocol}://${host}`;
+
+    const tokenResponse = await fetch(`${baseUrl}/api/spotify/user-token`, {
+      headers: {
+        'Authorization': `Bearer ${socket.supabaseToken}`
+      }
+    });
+
+    if (!tokenResponse.ok) {
+      throw new Error('Failed to get Spotify token');
+    }
+
+    const { access_token } = await tokenResponse.json();
+    if (!access_token) {
+      throw new Error('No Spotify access token available');
+    }
+
+    // Fetch track from Spotify API
+    const response = await fetch(`https://api.spotify.com/v1/tracks/${spotifyId}`, {
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Spotify API error: ${response.status}`);
+    }
+
+    const track = await response.json();
+
+    return {
+      title: track.name,
+      artist: track.artists.map(artist => artist.name).join(', '),
+      fullTitle: `${track.artists.map(artist => artist.name).join(', ')} - ${track.name}`,
+      url: track.external_urls?.spotify || trackUrl,
+      thumbnail: track.album?.images?.[0]?.url || null,
+      duration: track.duration_ms ? Math.floor(track.duration_ms / 1000) : null,
+    };
+  } catch (error) {
+    console.error('Error fetching Spotify metadata:', error);
+    return null;
+  }
+}
+
+// Helper function to extract Spotify ID from URL
+function extractSpotifyId(url) {
+  try {
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/').filter(p => p);
+
+    if (pathParts.length >= 2) {
+      const id = pathParts[pathParts.length - 1];
+      return id.split('?')[0];
+    }
+  } catch (e) {
+    // Try regex fallback
+    const match = url.match(/spotify\.com\/(?:.*\/)?([a-zA-Z0-9]{22})/);
+    if (match) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
+// Fetch individual Spotify track metadata
+app.post('/api/spotify/playlists/tracks/metadata', async (req, res) => {
+  if (!fetch) {
+    return res.status(500).json({ error: 'Fetch not available' });
+  }
+
+  try {
+    const { trackId } = req.body;
+    if (!trackId) {
+      return res.status(400).json({ error: 'trackId parameter is required' });
+    }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization required' });
+    }
+
+    const supabaseToken = authHeader.split(' ')[1];
+
+    // Get the user's Spotify access token
+    const tokenResponse = await fetch(`${req.protocol}://${req.get('host')}/api/spotify/user-token`, {
+      headers: {
+        'Authorization': `Bearer ${supabaseToken}`
+      }
+    });
+
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.json().catch(() => ({}));
+      return res.status(tokenResponse.status).json(errorData);
+    }
+
+    const { access_token } = await tokenResponse.json();
+
+    if (!access_token) {
+      return res.status(401).json({ error: 'No Spotify access token available' });
+    }
+
+    // Fetch track from Spotify API
+    const response = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        return res.status(401).json({
+          error: 'Spotify access token expired. Please reconnect your Spotify account.',
+          requiresReauth: true
+        });
+      }
+      throw new Error(`Spotify API error: ${response.status}`);
+    }
+
+    const track = await response.json();
+    res.json(track);
+  } catch (error) {
+    console.error('Error fetching Spotify track metadata:', error);
+    res.status(500).json({ error: 'Failed to fetch Spotify track data', details: error.message });
   }
 });
 

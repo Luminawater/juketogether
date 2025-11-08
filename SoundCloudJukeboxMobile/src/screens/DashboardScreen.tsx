@@ -58,6 +58,7 @@ const DashboardScreen: React.FC = () => {
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
+  const [creatingRoom, setCreatingRoom] = useState(false);
   const [createDialogVisible, setCreateDialogVisible] = useState(false);
   const [joinDialogVisible, setJoinDialogVisible] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
@@ -384,10 +385,26 @@ const DashboardScreen: React.FC = () => {
       return;
     }
 
+    if (creatingRoom) return; // Prevent multiple simultaneous room creations
+
     try {
+      setCreatingRoom(true);
+
+      // Check if a room with this name already exists
+      const { data: existingRoom } = await supabase
+        .from('room_settings')
+        .select('room_id, name')
+        .eq('name', roomName.trim())
+        .maybeSingle();
+
+      if (existingRoom) {
+        Alert.alert('Room Already Exists', `A room named "${roomName.trim()}" already exists. Please choose a different name.`);
+        return;
+      }
+
       const roomId = generateRoomId();
       const shortCode = await generateShortCode();
-      
+
       // First, create the room entry
       const { data: roomData, error: roomError } = await supabase
         .from('rooms')
@@ -441,6 +458,8 @@ const DashboardScreen: React.FC = () => {
     } catch (error) {
       console.error('Error creating room:', error);
       Alert.alert('Error', 'Failed to create room');
+    } finally {
+      setCreatingRoom(false);
     }
   };
 
@@ -520,7 +539,11 @@ const DashboardScreen: React.FC = () => {
   };
 
   const generateRoomId = () => {
-    return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+    // Generate a unique room ID with high collision resistance
+    const timestamp = Date.now().toString(36);
+    const random1 = Math.random().toString(36).substr(2, 8);
+    const random2 = Math.random().toString(36).substr(2, 8);
+    return `${timestamp}-${random1}-${random2}`;
   };
 
   // Generate unique short code (5 characters, uppercase alphanumeric)
@@ -857,7 +880,9 @@ const DashboardScreen: React.FC = () => {
             }}>
               Cancel
             </Button>
-            <Button onPress={createRoom} mode="contained">Create</Button>
+            <Button onPress={createRoom} mode="contained" disabled={creatingRoom} loading={creatingRoom}>
+              {creatingRoom ? 'Creating...' : 'Create'}
+            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

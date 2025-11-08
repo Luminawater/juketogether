@@ -561,6 +561,137 @@ app.post('/api/soundcloud-resolve', async (req, res) => {
   }
 });
 
+// Helper function to extract Spotify ID from URL
+function extractSpotifyId(url) {
+  try {
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/').filter(p => p);
+    
+    if (pathParts.length >= 2 && pathParts[0] === 'track') {
+      const id = pathParts[1];
+      return id.split('?')[0];
+    }
+  } catch (e) {
+    // Try regex fallback
+    const match = url.match(/spotify\.com\/track\/([a-zA-Z0-9]{22})/);
+    if (match) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
+// Get user's Spotify access token from Supabase session
+app.get('/api/spotify/user-token', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization required' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+
+    // Verify the Supabase token and get user
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
+
+    // Check if user signed in with Spotify
+    const isSpotifyUser = user.app_metadata?.provider === 'spotify' || 
+                         user.identities?.some(identity => identity.provider === 'spotify');
+    
+    if (!isSpotifyUser) {
+      return res.status(403).json({ error: 'User is not signed in with Spotify' });
+    }
+
+    // Try to get provider token from user metadata or identities
+    const providerToken = user.user_metadata?.spotify_access_token ||
+                          user.identities?.find(i => i.provider === 'spotify')?.identity_data?.access_token;
+    
+    if (!providerToken) {
+      return res.status(401).json({ 
+        error: 'Spotify access token not available. Please reconnect your Spotify account.',
+        requiresReauth: true
+      });
+    }
+    
+    return res.json({ access_token: providerToken });
+  } catch (error) {
+    console.error('Error getting Spotify user token:', error);
+    res.status(500).json({ error: 'Failed to get Spotify token', details: error.message });
+  }
+});
+
+// Fetch individual Spotify track metadata
+app.post('/api/spotify/playlists/tracks/metadata', async (req, res) => {
+  if (!fetch) {
+    return res.status(500).json({ error: 'Fetch not available' });
+  }
+
+  try {
+    const { trackId } = req.body;
+    if (!trackId) {
+      return res.status(400).json({ error: 'trackId parameter is required' });
+    }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization required' });
+    }
+
+    const supabaseToken = authHeader.split(' ')[1];
+
+    // Get the user's Spotify access token
+    const baseUrl = req.protocol + '://' + req.get('host');
+    const tokenResponse = await fetch(`${baseUrl}/api/spotify/user-token`, {
+      headers: {
+        'Authorization': `Bearer ${supabaseToken}`
+      }
+    });
+
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.json().catch(() => ({}));
+      return res.status(tokenResponse.status).json(errorData);
+    }
+
+    const { access_token } = await tokenResponse.json();
+
+    if (!access_token) {
+      return res.status(401).json({ error: 'No Spotify access token available' });
+    }
+
+    // Fetch track from Spotify API
+    const response = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        return res.status(401).json({
+          error: 'Spotify access token expired. Please reconnect your Spotify account.',
+          requiresReauth: true
+        });
+      }
+      throw new Error(`Spotify API error: ${response.status}`);
+    }
+
+    const track = await response.json();
+    res.json(track);
+  } catch (error) {
+    console.error('Error fetching Spotify track metadata:', error);
+    res.status(500).json({ error: 'Failed to fetch Spotify track data', details: error.message });
+  }
+});
+
 // Root route is now handled by Vercel static build (Expo web app)
 // app.get('/', ...) removed - Vercel serves index.html from web-build
 

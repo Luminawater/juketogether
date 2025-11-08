@@ -172,13 +172,13 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
                     disabled={loadingReaction}
                     style={[
                       styles.reactionButtonTouchable,
-                      { backgroundColor: trackReactions.userReaction === 'like' ? 'rgba(76, 175, 80, 0.2)' : `${theme.colors.surfaceVariant}80` }
+                      { backgroundColor: trackReactions.userReactions.includes('like') ? 'rgba(25, 118, 210, 0.2)' : `${theme.colors.surfaceVariant}80` }
                     ]}
                   >
                     <MaterialCommunityIcons
                       name="thumb-up"
                       size={26}
-                      color={trackReactions.userReaction === 'like' ? '#4caf50' : theme.colors.onSurfaceVariant}
+                      color={trackReactions.userReactions.includes('like') ? '#1976d2' : theme.colors.onSurfaceVariant}
                     />
                   </TouchableOpacity>
                   <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>
@@ -192,13 +192,13 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
                     disabled={loadingReaction}
                     style={[
                       styles.reactionButtonTouchable,
-                      { backgroundColor: trackReactions.userReaction === 'dislike' ? 'rgba(244, 67, 54, 0.2)' : `${theme.colors.surfaceVariant}80` }
+                      { backgroundColor: trackReactions.userReactions.includes('dislike') ? 'rgba(97, 97, 97, 0.2)' : `${theme.colors.surfaceVariant}80` }
                     ]}
                   >
                     <MaterialCommunityIcons
                       name="thumb-down"
                       size={26}
-                      color={trackReactions.userReaction === 'dislike' ? '#f44336' : theme.colors.onSurfaceVariant}
+                      color={trackReactions.userReactions.includes('dislike') ? '#616161' : theme.colors.onSurfaceVariant}
                     />
                   </TouchableOpacity>
                   <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>
@@ -212,13 +212,13 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
                     disabled={loadingReaction}
                     style={[
                       styles.reactionButtonTouchable,
-                      { backgroundColor: trackReactions.userReaction === 'fantastic' ? 'rgba(255, 152, 0, 0.2)' : `${theme.colors.surfaceVariant}80` }
+                      { backgroundColor: trackReactions.userReactions.includes('fantastic') ? 'rgba(123, 31, 162, 0.2)' : `${theme.colors.surfaceVariant}80` }
                     ]}
                   >
                     <MaterialCommunityIcons
                       name="star"
                       size={26}
-                      color={trackReactions.userReaction === 'fantastic' ? '#ff9800' : theme.colors.onSurfaceVariant}
+                      color={trackReactions.userReactions.includes('fantastic') ? '#7b1fa2' : theme.colors.onSurfaceVariant}
                     />
                   </TouchableOpacity>
                   <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>

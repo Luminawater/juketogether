@@ -469,60 +469,6 @@ export const RoomMainTab: React.FC<RoomMainTabProps> = ({
         />
       )}
 
-      {/* Add Track */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="plus-circle" size={22} color={theme.colors.primary} />
-            <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Add Track
-            </Title>
-          </View>
-          {!user && (
-            <View style={[styles.infoNotice, { backgroundColor: `${theme.colors.primary}15` }]}>
-              <MaterialCommunityIcons name="information" size={18} color={theme.colors.primary} />
-              <Text style={[styles.infoNoticeText, { color: theme.colors.primary }]}>
-                Sign up to add tracks to the queue
-              </Text>
-            </View>
-          )}
-          {user && !isOwner && !isAdmin && !roomSettings.allowQueue && (
-            <View style={[styles.permissionNoticeContainer, { backgroundColor: `${theme.colors.error}15` }]}>
-              <MaterialCommunityIcons name="alert-circle" size={16} color={theme.colors.error} />
-              <Text style={[styles.permissionNotice, { color: theme.colors.error }]}>
-                Only room owner and admins can add tracks to the queue
-              </Text>
-            </View>
-          )}
-          <TextInput
-            label="SoundCloud, Spotify, or YouTube URL"
-            value={trackUrl}
-            onChangeText={setTrackUrl}
-            mode="outlined"
-            placeholder="Paste URL(s) or text with URLs..."
-            multiline
-            numberOfLines={3}
-            style={styles.urlInput}
-            editable={!!user && (isOwner || isAdmin || roomSettings.allowQueue)}
-            onSubmitEditing={addTrack}
-            outlineColor={theme.colors.primary}
-            activeOutlineColor={theme.colors.primary}
-          />
-          <Button
-            mode="contained"
-            onPress={addTrack}
-            loading={loading}
-            disabled={loading || !user || (!isOwner && !isAdmin && !roomSettings.allowQueue)}
-            style={styles.addButton}
-            buttonColor={theme.colors.primary}
-            textColor={theme.colors.onPrimary}
-            icon="plus"
-          >
-            {user ? 'Add to Queue' : 'Sign Up to Add Tracks'}
-          </Button>
-        </Card.Content>
-      </Card>
-
       {/* Queue */}
       <Card style={[styles.card, styles.queueCard]}>
         <Card.Content style={styles.queueCardContent}>
