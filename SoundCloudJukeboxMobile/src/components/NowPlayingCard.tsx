@@ -23,6 +23,8 @@ interface NowPlayingCardProps {
   autoplay: boolean;
   onToggleAutoplay: () => void;
   canToggleAutoplay: boolean;
+  showMediaPlayer: boolean;
+  onToggleShowMediaPlayer: () => void;
   position?: number; // Position in milliseconds
   duration?: number; // Duration in milliseconds
   onAddToPlaylist?: () => void;
@@ -46,6 +48,8 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
   autoplay,
   onToggleAutoplay,
   canToggleAutoplay,
+  showMediaPlayer,
+  onToggleShowMediaPlayer,
   position = 0,
   duration = 0,
   onAddToPlaylist,
@@ -346,6 +350,31 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
                 </View>
               </View>
             )}
+
+            {/* Show Mediaplayer Toggle */}
+            <View style={[styles.autoplayContainer, { 
+              borderTopColor: theme.colors.outline,
+              borderBottomColor: theme.colors.outline,
+              backgroundColor: `${theme.colors.surfaceVariant}20`
+            }]}>
+              <View style={styles.autoplayContent}>
+                <View style={styles.autoplayLabelContainer}>
+                  <MaterialCommunityIcons 
+                    name={showMediaPlayer ? 'video' : 'video-off'} 
+                    size={20} 
+                    color={theme.colors.onSurfaceVariant} 
+                  />
+                  <Text style={[styles.autoplayLabel, { color: theme.colors.onSurface }]}>
+                    Show Mediaplayer
+                  </Text>
+                </View>
+                <Switch
+                  value={showMediaPlayer}
+                  onValueChange={onToggleShowMediaPlayer}
+                  color={theme.colors.primary}
+                />
+              </View>
+            </View>
 
             {/* Progress Bar and Time Display - Show for SoundCloud tracks */}
             {currentTrack?.url?.includes('soundcloud.com') && duration > 0 && (

@@ -27,7 +27,7 @@ import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { UserBadge } from '../components/UserBadge';
 import { ProfileHeader } from '../components/ProfileHeader';
-import { getRemainingSongs } from '../utils/permissions';
+import { getRemainingSongs, hasTier } from '../utils/permissions';
 
 type ProfileScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Profile'>;
 
@@ -87,6 +87,10 @@ const ProfileScreen: React.FC = () => {
   const [showInLeaderboard, setShowInLeaderboard] = useState(true);
   const [showInDiscovery, setShowInDiscovery] = useState(true);
   const [isPrivateAccount, setIsPrivateAccount] = useState(false);
+  const [showLikedMedia, setShowLikedMedia] = useState(false);
+  const [showDislikedMedia, setShowDislikedMedia] = useState(false);
+  const [showFavouriteMedia, setShowFavouriteMedia] = useState(false);
+  const [publicPlaylist, setPublicPlaylist] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -98,6 +102,10 @@ const ProfileScreen: React.FC = () => {
       setShowInLeaderboard(profile.show_in_leaderboard !== false);
       setShowInDiscovery(profile.show_in_discovery !== false);
       setIsPrivateAccount(profile.is_private_account === true);
+      setShowLikedMedia(profile.show_liked_media === true);
+      setShowDislikedMedia(profile.show_disliked_media === true);
+      setShowFavouriteMedia(profile.show_favourite_media === true);
+      setPublicPlaylist(profile.public_playlist === true);
     }
   }, [profile]);
 
@@ -155,6 +163,10 @@ const ProfileScreen: React.FC = () => {
         show_in_leaderboard: showInLeaderboard,
         show_in_discovery: showInDiscovery,
         is_private_account: isPrivateAccount,
+        show_liked_media: showLikedMedia,
+        show_disliked_media: showDislikedMedia,
+        show_favourite_media: showFavouriteMedia,
+        public_playlist: publicPlaylist,
         updated_at: new Date().toISOString(),
       };
 
@@ -515,6 +527,96 @@ const ProfileScreen: React.FC = () => {
                 value={isPrivateAccount}
                 onValueChange={setIsPrivateAccount}
                 disabled={saving}
+              />
+            </View>
+
+            <Divider style={styles.divider} />
+
+            <View style={styles.privacyRow}>
+              <View style={styles.privacyInfo}>
+                <Text style={[styles.privacyLabel, { color: theme.colors.onSurface }]}>
+                  Show Liked Media
+                </Text>
+                <Paragraph style={[styles.privacyDescription, { color: theme.colors.onSurfaceVariant }]}>
+                  Allow others to see your liked media in your public playlist
+                </Paragraph>
+              </View>
+              <Switch
+                value={showLikedMedia}
+                onValueChange={setShowLikedMedia}
+                disabled={saving}
+              />
+            </View>
+
+            <Divider style={styles.divider} />
+
+            <View style={styles.privacyRow}>
+              <View style={styles.privacyInfo}>
+                <Text style={[styles.privacyLabel, { color: theme.colors.onSurface }]}>
+                  Show Disliked Media
+                </Text>
+                <Paragraph style={[styles.privacyDescription, { color: theme.colors.onSurfaceVariant }]}>
+                  Allow others to see your disliked media in your public playlist
+                </Paragraph>
+              </View>
+              <Switch
+                value={showDislikedMedia}
+                onValueChange={setShowDislikedMedia}
+                disabled={saving}
+              />
+            </View>
+
+            <Divider style={styles.divider} />
+
+            <View style={styles.privacyRow}>
+              <View style={styles.privacyInfo}>
+                <Text style={[styles.privacyLabel, { color: theme.colors.onSurface }]}>
+                  Show Favourite Media
+                </Text>
+                <Paragraph style={[styles.privacyDescription, { color: theme.colors.onSurfaceVariant }]}>
+                  Allow others to see your favourite media in your public playlist
+                </Paragraph>
+              </View>
+              <Switch
+                value={showFavouriteMedia}
+                onValueChange={setShowFavouriteMedia}
+                disabled={saving}
+              />
+            </View>
+
+            <Divider style={styles.divider} />
+
+            <View style={styles.privacyRow}>
+              <View style={styles.privacyInfo}>
+                <Text style={[
+                  styles.privacyLabel, 
+                  { 
+                    color: profile && hasTier(profile.subscription_tier, 'standard') 
+                      ? theme.colors.onSurface 
+                      : theme.colors.onSurfaceVariant 
+                  }
+                ]}>
+                  Public Playlist
+                </Text>
+                <Paragraph style={[styles.privacyDescription, { color: theme.colors.onSurfaceVariant }]}>
+                  {profile && hasTier(profile.subscription_tier, 'standard')
+                    ? 'Make your media preferences visible to others (requires Standard tier or higher)'
+                    : 'Requires Standard tier or higher to enable'}
+                </Paragraph>
+              </View>
+              <Switch
+                value={publicPlaylist}
+                onValueChange={(value) => {
+                  if (profile && hasTier(profile.subscription_tier, 'standard')) {
+                    setPublicPlaylist(value);
+                  } else {
+                    Alert.alert(
+                      'Upgrade Required',
+                      'Public playlist requires Standard tier or higher. Please upgrade your subscription to enable this feature.'
+                    );
+                  }
+                }}
+                disabled={saving || !(profile && hasTier(profile.subscription_tier, 'standard'))}
               />
             </View>
           </Card.Content>

@@ -338,19 +338,30 @@ async function canUserPlay(roomId, userId) {
     }
     
     // Get user profile to check tier and songs played
-    const { data: profile } = await supabase
+    // Use .maybeSingle() to handle cases where profile might not exist
+    const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('subscription_tier, songs_played_count')
+      .select('subscription_tier, songs_played_count, subscription_updated_at')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
+    
+    if (profileError) {
+      console.error(`[canUserPlay] Error fetching profile for ${userId}:`, profileError);
+      // On error, allow playback (fail open)
+      return { canPlay: true, reason: null, blockedAt: null };
+    }
     
     if (!profile) {
       // No profile, treat as free tier - block immediately
+      console.log(`[canUserPlay] No profile found for ${userId}, blocking`);
       return { canPlay: false, reason: 'no_profile', blockedAt: 1, songsPlayed: 0 };
     }
     
     const tier = profile.subscription_tier || 'free';
     const songsPlayed = profile.songs_played_count || 0;
+    
+    // Log for debugging
+    console.log(`[canUserPlay] User ${userId}: tier=${tier}, songsPlayed=${songsPlayed}, updated_at=${profile.subscription_updated_at}`);
     
     // Check if user is room owner
     const room = await getRoom(roomId);
@@ -360,10 +371,12 @@ async function canUserPlay(roomId, userId) {
     if (tier === 'free') {
       // Block BEFORE 2nd song plays (after 1st song completes)
       if (songsPlayed >= 1) {
+        console.log(`[canUserPlay] Blocking free tier user ${userId} at song ${songsPlayed + 1}`);
         return { canPlay: false, reason: 'tier_limit', blockedAt: 2, songsPlayed, isOwner };
       }
       // Block BEFORE 6th song plays (after 5th song completes)
       if (songsPlayed >= 5) {
+        console.log(`[canUserPlay] Blocking free tier user ${userId} at song ${songsPlayed + 1}`);
         return { canPlay: false, reason: 'tier_limit', blockedAt: 6, songsPlayed, isOwner };
       }
     }
@@ -373,9 +386,10 @@ async function canUserPlay(roomId, userId) {
     // Pro tier: no limits
     
     // Other tiers have no limits
+    console.log(`[canUserPlay] Allowing playback for ${userId} (tier: ${tier})`);
     return { canPlay: true, reason: null, blockedAt: null, isOwner };
   } catch (error) {
-    console.error('Error checking if user can play:', error);
+    console.error('[canUserPlay] Error checking if user can play:', error);
     // On error, allow playback (fail open)
     return { canPlay: true, reason: null, blockedAt: null };
   }
@@ -946,10 +960,14 @@ io.on('connection', (socket) => {
     }
     
     // Check if user can play (tier limits)
-    const trackUserId = room.currentTrack?.addedBy || userId;
+    // For tier checking, we should check the room host's tier, not the track adder's tier
+    // This ensures the room owner's subscription controls playback
+    const trackUserId = room.hostUserId || room.currentTrack?.addedBy || userId;
+    console.log(`[next-track] Checking playback permission: roomId=${roomId}, userId=${userId}, hostUserId=${room.hostUserId}, trackUserId=${trackUserId}, currentTrack=${JSON.stringify(room.currentTrack?.id || 'none')}`);
     const playCheck = await canUserPlay(roomId, trackUserId);
     
     if (!playCheck.canPlay) {
+      console.log(`[next-track] Playback blocked: ${JSON.stringify(playCheck)}`);
       // Block playback - emit blocked event
       io.to(roomId).emit('playback-blocked', {
         reason: playCheck.reason,

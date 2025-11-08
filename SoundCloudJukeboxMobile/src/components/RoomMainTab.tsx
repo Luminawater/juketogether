@@ -52,6 +52,8 @@ interface RoomMainTabProps {
   handleReaction: (reaction: ReactionType) => void;
   loadingReaction: boolean;
   toggleAutoplay: () => void;
+  showMediaPlayer: boolean;
+  toggleShowMediaPlayer: () => void;
   isOwner: boolean;
   isAdmin: boolean;
   trackUrl: string;
@@ -110,6 +112,8 @@ export const RoomMainTab: React.FC<RoomMainTabProps> = ({
   handleReaction,
   loadingReaction,
   toggleAutoplay,
+  showMediaPlayer,
+  toggleShowMediaPlayer,
   isOwner,
   isAdmin,
   trackUrl,
@@ -260,6 +264,8 @@ export const RoomMainTab: React.FC<RoomMainTabProps> = ({
           autoplay={roomSettings.autoplay}
           onToggleAutoplay={toggleAutoplay}
           canToggleAutoplay={isOwner || isAdmin}
+          showMediaPlayer={showMediaPlayer}
+          onToggleShowMediaPlayer={toggleShowMediaPlayer}
           position={position}
           duration={duration}
           onAddToPlaylist={() => setShowQueueDialog(true)}
@@ -299,7 +305,7 @@ export const RoomMainTab: React.FC<RoomMainTabProps> = ({
       )}
 
       {/* YouTube Player - Show for YouTube tracks (separate from NowPlayingCard) */}
-      {currentTrack && (currentTrack.url?.includes('youtube') || currentTrack.url?.includes('youtu.be')) && (
+      {showMediaPlayer && currentTrack && (currentTrack.url?.includes('youtube') || currentTrack.url?.includes('youtu.be')) && (
         <View style={styles.youtubePlayerContainer}>
           <YouTubePlayer
             track={currentTrack}
@@ -342,7 +348,7 @@ export const RoomMainTab: React.FC<RoomMainTabProps> = ({
       )}
 
       {/* SoundCloud Player - Show for SoundCloud tracks (separate from NowPlayingCard) */}
-      {currentTrack && currentTrack.url?.includes('soundcloud.com') && (
+      {showMediaPlayer && currentTrack && currentTrack.url?.includes('soundcloud.com') && (
         <View style={styles.youtubePlayerContainer}>
           <SoundCloudPlayer
             track={currentTrack}

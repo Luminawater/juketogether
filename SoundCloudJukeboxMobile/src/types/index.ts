@@ -22,6 +22,10 @@ export interface UserProfile {
   show_in_leaderboard?: boolean;
   show_in_discovery?: boolean;
   is_private_account?: boolean;
+  show_liked_media?: boolean;
+  show_disliked_media?: boolean;
+  show_favourite_media?: boolean;
+  public_playlist?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -46,6 +50,8 @@ export interface Room {
   country?: string;
   follower_count?: number;
   total_playtime_seconds?: number;
+  currentTrack?: Track | null;
+  isPlaying?: boolean;
 }
 
 export interface Track {

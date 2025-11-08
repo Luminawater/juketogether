@@ -17,13 +17,14 @@ export function hasRole(userRole: UserRole, requiredRole: UserRole): boolean {
 
 /**
  * Check if a user has a specific tier or higher
- * Tier hierarchy: pro > standard > free
+ * Tier hierarchy: pro > standard > rookie > free
  */
 export function hasTier(userTier: SubscriptionTier, requiredTier: SubscriptionTier): boolean {
   const tierHierarchy: Record<SubscriptionTier, number> = {
     free: 0,
-    standard: 1,
-    pro: 2,
+    rookie: 1,
+    standard: 2,
+    pro: 3,
   };
 
   return tierHierarchy[userTier] >= tierHierarchy[requiredTier];

@@ -93,6 +93,7 @@ import { RoomMainTab } from '../components/RoomMainTab';
 import { RoomHeader } from '../components/RoomHeader';
 import { roomScreenStyles } from './RoomScreen.styles';
 import { RoomUser, Friend, RoomSettings, BlockedInfo, ActiveBoost, TierSettings } from './RoomScreen.types';
+import { localStorageHelpers } from '../utils/localStorageHelpers';
 
 type RoomScreenRouteProp = RouteProp<RootStackParamList, 'Room'>;
 type RoomScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Room'>;
@@ -155,6 +156,7 @@ const RoomScreen: React.FC = () => {
   const [showSessionExitDialog, setShowSessionExitDialog] = useState(false);
   const [miniPlayerVisible, setMiniPlayerVisible] = useState(false);
   const [floatingPlayerVisible, setFloatingPlayerVisible] = useState(false);
+  const [showMediaPlayer, setShowMediaPlayer] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
   const [shortCode, setShortCode] = useState<string | undefined>(undefined);
   const [creatorTier, setCreatorTier] = useState<'free' | 'standard' | 'pro'>('free');
@@ -214,6 +216,21 @@ const RoomScreen: React.FC = () => {
   const [adCountdown, setAdCountdown] = useState(5);
   const [songsSinceLastAd, setSongsSinceLastAd] = useState(0);
   const [purchasingBoost, setPurchasingBoost] = useState(false);
+
+  // Load showMediaPlayer preference from storage
+  useEffect(() => {
+    const loadMediaPlayerPreference = async () => {
+      try {
+        const saved = await localStorageHelpers.get('showMediaPlayer');
+        if (saved === 'true') {
+          setShowMediaPlayer(true);
+        }
+      } catch (error) {
+        console.error('Error loading media player preference:', error);
+      }
+    };
+    loadMediaPlayerPreference();
+  }, []);
 
   // Connect to Socket.io when component mounts
   useEffect(() => {
@@ -882,7 +899,8 @@ const RoomScreen: React.FC = () => {
         roomId,
         currentTrack.id,
         user.id,
-        reactionType
+        reactionType,
+        currentTrack // Pass the full track object to save to user preferences
       );
 
       if (result.success) {
@@ -1533,6 +1551,16 @@ const RoomScreen: React.FC = () => {
     });
   };
 
+  const toggleShowMediaPlayer = async () => {
+    const newValue = !showMediaPlayer;
+    setShowMediaPlayer(newValue);
+    try {
+      await localStorageHelpers.set('showMediaPlayer', newValue.toString());
+    } catch (error) {
+      console.error('Error saving media player preference:', error);
+    }
+  };
+
   const shareRoom = async () => {
     try {
       // Fetch room data including short_code if not already loaded
@@ -1715,6 +1743,8 @@ const RoomScreen: React.FC = () => {
           handleReaction={handleReaction}
           loadingReaction={loadingReaction}
           toggleAutoplay={toggleAutoplay}
+          showMediaPlayer={showMediaPlayer}
+          toggleShowMediaPlayer={toggleShowMediaPlayer}
           isOwner={isOwner}
           isAdmin={isAdmin}
           trackUrl={trackUrl}

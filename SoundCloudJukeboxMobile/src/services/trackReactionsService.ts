@@ -1,4 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import { Track } from '../types';
+import { saveMediaPreference, removeMediaPreference } from './userMediaPreferencesService';
 
 export type ReactionType = 'like' | 'dislike' | 'fantastic';
 
@@ -63,13 +65,15 @@ export async function getTrackReactions(
 
 /**
  * Add or update a reaction for a track
+ * Also saves the media to user's preferences if track is provided
  */
 export async function setTrackReaction(
   supabase: SupabaseClient,
   roomId: string,
   trackId: string,
   userId: string,
-  reactionType: ReactionType
+  reactionType: ReactionType,
+  track?: Track | null
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Check if user already has a reaction for this track
@@ -102,6 +106,14 @@ export async function setTrackReaction(
           console.error('Error removing reaction:', deleteError);
           return { success: false, error: deleteError.message };
         }
+        
+        // Also remove from user media preferences (toggle off)
+        if (track) {
+          const preferenceType = reactionType === 'fantastic' ? 'favourite' : reactionType;
+          // Remove the preference since user is toggling it off
+          await removeMediaPreference(supabase, userId, track.id, preferenceType as 'like' | 'dislike' | 'favourite');
+        }
+        
         return { success: true };
       } else {
         // Update to new reaction type using composite key
@@ -116,6 +128,18 @@ export async function setTrackReaction(
           console.error('Error updating reaction:', updateError);
           return { success: false, error: updateError.message };
         }
+        
+        // Update user media preferences
+        if (track) {
+          // Remove old preference type
+          const oldPreferenceType = existing.reaction_type === 'fantastic' ? 'favourite' : existing.reaction_type;
+          await removeMediaPreference(supabase, userId, track.id, oldPreferenceType as 'like' | 'dislike' | 'favourite');
+          
+          // Add new preference type
+          const newPreferenceType = reactionType === 'fantastic' ? 'favourite' : reactionType;
+          await saveMediaPreference(supabase, userId, track, newPreferenceType as 'like' | 'dislike' | 'favourite');
+        }
+        
         return { success: true };
       }
     } else {
@@ -132,6 +156,13 @@ export async function setTrackReaction(
         console.error('Error inserting reaction:', insertError);
         return { success: false, error: insertError.message };
       }
+      
+      // Also save to user media preferences
+      if (track) {
+        const preferenceType = reactionType === 'fantastic' ? 'favourite' : reactionType;
+        await saveMediaPreference(supabase, userId, track, preferenceType as 'like' | 'dislike' | 'favourite');
+      }
+      
       return { success: true };
     }
   } catch (error: any) {
