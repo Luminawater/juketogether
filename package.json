@@ -19,7 +19,8 @@
     "cors": "^2.8.5",
     "http-proxy-middleware": "^2.0.6",
     "@supabase/supabase-js": "^2.39.0",
-    "@supabase/ssr": "^0.0.10"
+    "@supabase/ssr": "^0.0.10",
+    "stripe": "^14.21.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

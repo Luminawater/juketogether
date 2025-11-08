@@ -5,6 +5,8 @@ import {
   ScrollView,
   Alert,
   Dimensions,
+  Linking,
+  Platform,
 } from 'react-native';
 import {
   Text,
@@ -15,12 +17,13 @@ import {
   ActivityIndicator,
   Chip,
 } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { SubscriptionTier } from '../types';
 import { getTierDisplayName, getTierColor } from '../utils/permissions';
+import { API_URL } from '../config/constants';
 
 type SubscriptionScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Subscription'>;
 
@@ -48,10 +51,43 @@ const SubscriptionScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [tiers, setTiers] = useState<TierConfig[]>([]);
   const [upgrading, setUpgrading] = useState<string | null>(null);
+  const [processingPayment, setProcessingPayment] = useState(false);
 
   useEffect(() => {
     loadTiers();
   }, []);
+
+  // Handle deep link callbacks from Stripe
+  useFocusEffect(
+    React.useCallback(() => {
+      // Check if we're returning from a successful payment
+      // This will be handled via URL parameters in web, or deep linking in mobile
+      const checkPaymentStatus = async () => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const urlParams = new URLSearchParams(window.location.search);
+          const sessionId = urlParams.get('session_id');
+          const canceled = urlParams.get('canceled');
+          
+          if (sessionId) {
+            // Payment was successful, refresh profile
+            await refreshProfile();
+            Alert.alert(
+              'Payment Successful!',
+              'Your subscription has been upgraded. Thank you!'
+            );
+            // Clean up URL
+            window.history.replaceState({}, '', '/subscription');
+          } else if (canceled) {
+            Alert.alert('Payment Canceled', 'Your payment was canceled.');
+            // Clean up URL
+            window.history.replaceState({}, '', '/subscription');
+          }
+        }
+      };
+      
+      checkPaymentStatus();
+    }, [refreshProfile])
+  );
 
   const loadTiers = async () => {
     try {
@@ -93,10 +129,11 @@ const SubscriptionScreen: React.FC = () => {
     if (!profile) return;
 
     // Don't allow downgrading
-    const tierHierarchy: Record<SubscriptionTier, number> = {
+    const tierHierarchy: Partial<Record<SubscriptionTier, number>> = {
       free: 0,
-      standard: 1,
-      pro: 2,
+      rookie: 1,
+      standard: 2,
+      pro: 3,
     };
 
     const currentTierLevel = tierHierarchy[profile.subscription_tier] || 0;
@@ -107,35 +144,82 @@ const SubscriptionScreen: React.FC = () => {
       return;
     }
 
-    setUpgrading(tier);
-    try {
-      // In a real app, this would integrate with a payment provider
-      // For now, we'll just update the tier (admin can handle payments separately)
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({
-          subscription_tier: tier,
-          subscription_updated_at: new Date().toISOString(),
-          songs_played_count: 0, // Reset count on upgrade
-        })
-        .eq('id', profile.id);
+    // Check if tier is free
+    const tierConfig = tiers.find(t => t.tier === tier);
+    if (tierConfig && tierConfig.price === 0) {
+      // Free tier - upgrade directly without payment
+      setUpgrading(tier);
+      try {
+        const { error } = await supabase
+          .from('user_profiles')
+          .update({
+            subscription_tier: tier,
+            subscription_updated_at: new Date().toISOString(),
+            songs_played_count: 0,
+          })
+          .eq('id', profile.id);
 
-      if (error) {
-        throw error;
+        if (error) {
+          throw error;
+        }
+
+        await refreshProfile();
+        Alert.alert(
+          'Success',
+          `You have been upgraded to ${getTierDisplayName(tier)}!`
+        );
+      } catch (error: any) {
+        console.error('Error upgrading tier:', error);
+        Alert.alert('Error', error.message || 'Failed to upgrade subscription');
+      } finally {
+        setUpgrading(null);
+      }
+      return;
+    }
+
+    // Paid tier - redirect to Stripe checkout
+    setProcessingPayment(true);
+    try {
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        Alert.alert('Error', 'Please sign in to upgrade your subscription');
+        return;
       }
 
-      // Refresh profile to show new tier
-      await refreshProfile();
+      // Create Stripe checkout session
+      const response = await fetch(`${API_URL}/api/stripe/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ tier }),
+      });
 
-      Alert.alert(
-        'Success',
-        `You have been upgraded to ${getTierDisplayName(tier)}!`
-      );
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create checkout session');
+      }
+
+      const { url } = await response.json();
+
+      if (!url) {
+        throw new Error('No checkout URL received');
+      }
+
+      // Open Stripe checkout URL
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        throw new Error('Cannot open payment URL');
+      }
     } catch (error: any) {
-      console.error('Error upgrading tier:', error);
-      Alert.alert('Error', error.message || 'Failed to upgrade subscription');
+      console.error('Error creating checkout session:', error);
+      Alert.alert('Error', error.message || 'Failed to start payment process');
     } finally {
-      setUpgrading(null);
+      setProcessingPayment(false);
     }
   };
 
@@ -242,14 +326,14 @@ const SubscriptionScreen: React.FC = () => {
           <Button
             mode={isCurrent ? 'outlined' : 'contained'}
             onPress={() => handleUpgrade(tierConfig.tier)}
-            disabled={isCurrent || upgrading === tierConfig.tier}
-            loading={upgrading === tierConfig.tier}
+            disabled={isCurrent || upgrading === tierConfig.tier || processingPayment}
+            loading={upgrading === tierConfig.tier || processingPayment}
             style={[styles.upgradeButton, isCurrent && { borderColor: tierColor }]}
             buttonColor={isCurrent ? undefined : tierColor}
             textColor={isCurrent ? tierColor : undefined}
-            icon={isCurrent ? 'check-circle' : 'arrow-up'}
+            icon={isCurrent ? 'check-circle' : processingPayment ? 'loading' : 'arrow-up'}
           >
-            {isCurrent ? 'Current Plan' : 'Upgrade'}
+            {isCurrent ? 'Current Plan' : processingPayment ? 'Processing...' : 'Upgrade'}
           </Button>
         </Card.Content>
       </Card>

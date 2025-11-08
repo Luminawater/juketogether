@@ -31,6 +31,12 @@ const io = socketIo(server, {
 });
 
 app.use(cors());
+
+// Stripe webhook endpoint needs raw body for signature verification
+// This must be BEFORE express.json() middleware
+app.use('/api/stripe-webhook', express.raw({ type: 'application/json' }));
+
+// JSON parser for all other routes
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -61,6 +67,18 @@ try {
   supabase = authModule.supabase;
 } catch (error) {
   console.warn('Auth/Chat modules not available:', error.message);
+}
+
+// Initialize Stripe
+let stripe = null;
+try {
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY_LIVE;
+  if (stripeSecretKey) {
+    stripe = require('stripe')(stripeSecretKey);
+    console.log('✅ Stripe initialized');
+  }
+} catch (error) {
+  console.warn('Stripe not configured:', error.message);
 }
 
 // Use authentication middleware if available (after authModule is defined)
@@ -170,11 +188,37 @@ function scheduleSave(roomId) {
   saveQueue.set(roomId, timeout);
 }
 
-// Helper function to get room creator's subscription tier
+// Helper function to get active boost for a room
+async function getActiveRoomBoost(roomId) {
+  if (!supabase) return null;
+  
+  try {
+    const { data, error } = await supabase
+      .rpc('get_active_room_boost', { room_id_param: roomId });
+    
+    if (error) {
+      console.error('Error getting active boost:', error);
+      return null;
+    }
+    
+    return data && data.length > 0 ? data[0] : null;
+  } catch (error) {
+    console.error('Error getting active boost:', error);
+    return null;
+  }
+}
+
+// Helper function to get room creator's subscription tier (considering boosts)
 async function getRoomCreatorTier(roomId) {
   if (!supabase) return 'free';
   
   try {
+    // Check for active boost first
+    const activeBoost = await getActiveRoomBoost(roomId);
+    if (activeBoost) {
+      return 'pro'; // Boost gives tier 3 (pro) benefits
+    }
+    
     const room = await getRoom(roomId);
     const creatorId = room.hostUserId;
     
@@ -429,6 +473,7 @@ io.on('connection', (socket) => {
     // Get creator tier and tier settings for the room
     const creatorTier = await getRoomCreatorTier(roomId);
     const tierSettings = await getTierSettings(creatorTier);
+    const activeBoost = await getActiveRoomBoost(roomId);
 
     socket.emit('room-state', {
       queue: room.queue,
@@ -450,6 +495,12 @@ io.on('connection', (socket) => {
         djMode: tierSettings.dj_mode,
         ads: tierSettings.ads,
       },
+      activeBoost: activeBoost ? {
+        id: activeBoost.id,
+        expiresAt: activeBoost.expires_at,
+        minutesRemaining: activeBoost.minutes_remaining,
+        purchasedBy: activeBoost.purchased_by,
+      } : null,
     });
 
     console.log(`📤 Room "${roomId}" state sent to user (synced from Supabase)`);
@@ -548,7 +599,11 @@ io.on('connection', (socket) => {
     console.log(`✅ Track added to room "${roomId}":`, trackUrl);
     
     // Auto-play first track if no track is currently playing
-    if (!room.currentTrack && room.queue.length > 0) {
+    // But only if room has boost or owner has tier 2/3
+    const creatorTier = await getRoomCreatorTier(roomId);
+    const canPlay = creatorTier !== 'free'; // Free tier needs boost to play
+    
+    if (!room.currentTrack && room.queue.length > 0 && canPlay) {
       room.currentTrack = room.queue.shift();
       room.isPlaying = true;
       room.position = 0;
@@ -557,6 +612,12 @@ io.on('connection', (socket) => {
       io.to(roomId).emit('track-changed', room.currentTrack);
       io.to(roomId).emit('play-track');
       console.log(`Auto-playing first track in room ${roomId}`);
+    } else if (!canPlay && room.isPlaying) {
+      // Stop music if boost expired or no boost for free tier
+      room.isPlaying = false;
+      scheduleSave(roomId);
+      io.to(roomId).emit('pause-track');
+      console.log(`Music stopped in room ${roomId} - free tier requires boost`);
     }
   });
 
@@ -569,6 +630,15 @@ io.on('connection', (socket) => {
     const canControl = await canUserControl(roomId, userId);
     if (!canControl) {
       socket.emit('error', { message: 'You do not have permission to control playback' });
+      return;
+    }
+    
+    // Check if room can play (has boost or owner has tier 2/3)
+    const creatorTier = await getRoomCreatorTier(roomId);
+    if (creatorTier === 'free') {
+      socket.emit('error', { 
+        message: 'Music playback requires a boost or room owner upgrade. Purchase a boost to continue playing.' 
+      });
       return;
     }
     
@@ -2058,6 +2128,135 @@ app.get('/api/profile', async (req, res) => {
   }
 });
 
+// Room boost endpoints
+app.post('/api/rooms/:roomId/boost', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const token = authHeader.substring(7);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
+
+    // Check if room exists
+    const { data: roomData, error: roomError } = await supabase
+      .from('rooms')
+      .select('id, created_by')
+      .eq('id', roomId)
+      .single();
+
+    if (roomError || !roomData) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    // Check if there's already an active boost
+    const activeBoost = await getActiveRoomBoost(roomId);
+    if (activeBoost) {
+      return res.status(400).json({ 
+        error: 'Room already has an active boost',
+        activeBoost: {
+          expiresAt: activeBoost.expires_at,
+          minutesRemaining: activeBoost.minutes_remaining,
+        }
+      });
+    }
+
+    // Create boost record (1 hour from now)
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+
+    const { data: boostData, error: boostError } = await supabase
+      .from('room_boosts')
+      .insert({
+        room_id: roomId,
+        purchased_by: user.id,
+        expires_at: expiresAt.toISOString(),
+        amount_paid: 1.00,
+        payment_status: 'pending', // Will be updated after payment confirmation
+      })
+      .select()
+      .single();
+
+    if (boostError) {
+      return res.status(400).json({ error: boostError.message });
+    }
+
+    // In a real implementation, you would:
+    // 1. Create a payment intent with Stripe/PayPal/etc.
+    // 2. Return the payment intent client secret
+    // 3. Update payment_status to 'completed' after payment confirmation
+    
+    // For now, we'll simulate payment completion (in production, this should be done via webhook)
+    // TODO: Integrate with payment provider (Stripe, PayPal, etc.)
+    
+    // Simulate payment success for development
+    // In production, this should be handled by a webhook from the payment provider
+    const { error: updateError } = await supabase
+      .from('room_boosts')
+      .update({ 
+        payment_status: 'completed',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', boostData.id);
+
+    if (updateError) {
+      console.error('Error updating boost payment status:', updateError);
+    }
+
+    // Broadcast boost activation to all users in room
+    if (io) {
+      const updatedBoost = await getActiveRoomBoost(roomId);
+      io.to(roomId).emit('boost-activated', {
+        boost: updatedBoost ? {
+          id: updatedBoost.id,
+          expiresAt: updatedBoost.expires_at,
+          minutesRemaining: updatedBoost.minutes_remaining,
+          purchasedBy: updatedBoost.purchased_by,
+        } : null,
+      });
+    }
+
+    res.json({
+      success: true,
+      boost: {
+        id: boostData.id,
+        expiresAt: expiresAt.toISOString(),
+        minutesRemaining: 60,
+      },
+      message: 'Boost activated successfully! Room now has Pro tier benefits for 1 hour.',
+    });
+  } catch (error) {
+    console.error('Boost purchase error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/rooms/:roomId/boost', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const activeBoost = await getActiveRoomBoost(roomId);
+    
+    res.json({
+      activeBoost: activeBoost ? {
+        id: activeBoost.id,
+        expiresAt: activeBoost.expires_at,
+        minutesRemaining: activeBoost.minutes_remaining,
+        purchasedBy: activeBoost.purchased_by,
+      } : null,
+    });
+  } catch (error) {
+    console.error('Get boost error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.put('/api/profile', async (req, res) => {
   try {
     const { display_name, avatar_url } = req.body;
@@ -2093,6 +2292,95 @@ app.put('/api/profile', async (req, res) => {
   } catch (error) {
     console.error('Update profile error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create Stripe Checkout Session for subscription upgrade
+app.post('/api/stripe/create-checkout-session', async (req, res) => {
+  try {
+    const { tier } = req.body;
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    if (!tier) {
+      return res.status(400).json({ error: 'Tier is required' });
+    }
+
+    const token = authHeader.substring(7);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
+
+    if (!stripe) {
+      return res.status(500).json({ error: 'Stripe not configured' });
+    }
+
+    // Get tier pricing from database
+    const { data: tierData, error: tierError } = await supabase
+      .from('subscription_tier_settings')
+      .select('*')
+      .eq('tier', tier)
+      .single();
+
+    if (tierError || !tierData) {
+      return res.status(404).json({ error: 'Tier not found' });
+    }
+
+    const price = parseFloat(tierData.price || 0);
+    if (price <= 0) {
+      return res.status(400).json({ error: 'Invalid tier price' });
+    }
+
+    // Get user's email
+    const userEmail = user.email || user.user_metadata?.email;
+
+    // Determine success and cancel URLs based on platform
+    const baseUrl = process.env.FRONTEND_URL || 'https://juketogether.vercel.app';
+    const successUrl = `${baseUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl}/subscription?canceled=true`;
+
+    // Create Stripe Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${tierData.display_name || tier} Subscription`,
+              description: tierData.description || `Upgrade to ${tier} tier`,
+            },
+            recurring: {
+              interval: 'month',
+            },
+            unit_amount: Math.round(price * 100), // Convert to cents
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'subscription',
+      customer_email: userEmail,
+      metadata: {
+        user_id: user.id,
+        tier: tier,
+        display_name: tierData.display_name || tier,
+      },
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    });
+
+    res.json({ 
+      sessionId: session.id,
+      url: session.url 
+    });
+  } catch (error) {
+    console.error('Create checkout session error:', error);
+    res.status(500).json({ error: error.message || 'Failed to create checkout session' });
   }
 });
 
@@ -2140,6 +2428,155 @@ async function generateShortCode() {
 // HTML routes removed - now using Expo web app
 // Room, dashboard, and auth are handled by React Navigation in the Expo app
 
+// Stripe webhook endpoint
+app.post('/api/stripe-webhook', async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  
+  // Support multiple webhook secrets (snapshot and thin payload)
+  const webhookSecrets = [
+    process.env.STRIPE_WEBHOOK_SECRET,           // Snapshot payload secret
+    process.env.STRIPE_WEBHOOK_SECRET_THIN,      // Thin payload secret
+  ].filter(Boolean); // Remove undefined values
+
+  if (webhookSecrets.length === 0) {
+    console.error('No STRIPE_WEBHOOK_SECRET configured');
+    return res.status(500).json({ error: 'Webhook secret not configured' });
+  }
+
+  if (!stripe) {
+    console.error('Stripe is not initialized');
+    return res.status(500).json({ error: 'Stripe not configured' });
+  }
+
+  let event;
+  let verified = false;
+
+  // Try to verify with each webhook secret
+  for (const webhookSecret of webhookSecrets) {
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      verified = true;
+      break;
+    } catch (err) {
+      // Try next secret
+      continue;
+    }
+  }
+
+  if (!verified) {
+    console.error('Webhook signature verification failed with all secrets');
+    return res.status(400).json({ error: 'Webhook signature verification failed' });
+  }
+
+  // Handle the event
+  try {
+    switch (event.type) {
+      case 'payment_intent.succeeded':
+        const paymentIntent = event.data.object;
+        console.log('PaymentIntent succeeded:', paymentIntent.id);
+        // Handle successful payment
+        // You can update user subscription here if needed
+        break;
+
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+        const subscription = event.data.object;
+        console.log('Subscription event:', event.type, subscription.id);
+        
+        // Update user subscription tier in Supabase
+        if (supabase && subscription.metadata?.user_id) {
+          const userId = subscription.metadata.user_id;
+          const tier = subscription.metadata.tier || 'standard';
+          
+          // Update user profile
+          const { error: profileError } = await supabase
+            .from('user_profiles')
+            .update({
+              subscription_tier: tier,
+              subscription_updated_at: new Date().toISOString(),
+              songs_played_count: 0, // Reset count on upgrade
+            })
+            .eq('id', userId);
+          
+          if (profileError) {
+            console.error('Error updating subscription tier:', profileError);
+          } else {
+            console.log(`Updated subscription tier for user ${userId} to ${tier}`);
+          }
+
+          // Track payment in subscription_payments table (only on creation)
+          if (event.type === 'customer.subscription.created') {
+            const amount = subscription.items?.data[0]?.price?.unit_amount 
+              ? subscription.items.data[0].price.unit_amount / 100 
+              : 0;
+            
+            const { error: paymentError } = await supabase
+              .from('subscription_payments')
+              .insert({
+                user_id: userId,
+                tier: tier,
+                amount_paid: amount,
+                payment_provider: 'stripe',
+                payment_provider_id: subscription.id,
+                payment_date: new Date().toISOString(),
+              });
+            
+            if (paymentError) {
+              console.error('Error tracking payment:', paymentError);
+            } else {
+              console.log(`Tracked payment for user ${userId}, tier ${tier}, amount $${amount}`);
+            }
+          }
+        }
+        break;
+
+      case 'customer.subscription.deleted':
+        const deletedSubscription = event.data.object;
+        console.log('Subscription deleted:', deletedSubscription.id);
+        
+        // Downgrade user to free tier
+        if (supabase && deletedSubscription.metadata?.user_id) {
+          const userId = deletedSubscription.metadata.user_id;
+          
+          const { error } = await supabase
+            .from('user_profiles')
+            .update({
+              subscription_tier: 'free',
+              subscription_updated_at: new Date().toISOString(),
+            })
+            .eq('id', userId);
+          
+          if (error) {
+            console.error('Error downgrading subscription:', error);
+          } else {
+            console.log(`Downgraded user ${userId} to free tier`);
+          }
+        }
+        break;
+
+      case 'checkout.session.completed':
+        const session = event.data.object;
+        console.log('Checkout session completed:', session.id);
+        
+        // If it's a subscription, the subscription.created event will handle the tier update
+        // But we can also track the checkout session here if needed
+        if (session.mode === 'subscription' && session.metadata?.user_id) {
+          console.log(`User ${session.metadata.user_id} completed checkout for tier ${session.metadata.tier}`);
+        }
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+
+    // Return a response to acknowledge receipt of the event
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Error handling webhook event:', error);
+    res.status(500).json({ error: 'Error processing webhook' });
+  }
+});
+
 // Status endpoint to check Supabase connection
 app.get('/api/status', async (req, res) => {
   if (testConnection) {
@@ -2148,14 +2585,16 @@ app.get('/api/status', async (req, res) => {
       supabase: connectionTest,
       server: 'running',
       auth: !!authModule,
-      chat: !!chatModule
+      chat: !!chatModule,
+      stripe: !!stripe
     });
   } else {
     res.json({
       supabase: { connected: false, error: 'Connection test not available' },
       server: 'running',
       auth: !!authModule,
-      chat: !!chatModule
+      chat: !!chatModule,
+      stripe: !!stripe
     });
   }
 });
@@ -2163,6 +2602,45 @@ app.get('/api/status', async (req, res) => {
 // Root route removed - Expo web app handles routing
 // For local development, serve the Expo web build if available
 // For Vercel, static build serves the Expo app
+
+// Periodic check for expired boosts (every 5 minutes)
+setInterval(async () => {
+  if (!supabase) return;
+  
+  try {
+    // Get all active boosts that have expired
+    const now = new Date().toISOString();
+    const { data: expiredBoosts, error } = await supabase
+      .from('room_boosts')
+      .select('room_id')
+      .eq('payment_status', 'completed')
+      .lt('expires_at', now);
+    
+    if (error) {
+      console.error('Error checking expired boosts:', error);
+      return;
+    }
+    
+    if (expiredBoosts && expiredBoosts.length > 0) {
+      // Check each room and stop music if owner is free tier
+      for (const boost of expiredBoosts) {
+        const room = await getRoom(boost.room_id);
+        const creatorTier = await getRoomCreatorTier(boost.room_id);
+        
+        // Only stop if owner is free tier (boost was providing pro benefits)
+        if (creatorTier === 'free' && room.isPlaying) {
+          room.isPlaying = false;
+          scheduleSave(boost.room_id);
+          io.to(boost.room_id).emit('pause-track');
+          io.to(boost.room_id).emit('boost-expired', { roomId: boost.room_id });
+          console.log(`⏸️ Music stopped in room ${boost.room_id} - boost expired`);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error in boost expiration check:', error);
+  }
+}, 5 * 60 * 1000); // Check every 5 minutes
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {

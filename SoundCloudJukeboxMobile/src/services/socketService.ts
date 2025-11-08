@@ -18,6 +18,12 @@ export interface RoomState {
     djMode: boolean;
     ads: boolean;
   };
+  activeBoost?: {
+    id: string;
+    expiresAt: string;
+    minutesRemaining: number;
+    purchasedBy: string;
+  } | null;
 }
 
 class SocketService {
@@ -145,6 +151,16 @@ class SocketService {
     // Room admins updates
     this._socket.on('room-admins-updated', (admins: string[]) => {
       this.emit('listeners', 'roomAdminsUpdated', admins);
+    });
+
+    // Boost activation
+    this._socket.on('boost-activated', (data: any) => {
+      this.emit('listeners', 'boost-activated', data);
+    });
+
+    // Boost expiration
+    this._socket.on('boost-expired', (data: any) => {
+      this.emit('listeners', 'boost-expired', data);
     });
   }
 

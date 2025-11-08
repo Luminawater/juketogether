@@ -57,6 +57,7 @@ import RoomChat from '../components/RoomChat';
 import AdsBanner from '../components/AdsBanner';
 import { hasTier } from '../utils/permissions';
 import { ShareRoomDialog } from '../components/ShareRoomDialog';
+import { API_URL } from '../config/constants';
 
 type RoomScreenRouteProp = RouteProp<RootStackParamList, 'Room'>;
 type RoomScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Room'>;
@@ -202,6 +203,12 @@ const RoomScreen: React.FC = () => {
         djMode: boolean;
         ads: boolean;
       };
+      activeBoost?: {
+        id: string;
+        expiresAt: string;
+        minutesRemaining: number;
+        purchasedBy: string;
+      } | null;
     }) => {
       setQueue(state.queue || []);
       setHistory(state.history || []);
@@ -225,6 +232,83 @@ const RoomScreen: React.FC = () => {
       if (state.tierSettings) {
         setTierSettings(state.tierSettings);
       }
+      
+      // Update active boost
+      if (state.activeBoost) {
+        setActiveBoost(state.activeBoost);
+      } else {
+        setActiveBoost(null);
+      }
+    };
+    
+    const handleBoostActivated = (data: { boost: any }) => {
+      if (data.boost) {
+        setActiveBoost(data.boost);
+        Alert.alert('Boost Activated!', 'Room now has Pro tier benefits for 1 hour!');
+      } else {
+        setActiveBoost(null);
+      }
+    };
+    
+    const handleBoostExpired = (data: { roomId: string }) => {
+      if (data.roomId === roomId) {
+        setActiveBoost(null);
+        Alert.alert('Boost Expired', 'The room boost has expired. Music playback has been paused. Purchase another boost to continue.');
+        // Refresh room state
+        if (socketService.socket) {
+          socketService.socket.emit('join-room', roomId);
+        }
+      }
+    };
+    
+    const purchaseBoost = async () => {
+      if (!user || !session) {
+        Alert.alert('Sign In Required', 'You need to sign in to purchase a boost.');
+        navigation.navigate('Auth');
+        return;
+      }
+      
+      // Confirm purchase
+      Alert.alert(
+        'Purchase Boost',
+        'Purchase a 1-hour boost for $1 USD? This will give the room Pro tier benefits (unlimited queue, DJ mode, no ads).',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Purchase',
+            onPress: async () => {
+              setPurchasingBoost(true);
+              try {
+                const response = await fetch(`${API_URL}/api/rooms/${roomId}/boost`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                  },
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                  throw new Error(data.error || 'Failed to purchase boost');
+                }
+                
+                Alert.alert('Success!', data.message || 'Boost activated successfully!');
+                
+                // Refresh room state
+                if (socketService.socket) {
+                  socketService.socket.emit('join-room', roomId);
+                }
+              } catch (error: any) {
+                console.error('Error purchasing boost:', error);
+                Alert.alert('Error', error.message || 'Failed to purchase boost. Please try again.');
+              } finally {
+                setPurchasingBoost(false);
+              }
+            },
+          },
+        ]
+      );
     };
 
     const handleTrackAdded = (track: Track) => {
@@ -337,6 +421,8 @@ const RoomScreen: React.FC = () => {
     socketService.on('historyUpdated', handleHistoryUpdated);
     socketService.on('roomSettingsUpdated', handleRoomSettingsUpdated);
     socketService.on('roomAdminsUpdated', handleRoomAdminsUpdated);
+    socketService.on('boost-activated', handleBoostActivated);
+    socketService.on('boost-expired', handleBoostExpired);
     socketService.on('error', handleError);
     socketService.on('connectionError', handleConnectionError);
 
@@ -361,11 +447,38 @@ const RoomScreen: React.FC = () => {
       socketService.off('historyUpdated', handleHistoryUpdated);
       socketService.off('roomSettingsUpdated', handleRoomSettingsUpdated);
       socketService.off('roomAdminsUpdated', handleRoomAdminsUpdated);
+      socketService.off('boost-activated', handleBoostActivated);
+      socketService.off('boost-expired', handleBoostExpired);
       socketService.off('error', handleError);
       socketService.off('connectionError', handleConnectionError);
       socketService.disconnect();
     };
   }, [roomId, user?.id, navigation]);
+
+  // Boost countdown timer
+  useEffect(() => {
+    if (!activeBoost) return;
+    
+    const interval = setInterval(() => {
+      if (activeBoost) {
+        const expiresAt = new Date(activeBoost.expiresAt);
+        const now = new Date();
+        const minutesRemaining = Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / 60000));
+        
+        if (minutesRemaining <= 0) {
+          // Boost expired, refresh room state
+          if (socketService.socket) {
+            socketService.socket.emit('join-room', roomId);
+          }
+          setActiveBoost(null);
+        } else {
+          setActiveBoost(prev => prev ? { ...prev, minutesRemaining } : null);
+        }
+      }
+    }, 60000); // Update every minute
+    
+    return () => clearInterval(interval);
+  }, [activeBoost, roomId]);
 
   // Load Spotify playlists when user is logged in with Spotify
   useEffect(() => {
@@ -947,6 +1060,59 @@ const RoomScreen: React.FC = () => {
               )}
             </Card.Content>
           </Card>
+      {/* Boost Banner - Show if owner is free tier and no active boost */}
+      {creatorTier === 'free' && !activeBoost && (
+        <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]}>
+          <Card.Content>
+            <View style={styles.boostContainer}>
+              <View style={styles.boostHeader}>
+                <MaterialCommunityIcons name="rocket-launch" size={24} color={theme.colors.primary} />
+                <Title style={[styles.boostTitle, { color: theme.colors.onSurface }]}>
+                  Boost This Room
+                </Title>
+              </View>
+              <Text style={[styles.boostDescription, { color: theme.colors.onSurfaceVariant }]}>
+                This room is on Free tier. Purchase a 1-hour boost for $1 USD to unlock Pro tier benefits:
+                {'\n'}• Unlimited queue
+                {'\n'}• DJ Mode
+                {'\n'}• No ads
+              </Text>
+              <Button
+                mode="contained"
+                onPress={purchaseBoost}
+                loading={purchasingBoost}
+                disabled={purchasingBoost}
+                style={styles.boostButton}
+                buttonColor={theme.colors.primary}
+                textColor={theme.colors.onPrimary}
+                icon="rocket-launch"
+              >
+                {purchasingBoost ? 'Processing...' : 'Boost for $1 USD'}
+              </Button>
+            </View>
+          </Card.Content>
+        </Card>
+      )}
+
+      {/* Active Boost Banner */}
+      {activeBoost && (
+        <Card style={[styles.card, { backgroundColor: `${theme.colors.primary}15`, borderColor: theme.colors.primary, borderWidth: 2 }]}>
+          <Card.Content>
+            <View style={styles.boostContainer}>
+              <View style={styles.boostHeader}>
+                <MaterialCommunityIcons name="rocket-launch" size={24} color={theme.colors.primary} />
+                <Title style={[styles.boostTitle, { color: theme.colors.primary }]}>
+                  Boost Active! 🚀
+                </Title>
+              </View>
+              <Text style={[styles.boostDescription, { color: theme.colors.onSurface }]}>
+                Room has Pro tier benefits for {activeBoost.minutesRemaining} more minute{activeBoost.minutesRemaining !== 1 ? 's' : ''}
+              </Text>
+            </View>
+          </Card.Content>
+        </Card>
+      )}
+
       {/* Ads Banner - Show based on room creator's tier, not current user's tier */}
       {tierSettings.ads && (
         <AdsBanner
@@ -2650,6 +2816,28 @@ const styles = StyleSheet.create({
       cursor: 'pointer',
       transition: 'transform 0.2s',
     } : {}),
+  },
+  boostContainer: {
+    padding: IS_MOBILE ? 8 : 12,
+  },
+  boostHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: IS_MOBILE ? 12 : 16,
+  },
+  boostTitle: {
+    fontSize: IS_MOBILE ? 18 : 20,
+    fontWeight: '700',
+  },
+  boostDescription: {
+    fontSize: IS_MOBILE ? 13 : 14,
+    lineHeight: IS_MOBILE ? 18 : 20,
+    marginBottom: IS_MOBILE ? 16 : 20,
+  },
+  boostButton: {
+    marginTop: 8,
+    borderRadius: 12,
   },
 });
 
