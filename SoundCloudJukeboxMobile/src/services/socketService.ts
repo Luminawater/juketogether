@@ -66,101 +66,106 @@ class SocketService {
   private setupEventHandlers() {
     if (!this._socket) return;
 
+    // If socket is already connected, emit connect event immediately
+    if (this._socket.connected) {
+      this.emit('connect');
+    }
+
     this._socket.on('connect', () => {
       console.log('Socket connected');
-      this.emit('listeners', 'connect');
+      this.emit('connect');
     });
 
     this._socket.on('disconnect', (reason) => {
       console.log('Socket disconnected:', reason);
-      this.emit('listeners', 'disconnect', reason);
+      this.emit('disconnect', reason);
     });
 
     this._socket.on('connect_error', (error) => {
       console.error('Socket connection error:', error);
       // Emit a more specific error for connection failures
-      this.emit('listeners', 'connectionError', error);
+      this.emit('connectionError', error);
     });
 
     this._socket.on('error', (error) => {
       console.error('Socket error:', error);
-      this.emit('listeners', 'error', error);
+      this.emit('error', error);
     });
 
     // Room state updates
     this._socket.on('room-state', (state: RoomState & any) => {
-      this.emit('listeners', 'roomState', state);
+      this.emit('roomState', state);
     });
 
     // Track added to queue
     this._socket.on('track-added', (track: Track) => {
-      this.emit('listeners', 'trackAdded', track);
+      this.emit('trackAdded', track);
     });
 
     // Track removed from queue
     this._socket.on('track-removed', (trackId: string) => {
-      this.emit('listeners', 'trackRemoved', trackId);
+      this.emit('trackRemoved', trackId);
     });
 
     // Playback control events
     this._socket.on('play-track', () => {
-      this.emit('listeners', 'play');
+      this.emit('play');
     });
 
     this._socket.on('pause-track', () => {
-      this.emit('listeners', 'pause');
+      this.emit('pause');
     });
 
     this._socket.on('track-changed', (track: Track) => {
-      this.emit('listeners', 'nextTrack', track);
+      this.emit('nextTrack', track);
     });
 
     // User events
     this._socket.on('user-joined', (data: any) => {
-      this.emit('listeners', 'userJoined', data);
+      this.emit('userJoined', data);
     });
 
     this._socket.on('user-left', (data: any) => {
-      this.emit('listeners', 'userLeft', data);
+      this.emit('userLeft', data);
     });
 
     this._socket.on('user-count', (count: number) => {
-      this.emit('listeners', 'userCount', count);
+      this.emit('userCount', count);
     });
 
     // Friends events
     this._socket.on('friends-list', (friends: any[]) => {
-      this.emit('listeners', 'friendsList', friends);
+      this.emit('friendsList', friends);
     });
 
     // Position sync
     this._socket.on('seek-track', (position: number) => {
-      this.emit('listeners', 'positionUpdate', position);
+      this.emit('positionUpdate', position);
     });
 
     // History updates
     this._socket.on('history-updated', (history: Track[]) => {
-      this.emit('listeners', 'historyUpdated', history);
+      this.emit('historyUpdated', history);
     });
 
     // Room settings updates
     this._socket.on('room-settings-updated', (settings: any) => {
-      this.emit('listeners', 'roomSettingsUpdated', settings);
+      this.emit('roomSettingsUpdated', settings);
     });
 
     // Room admins updates
     this._socket.on('room-admins-updated', (admins: string[]) => {
-      this.emit('listeners', 'roomAdminsUpdated', admins);
+      this.emit('roomAdminsUpdated', admins);
     });
 
     // Boost activation
     this._socket.on('boost-activated', (data: any) => {
-      this.emit('listeners', 'boost-activated', data);
+      this.emit('boost-activated', data);
     });
 
     // Boost expiration
     this._socket.on('boost-expired', (data: any) => {
-      this.emit('listeners', 'boost-expired', data);
+      this.emit('boost-expired', data);
     });
   }
 

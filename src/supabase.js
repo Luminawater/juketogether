@@ -596,6 +596,107 @@ async function removeFriendRequest(userId, friendId) {
   }
 }
 
+// Collaboration Requests
+async function createCollaborationRequest(requesterId, collaboratorId) {
+  if (!supabaseConfig) {
+    return false;
+  }
+  
+  try {
+    // Check if there's already a pending request (check both directions)
+    const existing1 = await restRequest('GET', 'collaboration_requests', null, {
+      requester_id: requesterId,
+      collaborator_id: collaboratorId,
+      status: 'pending'
+    });
+    const existing2 = await restRequest('GET', 'collaboration_requests', null, {
+      requester_id: collaboratorId,
+      collaborator_id: requesterId,
+      status: 'pending'
+    });
+    
+    const allExisting = [
+      ...(Array.isArray(existing1) ? existing1 : (existing1 ? [existing1] : [])),
+      ...(Array.isArray(existing2) ? existing2 : (existing2 ? [existing2] : []))
+    ];
+    
+    if (allExisting.length > 0) {
+      return false; // Request already exists
+    }
+    
+    const result = await restRequest('POST', 'collaboration_requests', {
+      requester_id: requesterId,
+      collaborator_id: collaboratorId,
+      status: 'pending'
+    });
+    return !!result;
+  } catch (error) {
+    console.error('Error creating collaboration request:', error);
+    return false;
+  }
+}
+
+async function acceptCollaborationRequest(requesterId, collaboratorId) {
+  if (!supabaseConfig) {
+    return null;
+  }
+  
+  try {
+    // Find the pending request
+    const existing = await restRequest('GET', 'collaboration_requests', null, {
+      requester_id: requesterId,
+      collaborator_id: collaboratorId,
+      status: 'pending'
+    });
+    
+    const request = Array.isArray(existing) ? existing[0] : existing;
+    if (!request || !request.id) {
+      return null;
+    }
+    
+    // Update the collaboration request status using the ID
+    const updated = await restRequest('PATCH', 'collaboration_requests', {
+      status: 'accepted',
+      responded_at: new Date().toISOString()
+    }, {
+      id: request.id
+    });
+    
+    return Array.isArray(updated) ? updated[0] : updated;
+  } catch (error) {
+    console.error('Error accepting collaboration request:', error);
+    return null;
+  }
+}
+
+async function getCollaborationRequest(requesterId, collaboratorId) {
+  if (!supabaseConfig) {
+    return null;
+  }
+  
+  try {
+    // Check both directions
+    const data1 = await restRequest('GET', 'collaboration_requests', null, {
+      requester_id: requesterId,
+      collaborator_id: collaboratorId
+    });
+    const data2 = await restRequest('GET', 'collaboration_requests', null, {
+      requester_id: collaboratorId,
+      collaborator_id: requesterId
+    });
+    
+    const allRequests = [
+      ...(Array.isArray(data1) ? data1 : (data1 ? [data1] : [])),
+      ...(Array.isArray(data2) ? data2 : (data2 ? [data2] : []))
+    ];
+    
+    return allRequests.length > 0 ? allRequests[0] : null;
+  } catch (error) {
+    console.error('Error getting collaboration request:', error);
+    return null;
+  }
+}
+
 // Track user joining a room
 async function trackUserJoin(roomId, hostUserId, userId) {
   if (!supabaseConfig) {
@@ -850,6 +951,9 @@ module.exports = {
   addFriendRequest,
   acceptFriendRequest,
   removeFriendRequest,
+  createCollaborationRequest,
+  acceptCollaborationRequest,
+  getCollaborationRequest,
   trackUserJoin,
   trackUserLeave,
   trackTrackPlay,

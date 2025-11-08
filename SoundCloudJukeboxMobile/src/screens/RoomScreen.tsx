@@ -2569,13 +2569,6 @@ const RoomScreen: React.FC = () => {
       <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
         <View style={styles.headerTop}>
           <View style={styles.headerLeft}>
-            <IconButton
-              icon="arrow-left"
-              iconColor={theme.colors.onSurface}
-              size={24}
-              onPress={() => navigation.goBack()}
-              style={styles.backButton}
-            />
             <Text style={[styles.roomTitle, { color: theme.colors.onSurface }]}>{roomName}</Text>
           </View>
           <View style={styles.headerRight}>

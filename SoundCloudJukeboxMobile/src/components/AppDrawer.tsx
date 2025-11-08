@@ -19,6 +19,7 @@ import { NavigationProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { hasRole } from '../utils/permissions';
+import AdsBanner from './AdsBanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = Math.min(320, SCREEN_WIDTH * 0.85);
@@ -257,6 +258,16 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({ visible, onDismiss, naviga
                     onPress={handleSignOut}
                   />
                 </View>
+
+                {/* Upgrade Ads Banner */}
+                <View style={styles.adsContainer}>
+                  <AdsBanner
+                    onUpgradePress={() => {
+                      onDismiss();
+                      navigation.navigate('Subscription');
+                    }}
+                  />
+                </View>
               </>
             )}
           </ScrollView>
@@ -333,5 +344,8 @@ const styles = StyleSheet.create({
   divider: {
     marginVertical: 8,
     marginHorizontal: 16,
+  },
+  adsContainer: {
+    paddingBottom: 16,
   },
 });

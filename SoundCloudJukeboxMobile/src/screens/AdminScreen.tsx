@@ -140,6 +140,7 @@ const AdminScreen: React.FC = () => {
       listedOnLeaderboard: false,
       ads: true,
       playlist: false,
+      collaboration: false,
       description: 'Basic access with limited features',
     },
     standard: {
@@ -152,6 +153,7 @@ const AdminScreen: React.FC = () => {
       listedOnLeaderboard: true,
       ads: true,
       playlist: false,
+      collaboration: false,
       description: 'Standard access with more features',
     },
     pro: {
@@ -164,6 +166,7 @@ const AdminScreen: React.FC = () => {
       listedOnLeaderboard: true,
       ads: false,
       playlist: true,
+      collaboration: true,
       description: 'Premium access with unlimited features',
     },
   });
@@ -640,6 +643,7 @@ const AdminScreen: React.FC = () => {
             listedOnLeaderboard: item.listed_on_leaderboard || false,
             ads: item.ads !== undefined ? item.ads : true,
             playlist: item.playlist !== undefined ? item.playlist : false,
+            collaboration: item.collaboration !== undefined ? item.collaboration : false,
             description: item.description || '',
           };
         });
@@ -669,6 +673,7 @@ const AdminScreen: React.FC = () => {
             listed_on_leaderboard: config.listedOnLeaderboard,
             ads: config.ads,
             playlist: config.playlist,
+            collaboration: config.collaboration,
             description: config.description,
             updated_at: new Date().toISOString(),
           }, {
@@ -832,6 +837,14 @@ const AdminScreen: React.FC = () => {
                 <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Playlist</Text>
               </View>
               
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.free.collaboration ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('free', 'collaboration', !subscriptionTiers.free.collaboration)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Collaboration</Text>
+              </View>
+              
               <TextInput
                 label="Description"
                 value={subscriptionTiers.free.description}
@@ -919,6 +932,14 @@ const AdminScreen: React.FC = () => {
                 <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Playlist</Text>
               </View>
               
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.standard.collaboration ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('standard', 'collaboration', !subscriptionTiers.standard.collaboration)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Collaboration</Text>
+              </View>
+              
               <TextInput
                 label="Description"
                 value={subscriptionTiers.standard.description}
@@ -1004,6 +1025,14 @@ const AdminScreen: React.FC = () => {
                   onPress={() => updateTier('pro', 'playlist', !subscriptionTiers.pro.playlist)}
                 />
                 <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Playlist</Text>
+              </View>
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.pro.collaboration ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('pro', 'collaboration', !subscriptionTiers.pro.collaboration)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Collaboration</Text>
               </View>
               
               <TextInput

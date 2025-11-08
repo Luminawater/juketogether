@@ -8,6 +8,13 @@
     "dev": "nodemon server.js",
     "start:dev": "nodemon server.js",
     "JT": "node server.js",
+    "dev:all": "concurrently \"npm run JT\" \"npm run expo:web\" --names \"SERVER,EXPO\" --prefix-colors \"blue,green\"",
+    "dev:all:ios": "concurrently \"npm run JT\" \"npm run expo:ios\" --names \"SERVER,EXPO\" --prefix-colors \"blue,green\"",
+    "dev:all:android": "concurrently \"npm run JT\" \"npm run expo:android\" --names \"SERVER,EXPO\" --prefix-colors \"blue,green\"",
+    "expo": "cd SoundCloudJukeboxMobile && npm start",
+    "expo:web": "cd SoundCloudJukeboxMobile && npm run web",
+    "expo:ios": "cd SoundCloudJukeboxMobile && npm run ios",
+    "expo:android": "cd SoundCloudJukeboxMobile && npm run android",
     "vercel-build": "cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build",
     "build:web": "cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build",
     "test:stripe": "node test-stripe.js",
@@ -32,6 +39,7 @@
     "stripe": "^14.21.0"
   },
   "devDependencies": {
+    "concurrently": "^9.1.2",
     "nodemon": "^3.0.1"
   }
 }

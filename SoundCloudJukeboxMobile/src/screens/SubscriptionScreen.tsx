@@ -37,6 +37,7 @@ interface TierConfig {
   listed_on_leaderboard: boolean;
   ads: boolean;
   playlist: boolean;
+  collaboration: boolean;
   description: string;
 }
 
@@ -115,6 +116,7 @@ const SubscriptionScreen: React.FC = () => {
           listed_on_leaderboard: item.listed_on_leaderboard || false,
           ads: item.ads !== undefined ? item.ads : true,
           playlist: item.playlist !== undefined ? item.playlist : false,
+          collaboration: item.collaboration !== undefined ? item.collaboration : false,
           description: item.description || '',
         }));
         setTiers(tierConfigs);
@@ -318,6 +320,12 @@ const SubscriptionScreen: React.FC = () => {
               <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Playlist:</Text>
               <Text style={[styles.featureValue, { color: tierConfig.playlist ? theme.colors.primary : theme.colors.onSurface }]}>
                 {tierConfig.playlist ? 'Yes' : 'No'}
+              </Text>
+            </View>
+            <View style={styles.featureRow}>
+              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Collaboration:</Text>
+              <Text style={[styles.featureValue, { color: tierConfig.collaboration ? theme.colors.primary : theme.colors.onSurface }]}>
+                {tierConfig.collaboration ? 'Yes' : 'No'}
               </Text>
             </View>
           </View>

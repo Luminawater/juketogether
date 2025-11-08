@@ -3,6 +3,7 @@ import { NavigationContainer, DarkTheme as NavigationDarkTheme, useNavigation } 
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { Provider as PaperProvider } from 'react-native-paper';
+import { IconButton } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -31,6 +32,7 @@ import darkTheme from './src/config/theme';
 
 // Import components
 import { CustomDrawerContent } from './src/components/DrawerContent';
+import { NotificationBadge } from './src/components/NotificationBadge';
 
 // Navigation types
 export type RootStackParamList = {
@@ -127,6 +129,7 @@ const AuthenticatedStack = () => {
           fontWeight: 'bold',
           color: darkTheme.colors.onSurface,
         },
+        headerRight: () => <NotificationBadge />,
         drawerStyle: {
           backgroundColor: darkTheme.colors.surface,
           width: 320,
@@ -251,8 +254,18 @@ export default function App() {
             <Stack.Screen
               name="Room"
               component={RoomScreen}
-              options={({ route }) => ({
-                title: route.params.roomName || 'Music Room',
+              options={({ route, navigation }) => ({
+                title: '',
+                headerLeft: () => (
+                  <IconButton
+                    icon="arrow-left"
+                    iconColor={darkTheme.colors.onSurface}
+                    size={24}
+                    onPress={() => navigation.goBack()}
+                    style={{ backgroundColor: 'transparent' }}
+                  />
+                ),
+                headerRight: () => <NotificationBadge />,
               })}
             />
             <Stack.Screen

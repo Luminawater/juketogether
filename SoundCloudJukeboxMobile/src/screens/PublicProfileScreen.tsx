@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -25,6 +25,8 @@ import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { UserProfile } from '../types';
 import { UserBadge } from '../components/UserBadge';
+import { io, Socket } from 'socket.io-client';
+import { SOCKET_URL } from '../config/constants';
 
 type PublicProfileScreenRouteProp = RouteProp<RootStackParamList, 'PublicProfile'>;
 type PublicProfileScreenNavigationProp = StackNavigationProp<RootStackParamList, 'PublicProfile'>;
@@ -42,7 +44,7 @@ interface UserAnalytics {
 const PublicProfileScreen: React.FC = () => {
   const route = useRoute<PublicProfileScreenRouteProp>();
   const navigation = useNavigation<PublicProfileScreenNavigationProp>();
-  const { user, supabase } = useAuth();
+  const { user, profile: currentUserProfile, supabase } = useAuth();
   const theme = useTheme();
 
   const { id } = route.params;
@@ -52,10 +54,28 @@ const PublicProfileScreen: React.FC = () => {
   const [analytics, setAnalytics] = useState<UserAnalytics | null>(null);
   const [isPrivate, setIsPrivate] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [friendshipStatus, setFriendshipStatus] = useState<'none' | 'pending' | 'accepted' | 'pending_incoming'>('none');
+  const [loadingFriendship, setLoadingFriendship] = useState(false);
+  const [collabStatus, setCollabStatus] = useState<'none' | 'pending' | 'accepted' | 'pending_incoming'>('none');
+  const [loadingCollab, setLoadingCollab] = useState(false);
+  const [canCollaborate, setCanCollaborate] = useState(false);
+  const friendSocketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     loadProfile();
-  }, [id]);
+    if (user?.id && id && user.id !== id) {
+      checkFriendshipStatus();
+      checkCollaborationStatus();
+      checkCollaborationEligibility();
+      setupFriendSocket();
+    }
+    return () => {
+      if (friendSocketRef.current) {
+        friendSocketRef.current.disconnect();
+        friendSocketRef.current = null;
+      }
+    };
+  }, [id, user?.id]);
 
   const loadProfile = async () => {
     if (!id) {
@@ -101,6 +121,281 @@ const PublicProfileScreen: React.FC = () => {
       setNotFound(true);
       setLoading(false);
     }
+  };
+
+  const setupFriendSocket = async () => {
+    if (!user?.id || !id || user.id === id) return;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      // Create a socket connection for friend requests (no room needed)
+      const socket = io(SOCKET_URL, {
+        transports: ['websocket', 'polling'],
+        reconnection: false,
+        auth: {
+          token: session.access_token,
+        },
+      });
+
+      socket.on('connect', () => {
+        console.log('Friend socket connected');
+        // Request friends list to check status
+        socket.emit('get-friends');
+      });
+
+      socket.on('friends-list', (friends: any[]) => {
+        checkFriendshipFromList(friends);
+      });
+
+      socket.on('friend-request-sent', () => {
+        setFriendshipStatus('pending');
+        setLoadingFriendship(false);
+        Alert.alert('Success', 'Friend request sent!');
+      });
+
+      socket.on('collaboration-request-sent', () => {
+        setCollabStatus('pending');
+        setLoadingCollab(false);
+        Alert.alert('Success', 'Collaboration request sent!');
+      });
+
+      socket.on('collaboration-request-accepted', (data: { roomId: string }) => {
+        setCollabStatus('accepted');
+        setLoadingCollab(false);
+        Alert.alert('Success', 'Collaboration request accepted! Creating room...', [
+          {
+            text: 'Join Room',
+            onPress: () => {
+              navigation.navigate('Room', { roomId: data.roomId });
+            },
+          },
+          { text: 'OK' },
+        ]);
+      });
+
+      socket.on('error', (error: any) => {
+        console.error('Friend socket error:', error);
+        if (error.message) {
+          Alert.alert('Error', error.message);
+        }
+      });
+
+      friendSocketRef.current = socket;
+    } catch (error) {
+      console.error('Error setting up friend socket:', error);
+    }
+  };
+
+  const checkFriendshipStatus = async () => {
+    if (!user?.id || !id || user.id === id) return;
+    
+    try {
+      // Check friendship status from Supabase - check both directions
+      const { data: friendships, error } = await supabase
+        .from('friends')
+        .select('*')
+        .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
+
+      if (error) {
+        console.error('Error checking friendship:', error);
+        return;
+      }
+
+      // Find the friendship relationship with this user
+      const friendship = friendships?.find(
+        (f: any) => 
+          (f.user_id === user.id && f.friend_id === id) ||
+          (f.user_id === id && f.friend_id === user.id)
+      );
+
+      if (friendship) {
+        if (friendship.status === 'accepted') {
+          setFriendshipStatus('accepted');
+        } else if (friendship.status === 'pending') {
+          // Check if request is incoming (friend_id is current user) or outgoing (user_id is current user)
+          if (friendship.friend_id === user.id) {
+            setFriendshipStatus('pending_incoming');
+          } else {
+            setFriendshipStatus('pending');
+          }
+        }
+      } else {
+        setFriendshipStatus('none');
+      }
+    } catch (error) {
+      console.error('Error checking friendship status:', error);
+    }
+  };
+
+  const checkFriendshipFromList = (friends: any[]) => {
+    if (!user?.id || !id) return;
+    
+    const friendship = friends.find(
+      (f: any) => 
+        (f.user_id === user.id && f.friend_id === id) ||
+        (f.user_id === id && f.friend_id === user.id)
+    );
+
+    if (friendship) {
+      if (friendship.status === 'accepted') {
+        setFriendshipStatus('accepted');
+      } else if (friendship.status === 'pending') {
+        if (friendship.friend_id === user.id) {
+          setFriendshipStatus('pending_incoming');
+        } else {
+          setFriendshipStatus('pending');
+        }
+      }
+    } else {
+      setFriendshipStatus('none');
+    }
+  };
+
+  const handleSendFriendRequest = () => {
+    if (!friendSocketRef.current || !id || loadingFriendship) return;
+    
+    setLoadingFriendship(true);
+    friendSocketRef.current.emit('add-friend', { friendId: id });
+    
+    // Reset loading after a delay
+    setTimeout(() => setLoadingFriendship(false), 2000);
+  };
+
+  const handleAcceptFriendRequest = () => {
+    if (!friendSocketRef.current || !id || loadingFriendship) return;
+    
+    setLoadingFriendship(true);
+    friendSocketRef.current.emit('accept-friend-request', { friendId: id });
+    
+    // Listen for friends-list update after acceptance
+    const updateHandler = (friends: any[]) => {
+      checkFriendshipFromList(friends);
+      setLoadingFriendship(false);
+      Alert.alert('Success', 'Friend request accepted!');
+      friendSocketRef.current?.off('friends-list', updateHandler);
+    };
+    friendSocketRef.current.on('friends-list', updateHandler);
+    
+    // Fallback timeout
+    setTimeout(() => {
+      setLoadingFriendship(false);
+      friendSocketRef.current?.off('friends-list', updateHandler);
+    }, 5000);
+  };
+
+  const checkCollaborationEligibility = async () => {
+    if (!user?.id || !id || user.id === id || !currentUserProfile?.subscription_tier || !profile?.subscription_tier) {
+      setCanCollaborate(false);
+      return;
+    }
+    
+    try {
+      // Check if both users' tiers have collaboration enabled
+      const { data: currentUserTier } = await supabase
+        .from('subscription_tier_settings')
+        .select('collaboration')
+        .eq('tier', currentUserProfile.subscription_tier)
+        .single();
+      
+      const { data: profileUserTier } = await supabase
+        .from('subscription_tier_settings')
+        .select('collaboration')
+        .eq('tier', profile.subscription_tier)
+        .single();
+
+      setCanCollaborate(
+        (currentUserTier?.collaboration || false) && 
+        (profileUserTier?.collaboration || false)
+      );
+    } catch (error) {
+      console.error('Error checking collaboration eligibility:', error);
+      setCanCollaborate(false);
+    }
+  };
+
+  const checkCollaborationStatus = async () => {
+    if (!user?.id || !id || user.id === id) return;
+    
+    try {
+      // Check collaboration request status from Supabase
+      const { data: collabRequests, error } = await supabase
+        .from('collaboration_requests')
+        .select('*')
+        .or(`requester_id.eq.${user.id},collaborator_id.eq.${user.id}`);
+
+      if (error) {
+        console.error('Error checking collaboration status:', error);
+        return;
+      }
+
+      // Find the collaboration request with this user
+      const collab = collabRequests?.find(
+        (c: any) => 
+          (c.requester_id === user.id && c.collaborator_id === id) ||
+          (c.requester_id === id && c.collaborator_id === user.id)
+      );
+
+      if (collab) {
+        if (collab.status === 'accepted') {
+          setCollabStatus('accepted');
+        } else if (collab.status === 'pending') {
+          // Check if request is incoming (collaborator_id is current user) or outgoing (requester_id is current user)
+          if (collab.collaborator_id === user.id) {
+            setCollabStatus('pending_incoming');
+          } else {
+            setCollabStatus('pending');
+          }
+        } else {
+          setCollabStatus('none');
+        }
+      } else {
+        setCollabStatus('none');
+      }
+    } catch (error) {
+      console.error('Error checking collaboration status:', error);
+    }
+  };
+
+  const handleSendCollaborationRequest = () => {
+    if (!friendSocketRef.current || !id || loadingCollab) return;
+    
+    setLoadingCollab(true);
+    friendSocketRef.current.emit('request-collaboration', { collaboratorId: id });
+    
+    // Reset loading after a delay
+    setTimeout(() => setLoadingCollab(false), 2000);
+  };
+
+  const handleAcceptCollaborationRequest = () => {
+    if (!friendSocketRef.current || !id || loadingCollab) return;
+    
+    setLoadingCollab(true);
+    friendSocketRef.current.emit('accept-collaboration-request', { requesterId: id });
+    
+    // Listen for collaboration-accepted event
+    const updateHandler = (data: { roomId: string }) => {
+      setCollabStatus('accepted');
+      setLoadingCollab(false);
+      Alert.alert('Success', 'Collaboration request accepted! Creating room...', [
+        {
+          text: 'Join Room',
+          onPress: () => {
+            navigation.navigate('Room', { roomId: data.roomId });
+          },
+        },
+        { text: 'OK' },
+      ]);
+      friendSocketRef.current?.off('collaboration-request-accepted', updateHandler);
+    };
+    friendSocketRef.current.on('collaboration-request-accepted', updateHandler);
+    
+    // Fallback timeout
+    setTimeout(() => {
+      setLoadingCollab(false);
+      friendSocketRef.current?.off('collaboration-request-accepted', updateHandler);
+    }, 10000);
   };
 
   const loadUserAnalytics = async (userId: string) => {
@@ -323,6 +618,106 @@ const PublicProfileScreen: React.FC = () => {
             size="small"
           />
         </View>
+        
+        {/* Friend Request Button - Only show if viewing someone else's profile */}
+        {user?.id && id && user.id !== id && (
+          <View style={styles.friendRequestContainer}>
+            {friendshipStatus === 'none' && (
+              <Button
+                mode="contained"
+                onPress={handleSendFriendRequest}
+                loading={loadingFriendship}
+                disabled={loadingFriendship}
+                icon="account-plus"
+                style={styles.friendButton}
+              >
+                Send Friend Request
+              </Button>
+            )}
+            {friendshipStatus === 'pending' && (
+              <Button
+                mode="outlined"
+                disabled={true}
+                icon="clock-outline"
+                style={styles.friendButton}
+              >
+                Friend Request Sent
+              </Button>
+            )}
+            {friendshipStatus === 'pending_incoming' && (
+              <Button
+                mode="contained"
+                onPress={handleAcceptFriendRequest}
+                loading={loadingFriendship}
+                disabled={loadingFriendship}
+                icon="account-check"
+                style={styles.friendButton}
+              >
+                Accept Friend Request
+              </Button>
+            )}
+            {friendshipStatus === 'accepted' && (
+              <Button
+                mode="outlined"
+                disabled={true}
+                icon="account-check"
+                style={styles.friendButton}
+              >
+                Friends
+              </Button>
+            )}
+          </View>
+        )}
+        
+        {/* Collaboration Request Button - Only show for users with collaboration-enabled tiers */}
+        {user?.id && id && user.id !== id && canCollaborate && (
+          <View style={styles.friendRequestContainer}>
+            {collabStatus === 'none' && (
+              <Button
+                mode="contained"
+                onPress={handleSendCollaborationRequest}
+                loading={loadingCollab}
+                disabled={loadingCollab}
+                icon="music-note"
+                style={[styles.friendButton, { backgroundColor: theme.colors.secondary }]}
+              >
+                Request a Collab
+              </Button>
+            )}
+            {collabStatus === 'pending' && (
+              <Button
+                mode="outlined"
+                disabled={true}
+                icon="clock-outline"
+                style={styles.friendButton}
+              >
+                Collab Request Sent
+              </Button>
+            )}
+            {collabStatus === 'pending_incoming' && (
+              <Button
+                mode="contained"
+                onPress={handleAcceptCollaborationRequest}
+                loading={loadingCollab}
+                disabled={loadingCollab}
+                icon="music-note-multiple"
+                style={[styles.friendButton, { backgroundColor: theme.colors.secondary }]}
+              >
+                Accept Collab Request
+              </Button>
+            )}
+            {collabStatus === 'accepted' && (
+              <Button
+                mode="outlined"
+                disabled={true}
+                icon="music-note-multiple"
+                style={styles.friendButton}
+              >
+                Collaborating
+              </Button>
+            )}
+          </View>
+        )}
       </View>
 
       {/* Statistics Card */}
@@ -518,6 +913,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     marginBottom: 2,
+  },
+  friendRequestContainer: {
+    marginTop: 20,
+    width: '100%',
+    paddingHorizontal: 20,
+  },
+  friendButton: {
+    width: '100%',
   },
 });
 

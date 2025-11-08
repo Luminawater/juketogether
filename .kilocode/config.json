@@ -1,0 +1,34 @@
+{
+  "projectId": "soundcloud-jukebox",
+  "indexing": {
+    "enabled": true,
+    "filePatterns": {
+      "include": [
+        "src/**/*.js",
+        "src/**/*.ts",
+        "src/**/*.jsx",
+        "src/**/*.tsx",
+        "**/*.md",
+        "**/*.json"
+      ],
+      "exclude": [
+        "node_modules/**",
+        "dist/**",
+        "build/**",
+        ".git/**",
+        ".vscode/**",
+        ".kilocode/**"
+      ]
+    },
+    "maxFileSize": 1048576,
+    "chunkSize": {
+      "min": 100,
+      "max": 1000
+    }
+  },
+  "qdrant": {
+    "collectionName": "soundcloud-jukebox_index",
+    "vectorSize": 384,
+    "distanceMetric": "Cosine"
+  }
+}

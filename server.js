@@ -109,6 +109,9 @@ const {
   addFriendRequest,
   acceptFriendRequest,
   removeFriendRequest,
+  createCollaborationRequest,
+  acceptCollaborationRequest,
+  getCollaborationRequest,
   trackUserJoin,
   trackUserLeave,
   trackTrackPlay
@@ -263,9 +266,9 @@ async function getTierSettings(tier) {
   if (!supabase) {
     // Return default settings if Supabase not available
     const defaults = {
-      free: { queue_limit: 1, dj_mode: false, ads: true },
-      standard: { queue_limit: 10, dj_mode: false, ads: true },
-      pro: { queue_limit: null, dj_mode: true, ads: false },
+      free: { queue_limit: 1, dj_mode: false, ads: true, collaboration: false },
+      standard: { queue_limit: 10, dj_mode: false, ads: true, collaboration: false },
+      pro: { queue_limit: null, dj_mode: true, ads: false, collaboration: true },
     };
     return defaults[tier] || defaults.free;
   }
@@ -273,7 +276,7 @@ async function getTierSettings(tier) {
   try {
     const { data } = await supabase
       .from('subscription_tier_settings')
-      .select('queue_limit, dj_mode, ads')
+      .select('queue_limit, dj_mode, ads, collaboration')
       .eq('tier', tier)
       .single();
     
@@ -282,23 +285,24 @@ async function getTierSettings(tier) {
         queue_limit: data.queue_limit,
         dj_mode: data.dj_mode || false,
         ads: data.ads !== undefined ? data.ads : true,
+        collaboration: data.collaboration !== undefined ? data.collaboration : false,
       };
     }
     
     // Fallback to defaults if not found
     const defaults = {
-      free: { queue_limit: 1, dj_mode: false, ads: true },
-      standard: { queue_limit: 10, dj_mode: false, ads: true },
-      pro: { queue_limit: null, dj_mode: true, ads: false },
+      free: { queue_limit: 1, dj_mode: false, ads: true, collaboration: false },
+      standard: { queue_limit: 10, dj_mode: false, ads: true, collaboration: false },
+      pro: { queue_limit: null, dj_mode: true, ads: false, collaboration: true },
     };
     return defaults[tier] || defaults.free;
   } catch (error) {
     console.error('Error getting tier settings:', error);
     // Return defaults on error
     const defaults = {
-      free: { queue_limit: 1, dj_mode: false, ads: true },
-      standard: { queue_limit: 10, dj_mode: false, ads: true },
-      pro: { queue_limit: null, dj_mode: true, ads: false },
+      free: { queue_limit: 1, dj_mode: false, ads: true, collaboration: false },
+      standard: { queue_limit: 10, dj_mode: false, ads: true, collaboration: false },
+      pro: { queue_limit: null, dj_mode: true, ads: false, collaboration: true },
     };
     return defaults[tier] || defaults.free;
   }
@@ -1430,6 +1434,147 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Collaboration request endpoints
+  socket.on('request-collaboration', async (data) => {
+    const { collaboratorId } = data;
+
+    if (!socket.isAuthenticated) {
+      socket.emit('error', { message: 'Authentication required' });
+      return;
+    }
+
+    const requesterId = socket.userId;
+    
+    // Verify both users have a tier with collaboration enabled
+    const { data: requesterProfile } = await supabase
+      .from('user_profiles')
+      .select('subscription_tier')
+      .eq('id', requesterId)
+      .single();
+    
+    const { data: collaboratorProfile } = await supabase
+      .from('user_profiles')
+      .select('subscription_tier')
+      .eq('id', collaboratorId)
+      .single();
+
+    if (!requesterProfile) {
+      socket.emit('error', { message: 'User profile not found' });
+      return;
+    }
+
+    if (!collaboratorProfile) {
+      socket.emit('error', { message: 'Collaborator profile not found' });
+      return;
+    }
+
+    // Check if requester's tier has collaboration enabled
+    const requesterTierSettings = await getTierSettings(requesterProfile.subscription_tier);
+    if (!requesterTierSettings.collaboration) {
+      socket.emit('error', { message: 'Your subscription tier does not support collaboration' });
+      return;
+    }
+
+    // Check if collaborator's tier has collaboration enabled
+    const collaboratorTierSettings = await getTierSettings(collaboratorProfile.subscription_tier);
+    if (!collaboratorTierSettings.collaboration) {
+      socket.emit('error', { message: 'The user\'s subscription tier does not support collaboration' });
+      return;
+    }
+
+    const success = await createCollaborationRequest(requesterId, collaboratorId);
+    
+    if (success) {
+      socket.emit('collaboration-request-sent', { collaboratorId });
+      // Notify the collaborator
+      const collaboratorSocket = Array.from(io.sockets.sockets.values())
+        .find(s => s.isAuthenticated && s.userId === collaboratorId);
+      if (collaboratorSocket) {
+        collaboratorSocket.emit('collaboration-request-received', { requesterId });
+      }
+    } else {
+      socket.emit('error', { message: 'Failed to send collaboration request' });
+    }
+  });
+
+  socket.on('accept-collaboration-request', async (data) => {
+    const { requesterId } = data;
+
+    if (!socket.isAuthenticated) {
+      socket.emit('error', { message: 'Authentication required' });
+      return;
+    }
+
+    const collaboratorId = socket.userId;
+    
+    // Accept the collaboration request
+    const collabRequest = await acceptCollaborationRequest(requesterId, collaboratorId);
+    
+    if (!collabRequest) {
+      socket.emit('error', { message: 'Collaboration request not found or already processed' });
+      return;
+    }
+
+    // Create a collaboration room with both users as hosts
+    const roomId = generateRoomId();
+    const shortCode = await generateShortCode();
+    
+    // Create room in Supabase
+    const { error: roomError } = await supabase
+      .from('rooms')
+      .insert({
+        id: roomId,
+        host_user_id: requesterId, // Primary host (first requester)
+        short_code: shortCode,
+      });
+
+    if (roomError) {
+      console.error('Error creating collaboration room:', roomError);
+      socket.emit('error', { message: 'Failed to create collaboration room' });
+      return;
+    }
+
+    // Create room settings
+    const { error: settingsError } = await supabase
+      .from('room_settings')
+      .insert({
+        room_id: roomId,
+        name: `Collab: ${requesterId.substring(0, 8)} & ${collaboratorId.substring(0, 8)}`,
+        description: 'DJ Mode Collaboration Room',
+        dj_mode: true,
+        dj_players: 2, // Both users can DJ
+        allow_controls: true,
+        allow_queue: true,
+      });
+
+    if (settingsError) {
+      console.error('Error creating room settings:', settingsError);
+      // Clean up room
+      await supabase.from('rooms').delete().eq('id', roomId);
+      socket.emit('error', { message: 'Failed to create collaboration room settings' });
+      return;
+    }
+
+    // Add both users as admins (so both can control)
+    await addRoomAdmin(roomId, requesterId, requesterId);
+    await addRoomAdmin(roomId, collaboratorId, collaboratorId);
+
+    // Update collaboration request with room_id
+    await supabase
+      .from('collaboration_requests')
+      .update({ room_id: roomId })
+      .eq('id', collabRequest.id);
+
+    // Notify both users
+    socket.emit('collaboration-request-accepted', { roomId, requesterId, collaboratorId });
+    
+    const requesterSocket = Array.from(io.sockets.sockets.values())
+      .find(s => s.isAuthenticated && s.userId === requesterId);
+    if (requesterSocket) {
+      requesterSocket.emit('collaboration-request-accepted', { roomId, requesterId, collaboratorId });
+    }
+  });
+
 });
 
 // Proxy endpoint for SoundCloud oEmbed API (to avoid CORS issues)
@@ -1953,7 +2098,7 @@ app.get('/api/spotify/playlists/:playlistId/tracks', async (req, res) => {
       }
 
       const data = await response.json();
-      const tracks = (data.items || []).map((item: any) => item.track).filter((track: any) => track !== null);
+      const tracks = (data.items || []).map((item) => item.track).filter((track) => track !== null);
       allTracks = allTracks.concat(tracks);
       nextUrl = data.next;
     }
