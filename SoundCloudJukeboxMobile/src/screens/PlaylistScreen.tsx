@@ -26,6 +26,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { getThumbnailUrl } from '../utils/imageUtils';
 
 type PlaylistScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Playlist'>;
 type PlaylistScreenRouteProp = RouteProp<RootStackParamList, 'Playlist'>;
@@ -328,7 +329,7 @@ const PlaylistScreen: React.FC = () => {
                       left={() => (
                         <Avatar.Image
                           size={56}
-                          source={{ uri: track.track_thumbnail || 'https://via.placeholder.com/56' }}
+                          source={{ uri: getThumbnailUrl(track.track_thumbnail, 56) }}
                         />
                       )}
                       right={() => (

@@ -16,7 +16,9 @@ import {
   useTheme,
   ActivityIndicator,
   Chip,
+  Divider,
 } from 'react-native-paper';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
@@ -43,8 +45,8 @@ interface TierConfig {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const IS_MOBILE = SCREEN_WIDTH < 768;
-const CARD_WIDTH = IS_MOBILE ? SCREEN_WIDTH - 32 : Math.min(300, Math.max(260, (SCREEN_WIDTH - 100) / 4)); // Slim pillar width
-const CARD_MIN_HEIGHT = 650; // Tall pillar height
+const CARD_WIDTH = IS_MOBILE ? SCREEN_WIDTH - 32 : Math.min(320, Math.max(280, (SCREEN_WIDTH - 120) / 4));
+const CARD_MIN_HEIGHT = 680;
 
 const SubscriptionScreen: React.FC = () => {
   const navigation = useNavigation<SubscriptionScreenNavigationProp>();
@@ -267,9 +269,23 @@ const SubscriptionScreen: React.FC = () => {
     return value?.toString() || 'N/A';
   };
 
+  const getFeatureIcon = (featureName: string, enabled: boolean) => {
+    const iconMap: Record<string, string> = {
+      queue_limit: 'playlist-music',
+      dj_mode: 'turntable',
+      listed_on_discovery: 'compass-outline',
+      listed_on_leaderboard: 'trophy',
+      ads: 'advertisements-off',
+      playlist: 'playlist-play',
+      collaboration: 'account-group',
+    };
+    return iconMap[featureName] || 'check-circle';
+  };
+
   const renderTierCard = (tierConfig: TierConfig) => {
     const isCurrent = isCurrentTier(tierConfig.tier);
     const tierColor = getTierColor(tierConfig.tier);
+    const isPopular = tierConfig.tier === 'pro' || tierConfig.tier === 'standard';
 
     return (
       <Card
@@ -278,24 +294,34 @@ const SubscriptionScreen: React.FC = () => {
           styles.tierCard,
           {
             backgroundColor: theme.colors.surface,
-            borderColor: isCurrent ? tierColor : theme.colors.outline,
-            borderWidth: isCurrent ? 3 : 1.5,
+            borderColor: isCurrent ? tierColor : isPopular ? `${tierColor}60` : theme.colors.outline,
+            borderWidth: isCurrent ? 3 : isPopular ? 2 : 1.5,
             minHeight: CARD_MIN_HEIGHT,
             ...(Platform.OS === 'web' ? {
               boxShadow: isCurrent 
-                ? `0 8px 24px ${tierColor}40, 0 4px 12px rgba(0, 0, 0, 0.15)`
-                : '0 4px 12px rgba(0, 0, 0, 0.1)',
-              transition: 'all 0.3s ease',
+                ? `0 12px 32px ${tierColor}50, 0 6px 16px rgba(0, 0, 0, 0.2)`
+                : isPopular
+                ? `0 8px 20px ${tierColor}30, 0 4px 12px rgba(0, 0, 0, 0.15)`
+                : '0 4px 16px rgba(0, 0, 0, 0.12)',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: 'translateY(0)',
             } : {
-              shadowColor: isCurrent ? tierColor : '#000',
-              shadowOffset: { width: 0, height: isCurrent ? 8 : 4 },
-              shadowOpacity: isCurrent ? 0.3 : 0.1,
-              shadowRadius: isCurrent ? 12 : 6,
-              elevation: isCurrent ? 8 : 4,
+              shadowColor: isCurrent ? tierColor : isPopular ? tierColor : '#000',
+              shadowOffset: { width: 0, height: isCurrent ? 10 : isPopular ? 6 : 4 },
+              shadowOpacity: isCurrent ? 0.35 : isPopular ? 0.2 : 0.12,
+              shadowRadius: isCurrent ? 16 : isPopular ? 12 : 8,
+              elevation: isCurrent ? 10 : isPopular ? 6 : 4,
             }),
           },
         ]}
       >
+        {isPopular && !isCurrent && (
+          <View style={[styles.popularBadge, { backgroundColor: `${tierColor}20` }]}>
+            <MaterialCommunityIcons name="star" size={14} color={tierColor} />
+            <Text style={[styles.popularBadgeText, { color: tierColor }]}>Popular</Text>
+          </View>
+        )}
+        
         <Card.Content style={styles.cardContent}>
           {isCurrent && (
             <Chip
@@ -304,11 +330,18 @@ const SubscriptionScreen: React.FC = () => {
               icon="check-circle"
               compact
             >
-              Current
+              Current Plan
             </Chip>
           )}
           
-          <View style={[styles.tierHeader, { borderBottomColor: theme.colors.outline }]}>
+          <View style={[styles.tierHeader, { borderBottomColor: `${theme.colors.outline}80` }]}>
+            <View style={[styles.tierIconContainer, { backgroundColor: `${tierColor}15` }]}>
+              <MaterialCommunityIcons 
+                name={isPopular ? 'crown' : 'account'} 
+                size={28} 
+                color={tierColor} 
+              />
+            </View>
             <Title style={[styles.tierTitle, { color: theme.colors.onSurface }]}>
               {tierConfig.display_name}
             </Title>
@@ -319,91 +352,134 @@ const SubscriptionScreen: React.FC = () => {
               </Text>
               {tierConfig.price > 0 && (
                 <Text style={[styles.pricePeriod, { color: theme.colors.onSurfaceVariant }]}>
-                  /mo
+                  /month
                 </Text>
               )}
             </View>
           </View>
 
           <View style={styles.featuresContainer}>
+            <Text style={[styles.featuresTitle, { color: theme.colors.onSurfaceVariant }]}>
+              Features
+            </Text>
+            <Divider style={[styles.featuresDivider, { backgroundColor: theme.colors.outline }]} />
+            
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Queue</Text>
+              <View style={styles.featureLeft}>
+                <MaterialCommunityIcons 
+                  name={getFeatureIcon('queue_limit', true)} 
+                  size={18} 
+                  color={tierConfig.queue_limit === null || tierConfig.queue_limit === Infinity ? tierColor : theme.colors.onSurfaceVariant} 
+                  style={styles.featureIcon}
+                />
+                <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Queue Limit</Text>
+              </View>
               <Text style={[styles.featureValue, { 
                 color: isProTier(tierConfig.tier) || tierConfig.queue_limit === null || tierConfig.queue_limit === Infinity
-                  ? theme.colors.primary 
+                  ? tierColor 
                   : theme.colors.onSurface 
               }]}>
                 {getFeatureDisplayValue(tierConfig, 'queue_limit', tierConfig.queue_limit)}
               </Text>
             </View>
+            
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>DJ Mode</Text>
+              <View style={styles.featureLeft}>
+                <MaterialCommunityIcons 
+                  name={getFeatureIcon('dj_mode', tierConfig.dj_mode)} 
+                  size={18} 
+                  color={tierConfig.dj_mode ? tierColor : theme.colors.onSurfaceVariant} 
+                  style={styles.featureIcon}
+                />
+                <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>DJ Mode</Text>
+              </View>
               <Text style={[styles.featureValue, { 
-                color: isProTier(tierConfig.tier) && tierConfig.dj_mode
-                  ? theme.colors.primary 
-                  : tierConfig.dj_mode 
-                    ? theme.colors.primary 
-                    : theme.colors.onSurface 
+                color: tierConfig.dj_mode ? tierColor : theme.colors.onSurface 
               }]}>
                 {getFeatureDisplayValue(tierConfig, 'dj_mode', tierConfig.dj_mode)}
               </Text>
             </View>
+            
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Discovery</Text>
+              <View style={styles.featureLeft}>
+                <MaterialCommunityIcons 
+                  name={getFeatureIcon('listed_on_discovery', tierConfig.listed_on_discovery)} 
+                  size={18} 
+                  color={tierConfig.listed_on_discovery ? tierColor : theme.colors.onSurfaceVariant} 
+                  style={styles.featureIcon}
+                />
+                <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Discovery</Text>
+              </View>
               <Text style={[styles.featureValue, { 
-                color: isProTier(tierConfig.tier) && tierConfig.listed_on_discovery
-                  ? theme.colors.primary 
-                  : tierConfig.listed_on_discovery 
-                    ? theme.colors.primary 
-                    : theme.colors.onSurface 
+                color: tierConfig.listed_on_discovery ? tierColor : theme.colors.onSurface 
               }]}>
                 {getFeatureDisplayValue(tierConfig, 'listed_on_discovery', tierConfig.listed_on_discovery)}
               </Text>
             </View>
+            
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Leaderboard</Text>
+              <View style={styles.featureLeft}>
+                <MaterialCommunityIcons 
+                  name={getFeatureIcon('listed_on_leaderboard', tierConfig.listed_on_leaderboard)} 
+                  size={18} 
+                  color={tierConfig.listed_on_leaderboard ? tierColor : theme.colors.onSurfaceVariant} 
+                  style={styles.featureIcon}
+                />
+                <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Leaderboard</Text>
+              </View>
               <Text style={[styles.featureValue, { 
-                color: isProTier(tierConfig.tier) && tierConfig.listed_on_leaderboard
-                  ? theme.colors.primary 
-                  : tierConfig.listed_on_leaderboard 
-                    ? theme.colors.primary 
-                    : theme.colors.onSurface 
+                color: tierConfig.listed_on_leaderboard ? tierColor : theme.colors.onSurface 
               }]}>
                 {getFeatureDisplayValue(tierConfig, 'listed_on_leaderboard', tierConfig.listed_on_leaderboard)}
               </Text>
             </View>
+            
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Ads</Text>
+              <View style={styles.featureLeft}>
+                <MaterialCommunityIcons 
+                  name={getFeatureIcon('ads', !tierConfig.ads)} 
+                  size={18} 
+                  color={!tierConfig.ads ? tierColor : theme.colors.error} 
+                  style={styles.featureIcon}
+                />
+                <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>No Ads</Text>
+              </View>
               <Text style={[styles.featureValue, { 
-                color: isProTier(tierConfig.tier) && !tierConfig.ads
-                  ? theme.colors.primary 
-                  : !tierConfig.ads 
-                    ? theme.colors.primary 
-                    : theme.colors.error 
+                color: !tierConfig.ads ? tierColor : theme.colors.error 
               }]}>
                 {getFeatureDisplayValue(tierConfig, 'ads', !tierConfig.ads)}
               </Text>
             </View>
+            
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Playlist</Text>
+              <View style={styles.featureLeft}>
+                <MaterialCommunityIcons 
+                  name={getFeatureIcon('playlist', tierConfig.playlist)} 
+                  size={18} 
+                  color={tierConfig.playlist ? tierColor : theme.colors.onSurfaceVariant} 
+                  style={styles.featureIcon}
+                />
+                <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Playlists</Text>
+              </View>
               <Text style={[styles.featureValue, { 
-                color: isProTier(tierConfig.tier) && tierConfig.playlist
-                  ? theme.colors.primary 
-                  : tierConfig.playlist 
-                    ? theme.colors.primary 
-                    : theme.colors.onSurface 
+                color: tierConfig.playlist ? tierColor : theme.colors.onSurface 
               }]}>
                 {getFeatureDisplayValue(tierConfig, 'playlist', tierConfig.playlist)}
               </Text>
             </View>
+            
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Collaboration</Text>
+              <View style={styles.featureLeft}>
+                <MaterialCommunityIcons 
+                  name={getFeatureIcon('collaboration', tierConfig.collaboration)} 
+                  size={18} 
+                  color={tierConfig.collaboration ? tierColor : theme.colors.onSurfaceVariant} 
+                  style={styles.featureIcon}
+                />
+                <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Collaboration</Text>
+              </View>
               <Text style={[styles.featureValue, { 
-                color: isProTier(tierConfig.tier) && tierConfig.collaboration
-                  ? theme.colors.primary 
-                  : tierConfig.collaboration 
-                    ? theme.colors.primary 
-                    : theme.colors.onSurface 
+                color: tierConfig.collaboration ? tierColor : theme.colors.onSurface 
               }]}>
                 {getFeatureDisplayValue(tierConfig, 'collaboration', tierConfig.collaboration)}
               </Text>
@@ -411,12 +487,14 @@ const SubscriptionScreen: React.FC = () => {
           </View>
 
           {tierConfig.description && (
-            <Text
-              style={[styles.description, { color: theme.colors.onSurfaceVariant }]}
-              numberOfLines={3}
-            >
-              {tierConfig.description}
-            </Text>
+            <View style={[styles.descriptionContainer, { borderTopColor: `${theme.colors.outline}40` }]}>
+              <Text
+                style={[styles.description, { color: theme.colors.onSurfaceVariant }]}
+                numberOfLines={3}
+              >
+                {tierConfig.description}
+              </Text>
+            </View>
           )}
 
           <View style={styles.buttonContainer}>
@@ -425,13 +503,20 @@ const SubscriptionScreen: React.FC = () => {
               onPress={() => handleUpgrade(tierConfig.tier)}
               disabled={isCurrent || upgrading === tierConfig.tier || processingPayment}
               loading={upgrading === tierConfig.tier || processingPayment}
-              style={[styles.upgradeButton, isCurrent && { borderColor: tierColor }]}
+              style={[
+                styles.upgradeButton, 
+                isCurrent && { borderColor: tierColor, borderWidth: 2 },
+                !isCurrent && Platform.OS === 'web' && {
+                  boxShadow: `0 4px 12px ${tierColor}40`,
+                }
+              ]}
               buttonColor={isCurrent ? undefined : tierColor}
               textColor={isCurrent ? tierColor : undefined}
               icon={isCurrent ? 'check-circle' : processingPayment ? 'loading' : 'arrow-up'}
-              compact
+              contentStyle={styles.upgradeButtonContent}
+              labelStyle={styles.upgradeButtonLabel}
             >
-              {isCurrent ? 'Current Plan' : processingPayment ? 'Processing...' : 'Upgrade'}
+              {isCurrent ? 'Current Plan' : processingPayment ? 'Processing...' : 'Upgrade Now'}
             </Button>
           </View>
         </Card.Content>
@@ -455,6 +540,13 @@ const SubscriptionScreen: React.FC = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.header}>
+        <View style={[styles.headerIconContainer, { backgroundColor: `${theme.colors.primary}15` }]}>
+          <MaterialCommunityIcons 
+            name="crown-outline" 
+            size={32} 
+            color={theme.colors.primary} 
+          />
+        </View>
         <Title style={[styles.headerTitle, { color: theme.colors.onSurface }]}>
           Subscription Plans
         </Title>
@@ -487,130 +579,214 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
+    fontWeight: '500',
   },
   header: {
-    padding: 16,
-    paddingTop: 24,
-    paddingBottom: 24,
+    padding: IS_MOBILE ? 20 : 24,
+    paddingTop: IS_MOBILE ? 28 : 32,
+    paddingBottom: IS_MOBILE ? 20 : 24,
     alignItems: 'center',
   },
+  headerIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   headerTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: IS_MOBILE ? 28 : 36,
+    fontWeight: '800',
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: IS_MOBILE ? 14 : 16,
     textAlign: 'center',
-    opacity: 0.8,
+    opacity: 0.75,
+    fontWeight: '400',
+    lineHeight: 22,
+    paddingHorizontal: 20,
   },
   horizontalScroll: {
     flex: 1,
   },
   horizontalScrollContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingBottom: 32,
-    gap: 16,
+    paddingHorizontal: IS_MOBILE ? 16 : 24,
+    paddingVertical: 20,
+    paddingBottom: 40,
+    gap: IS_MOBILE ? 16 : 20,
     alignItems: 'flex-start',
   },
   tierCard: {
-    borderRadius: 20,
+    borderRadius: 24,
     flex: 0,
     width: CARD_WIDTH,
     maxWidth: CARD_WIDTH,
+    overflow: 'hidden',
+    position: 'relative',
     ...(Platform.OS === 'web' ? {
       cursor: 'pointer',
+      ':hover': {
+        transform: 'translateY(-4px)',
+      },
     } : {}),
+  },
+  popularBadge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    zIndex: 10,
+    gap: 4,
+  },
+  popularBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   cardContent: {
     justifyContent: 'flex-start',
-    padding: 20,
-    paddingTop: 16,
+    padding: IS_MOBILE ? 18 : 24,
+    paddingTop: IS_MOBILE ? 18 : 24,
     minHeight: CARD_MIN_HEIGHT,
     width: '100%',
   },
   currentChip: {
     alignSelf: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   currentChipText: {
     color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 11,
+    fontWeight: '700',
+    fontSize: 12,
+    letterSpacing: 0.3,
   },
   tierHeader: {
-    borderBottomWidth: 1.5,
-    paddingBottom: 16,
-    marginBottom: 20,
+    borderBottomWidth: 2,
+    paddingBottom: 20,
+    marginBottom: 24,
     alignItems: 'center',
   },
-  tierTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  tierIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 12,
+  },
+  tierTitle: {
+    fontSize: IS_MOBILE ? 22 : 26,
+    fontWeight: '800',
+    marginBottom: 14,
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'center',
+    marginTop: 4,
   },
   price: {
-    fontSize: 38,
-    fontWeight: 'bold',
-    letterSpacing: -1.5,
-    lineHeight: 42,
+    fontSize: IS_MOBILE ? 36 : 44,
+    fontWeight: '900',
+    letterSpacing: -2,
+    lineHeight: IS_MOBILE ? 40 : 48,
   },
   pricePeriod: {
-    fontSize: 16,
-    marginLeft: 4,
-    opacity: 0.7,
+    fontSize: IS_MOBILE ? 14 : 16,
+    marginLeft: 6,
+    opacity: 0.65,
     fontWeight: '500',
   },
   featuresContainer: {
-    marginBottom: 20,
+    marginBottom: 24,
     width: '100%',
-    minHeight: 200,
+    minHeight: 240,
+  },
+  featuresTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+    opacity: 0.6,
+  },
+  featuresDivider: {
+    marginBottom: 16,
+    height: 1,
+    opacity: 0.3,
   },
   featureRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingVertical: 8,
-    minHeight: 32,
+    marginBottom: 14,
+    paddingVertical: 10,
+    minHeight: 36,
+  },
+  featureLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 10,
+  },
+  featureIcon: {
+    marginRight: 0,
   },
   featureLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.2,
     flex: 1,
-    marginRight: 8,
   },
   featureValue: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     textAlign: 'right',
     flexShrink: 0,
-    minWidth: 80,
+    minWidth: 90,
+    letterSpacing: 0.2,
+  },
+  descriptionContainer: {
+    marginBottom: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
   },
   description: {
     fontSize: 12,
-    marginBottom: 20,
     fontStyle: 'italic',
-    lineHeight: 16,
+    lineHeight: 18,
     textAlign: 'center',
-    opacity: 0.8,
+    opacity: 0.7,
+    paddingHorizontal: 8,
   },
   buttonContainer: {
     marginTop: 'auto',
-    paddingTop: 16,
+    paddingTop: 20,
   },
   upgradeButton: {
-    borderRadius: 12,
-    paddingVertical: 4,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  upgradeButtonContent: {
+    paddingVertical: IS_MOBILE ? 6 : 8,
+    paddingHorizontal: 16,
+  },
+  upgradeButtonLabel: {
+    fontSize: IS_MOBILE ? 14 : 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });
 

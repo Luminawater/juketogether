@@ -264,7 +264,11 @@ export default function App() {
                     icon="arrow-left"
                     iconColor={darkTheme.colors.onSurface}
                     size={24}
-                    onPress={() => navigation.goBack()}
+                    onPress={() => {
+                      if (navigation.canGoBack()) {
+                        navigation.goBack();
+                      }
+                    }}
                     style={{ backgroundColor: 'transparent' }}
                   />
                 ),

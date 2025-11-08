@@ -398,7 +398,8 @@ function isPlaylistUrl(url) {
     // SoundCloud playlists have paths like:
     // - soundcloud.com/user/sets/playlist-name
     // - soundcloud.com/user/playlists/playlist-name
-    const playlistPattern = /soundcloud\.com\/[^\/]+\/(sets|playlists)\//i;
+    // - soundcloud.com/discover/sets/track-stations:ID (track stations)
+    const playlistPattern = /soundcloud\.com\/([^\/]+\/(sets|playlists)\/|discover\/sets\/track-stations:)/i;
     return playlistPattern.test(url);
 }
 

@@ -4,6 +4,7 @@ import { Card, Text, Button, Avatar, useTheme, Slider, Menu, IconButton } from '
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Track } from '../types';
 import { WaveformView } from './WaveformView';
+import { getThumbnailUrl } from '../utils/imageUtils';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const IS_MOBILE = SCREEN_WIDTH < 768;
@@ -96,7 +97,7 @@ export const DJModePlayer: React.FC<DJModePlayerProps> = ({
             <View style={styles.trackDisplay}>
               <Avatar.Image
                 size={IS_MOBILE ? 80 : 100}
-                source={{ uri: track.info?.thumbnail || 'https://via.placeholder.com/100' }}
+                source={{ uri: getThumbnailUrl(track.info?.thumbnail, IS_MOBILE ? 80 : 100) }}
                 style={[styles.trackThumbnail, isPlaying && styles.trackThumbnailPlaying]}
               />
               <View style={styles.trackInfo}>

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, TouchableOpacity, Platform, Animated } from 'react-native';
 import { Card, Text, Button, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -9,36 +9,198 @@ interface DJModeUpgradeAdProps {
 
 export const DJModeUpgradeAd: React.FC<DJModeUpgradeAdProps> = ({ onUpgrade }) => {
   const theme = useTheme();
+  const glowAnimation = useRef(new Animated.Value(0)).current;
+  const iconGlowAnimation = useRef(new Animated.Value(0)).current;
+  const titleGlowAnimation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Create pulsing glow animation for the card
+    const glowLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnimation, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(glowAnimation, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: false,
+        }),
+      ])
+    );
+
+    // Create pulsing glow animation for the icon
+    const iconGlowLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(iconGlowAnimation, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: false,
+        }),
+        Animated.timing(iconGlowAnimation, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: false,
+        }),
+      ])
+    );
+
+    // Create pulsing glow animation for the title
+    const titleGlowLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(titleGlowAnimation, {
+          toValue: 1,
+          duration: 1800,
+          useNativeDriver: false,
+        }),
+        Animated.timing(titleGlowAnimation, {
+          toValue: 0,
+          duration: 1800,
+          useNativeDriver: false,
+        }),
+      ])
+    );
+
+    glowLoop.start();
+    iconGlowLoop.start();
+    titleGlowLoop.start();
+
+    return () => {
+      glowLoop.stop();
+      iconGlowLoop.stop();
+      titleGlowLoop.stop();
+    };
+  }, []);
+
+  const cardGlowOpacity = glowAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.8],
+  });
+
+  const cardGlowScale = glowAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.02],
+  });
+
+  const iconGlowOpacity = iconGlowAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.5, 1],
+  });
+
+  const iconGlowScale = iconGlowAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.1],
+  });
+
+  const titleGlowOpacity = titleGlowAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.6, 1],
+  });
+
+  const primaryColor = theme.colors.primary;
+  
+  // Extract RGB values from hex or rgb color
+  const getRgbValues = (color: string): [number, number, number] => {
+    // Handle hex colors (#667eea or #667EEA)
+    if (color.startsWith('#')) {
+      const hex = color.slice(1);
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      return [r, g, b];
+    }
+    // Handle rgb/rgba colors (rgb(102, 126, 234))
+    const rgbMatch = color.match(/\d+/g);
+    if (rgbMatch && rgbMatch.length >= 3) {
+      return [
+        parseInt(rgbMatch[0], 10),
+        parseInt(rgbMatch[1], 10),
+        parseInt(rgbMatch[2], 10),
+      ];
+    }
+    // Default fallback
+    return [102, 126, 234];
+  };
+
+  const [primaryR, primaryG, primaryB] = getRgbValues(primaryColor);
 
   return (
-    <Card
+    <Animated.View
       style={[
-        styles.card,
+        styles.cardWrapper,
         {
-          backgroundColor: theme.colors.surface,
-          borderColor: theme.colors.primary,
-          borderWidth: 2,
+          transform: [{ scale: cardGlowScale }],
         },
       ]}
-      elevation={4}
     >
-      <Card.Content style={styles.content}>
-        <View style={styles.iconContainer}>
-          <MaterialCommunityIcons
-            name="equalizer"
-            size={64}
-            color={theme.colors.primary}
-          />
-        </View>
-        
-        <Text
-          style={[
-            styles.title,
-            { color: theme.colors.onSurface },
-          ]}
-        >
-          Want to DJ? Get PRO!
-        </Text>
+      <Animated.View
+        style={[
+          styles.glowLayer,
+          {
+            opacity: cardGlowOpacity,
+            shadowColor: primaryColor,
+            ...(Platform.OS === 'web' ? {
+              boxShadow: `0 0 40px rgba(${primaryR}, ${primaryG}, ${primaryB}, 0.8), 0 0 80px rgba(${primaryR}, ${primaryG}, ${primaryB}, 0.4)`,
+            } : {}),
+          },
+        ]}
+      />
+      <Card
+        style={[
+          styles.card,
+          {
+            backgroundColor: theme.colors.surface,
+            borderColor: primaryColor,
+            borderWidth: 2,
+            shadowColor: primaryColor,
+            ...(Platform.OS === 'web' ? {
+              boxShadow: `0 0 20px rgba(${primaryR}, ${primaryG}, ${primaryB}, 0.6), 0 0 40px rgba(${primaryR}, ${primaryG}, ${primaryB}, 0.3), 0 8px 32px rgba(0, 0, 0, 0.2)`,
+            } : {}),
+          },
+        ]}
+        elevation={8}
+      >
+        <Card.Content style={styles.content}>
+          <Animated.View
+            style={[
+              styles.iconContainer,
+              {
+                transform: [{ scale: iconGlowScale }],
+                opacity: iconGlowOpacity,
+                backgroundColor: `rgba(${primaryR}, ${primaryG}, ${primaryB}, 0.15)`,
+                shadowColor: primaryColor,
+                ...(Platform.OS === 'web' ? {
+                  boxShadow: `0 0 30px rgba(${primaryR}, ${primaryG}, ${primaryB}, 0.8)`,
+                } : {}),
+              },
+            ]}
+          >
+            <MaterialCommunityIcons
+              name="equalizer"
+              size={64}
+              color={primaryColor}
+            />
+          </Animated.View>
+          
+          <Animated.Text
+            style={[
+              styles.title,
+              {
+                color: theme.colors.onSurface,
+                opacity: titleGlowOpacity,
+                textShadowColor: primaryColor,
+                textShadowOffset: { width: 0, height: 0 },
+                textShadowRadius: 20,
+                ...(Platform.OS === 'web' ? {
+                  textShadow: `0 0 20px rgba(${primaryR}, ${primaryG}, ${primaryB}, 0.8), 0 0 40px rgba(${primaryR}, ${primaryG}, ${primaryB}, 0.4)`,
+                  filter: `drop-shadow(0 0 10px rgba(${primaryR}, ${primaryG}, ${primaryB}, 0.6))`,
+                } : {}),
+              },
+            ]}
+          >
+            Want to DJ? Get PRO!
+          </Animated.Text>
         
         <Text
           style={[
@@ -95,8 +257,16 @@ export const DJModeUpgradeAd: React.FC<DJModeUpgradeAdProps> = ({ onUpgrade }) =
         <Button
           mode="contained"
           onPress={onUpgrade}
-          style={styles.upgradeButton}
-          buttonColor={theme.colors.primary}
+          style={[
+            styles.upgradeButton,
+            {
+              shadowColor: primaryColor,
+              ...(Platform.OS === 'web' ? {
+                boxShadow: `0 0 15px rgba(${primaryR}, ${primaryG}, ${primaryB}, 0.5), 0 4px 12px rgba(0, 0, 0, 0.15)`,
+              } : {}),
+            },
+          ]}
+          buttonColor={primaryColor}
           icon="arrow-up-circle"
           contentStyle={styles.buttonContent}
         >
@@ -104,15 +274,38 @@ export const DJModeUpgradeAd: React.FC<DJModeUpgradeAdProps> = ({ onUpgrade }) =
         </Button>
       </Card.Content>
     </Card>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
+  cardWrapper: {
+    position: 'relative',
+    margin: 16,
+  },
+  glowLayer: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    right: -10,
+    bottom: -10,
+    borderRadius: 26,
+    backgroundColor: 'transparent',
+    ...(Platform.OS !== 'web' ? {
+      shadowOffset: { width: 0, height: 0 },
+      shadowRadius: 40,
+      shadowOpacity: 0.8,
+      elevation: 20,
+    } : {}),
+  },
   card: {
     borderRadius: 16,
-    margin: 16,
-    ...(Platform.OS === 'web' ? {
-      boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.15)',
+    position: 'relative',
+    zIndex: 1,
+    ...(Platform.OS !== 'web' ? {
+      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: 24,
+      shadowOpacity: 0.3,
     } : {}),
   },
   content: {
@@ -123,7 +316,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     padding: 16,
     borderRadius: 50,
-    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+    ...(Platform.OS !== 'web' ? {
+      shadowOffset: { width: 0, height: 0 },
+      shadowRadius: 20,
+      shadowOpacity: 0.8,
+      elevation: 15,
+    } : {}),
   },
   title: {
     fontSize: 24,

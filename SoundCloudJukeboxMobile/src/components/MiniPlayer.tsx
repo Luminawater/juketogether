@@ -3,6 +3,7 @@ import { View, StyleSheet, Platform, Dimensions, TouchableOpacity, Animated } fr
 import { Card, Text, IconButton, useTheme, Avatar } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Track } from '../types';
+import { getThumbnailUrl } from '../utils/imageUtils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const IS_MOBILE = SCREEN_WIDTH < 768;
@@ -14,6 +15,7 @@ interface MiniPlayerProps {
   onPlayPause: () => void;
   onExpand: () => void;
   onClose: () => void;
+  position?: 'left' | 'right';
 }
 
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({
@@ -23,6 +25,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   onPlayPause,
   onExpand,
   onClose,
+  position = 'right',
 }) => {
   const theme = useTheme();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -37,7 +40,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, position === 'left' && styles.containerLeft]}>
       <Card
         style={[
           styles.card,
@@ -58,7 +61,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
             <Avatar.Image
               size={IS_MOBILE ? 48 : 56}
               source={{
-                uri: currentTrack.info?.thumbnail || 'https://via.placeholder.com/100',
+                uri: getThumbnailUrl(currentTrack.info?.thumbnail, IS_MOBILE ? 48 : 56),
               }}
               style={styles.thumbnail}
             />
@@ -109,6 +112,10 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web' ? {
       position: 'fixed',
     } : {}),
+  },
+  containerLeft: {
+    right: undefined,
+    left: IS_MOBILE ? 16 : 24,
   },
   card: {
     borderRadius: 16,

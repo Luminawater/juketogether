@@ -574,6 +574,7 @@ io.on('connection', (socket) => {
       isPrivate: roomSettings.is_private || false, // Keep for backward compatibility
       allowControls: roomSettings.allow_controls !== false,
       allowQueue: roomSettings.allow_queue !== false,
+      allowQueueRemoval: roomSettings.allow_queue_removal !== false,
       djMode: roomSettings.dj_mode || false,
       djPlayers: roomSettings.dj_players || 0,
       allowPlaylistAdditions: roomSettings.allow_playlist_additions || false,
@@ -583,6 +584,7 @@ io.on('connection', (socket) => {
       isPrivate: false,
       allowControls: true,
       allowQueue: true,
+      allowQueueRemoval: true,
       djMode: false,
       djPlayers: 0,
       allowPlaylistAdditions: false,
@@ -961,6 +963,36 @@ io.on('connection', (socket) => {
   socket.on('remove-track', async (data) => {
     const { roomId, trackId } = data;
     const room = await getRoom(roomId);
+    const userId = socket.isAuthenticated ? socket.userId : socket.id;
+    
+    // Check permissions
+    const roomAdmins = await loadRoomAdmins(roomId);
+    const isOwner = room.hostUserId === userId;
+    const isAdmin = roomAdmins.includes(userId);
+    
+    // Get room settings
+    let roomSettings = null;
+    if (chatModule) {
+      roomSettings = await chatModule.getRoomSettings(roomId);
+    }
+    
+    // Check if user can remove tracks
+    const canRemove = isOwner || isAdmin || (roomSettings?.allow_queue_removal !== false);
+    
+    if (!canRemove) {
+      socket.emit('error', { message: 'You do not have permission to remove tracks from the queue' });
+      return;
+    }
+    
+    // Find the track to check if user added it (users can always remove their own tracks)
+    const track = room.queue.find(t => t.id === trackId);
+    const isTrackOwner = track && track.addedBy === userId;
+    
+    // If not owner/admin and removal is restricted, only allow removing own tracks
+    if (!isOwner && !isAdmin && roomSettings?.allow_queue_removal === false && !isTrackOwner) {
+      socket.emit('error', { message: 'You can only remove tracks that you added' });
+      return;
+    }
     
     room.queue = room.queue.filter(track => track.id !== trackId);
     scheduleSave(roomId);
@@ -1314,6 +1346,7 @@ io.on('connection', (socket) => {
       is_private: settings.isPrivate || (settings.visibility === 'private'), // Keep for backward compatibility
       allow_controls: settings.allowControls,
       allow_queue: settings.allowQueue,
+      allow_queue_removal: settings.allowQueueRemoval,
       dj_mode: settings.djMode,
       dj_players: settings.djPlayers,
       allow_playlist_additions: settings.allowPlaylistAdditions,
@@ -1329,6 +1362,7 @@ io.on('connection', (socket) => {
         isPrivate: updatedSettings.is_private || false,
         allowControls: updatedSettings.allow_controls !== false,
         allowQueue: updatedSettings.allow_queue !== false,
+        allowQueueRemoval: updatedSettings.allow_queue_removal !== false,
         djMode: updatedSettings.dj_mode || false,
         djPlayers: updatedSettings.dj_players || 0,
         allowPlaylistAdditions: updatedSettings.allow_playlist_additions || false,
@@ -2047,10 +2081,20 @@ app.post('/api/soundcloud-playlist', async (req, res) => {
     }
     
     // Extract playlist name from URL
-    const playlistMatch = url.match(/soundcloud\.com\/[^/]+\/(?:sets|playlists)\/([^/?]+)/);
-    const playlistTitle = playlistMatch 
-      ? playlistMatch[1].replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-      : 'Untitled Playlist';
+    // Handle both regular playlists and track stations
+    let playlistTitle = 'Untitled Playlist';
+    
+    // Check if it's a track station
+    const trackStationMatch = url.match(/soundcloud\.com\/discover\/sets\/track-stations:(\d+)/);
+    if (trackStationMatch) {
+      playlistTitle = 'Track Station';
+    } else {
+      // Regular playlist format
+      const playlistMatch = url.match(/soundcloud\.com\/[^/]+\/(?:sets|playlists)\/([^/?]+)/);
+      if (playlistMatch) {
+        playlistTitle = playlistMatch[1].replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      }
+    }
     
     res.json({
       playlistTitle: playlistTitle,

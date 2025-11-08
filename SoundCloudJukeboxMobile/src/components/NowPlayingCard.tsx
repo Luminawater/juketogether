@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Track } from '../types';
 import { TrackReactionCounts, ReactionType } from '../services/trackReactionsService';
 import { Dimensions } from 'react-native';
+import { getThumbnailUrl } from '../utils/imageUtils';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const IS_MOBILE = SCREEN_WIDTH < 768;
@@ -72,7 +73,9 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
                 <View style={[styles.thumbnailWrapper, isPlaying && styles.thumbnailWrapperPlaying]}>
                   <Avatar.Image
                     size={IS_MOBILE ? 100 : 120}
-                    source={{ uri: currentTrack.info?.thumbnail || 'https://via.placeholder.com/100' }}
+                    source={{ 
+                      uri: getThumbnailUrl(currentTrack.info?.thumbnail, IS_MOBILE ? 100 : 120)
+                    }}
                     style={styles.trackThumbnail}
                   />
                   {isPlaying && (
@@ -257,13 +260,13 @@ const styles = StyleSheet.create({
     }),
   },
   content: {
-    padding: IS_MOBILE ? 16 : 20,
+    padding: IS_MOBILE ? 14 : 16,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: IS_MOBILE ? 16 : 20,
+    marginBottom: IS_MOBILE ? 12 : 14,
     gap: 8,
   },
   headerLeft: {
@@ -305,7 +308,7 @@ const styles = StyleSheet.create({
   trackInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: IS_MOBILE ? 16 : 20,
+    marginVertical: IS_MOBILE ? 12 : 16,
   },
   thumbnailContainer: {
     position: 'relative',
@@ -389,8 +392,8 @@ const styles = StyleSheet.create({
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: IS_MOBILE ? 8 : 12,
-    marginTop: IS_MOBILE ? 16 : 20,
+    gap: IS_MOBILE ? 8 : 10,
+    marginTop: IS_MOBILE ? 12 : 14,
     flexWrap: 'wrap',
   },
   controlButton: {
@@ -414,9 +417,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 12,
+    padding: 10,
     borderRadius: 12,
-    marginTop: 12,
+    marginTop: 8,
   },
   permissionNotice: {
     fontSize: IS_MOBILE ? 11 : 12,
@@ -427,10 +430,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: IS_MOBILE ? 20 : 28,
-    marginVertical: IS_MOBILE ? 20 : 24,
-    paddingVertical: IS_MOBILE ? 16 : 20,
-    paddingHorizontal: IS_MOBILE ? 12 : 16,
+    gap: IS_MOBILE ? 16 : 24,
+    marginVertical: IS_MOBILE ? 12 : 16,
+    paddingVertical: IS_MOBILE ? 12 : 16,
+    paddingHorizontal: IS_MOBILE ? 10 : 14,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderRadius: 16,
@@ -441,7 +444,7 @@ const styles = StyleSheet.create({
     gap: IS_MOBILE ? 6 : 8,
   },
   reactionButtonTouchable: {
-    padding: IS_MOBILE ? 12 : 14,
+    padding: IS_MOBILE ? 10 : 12,
     borderRadius: 16,
     ...(Platform.OS === 'web' ? {
       cursor: 'pointer',

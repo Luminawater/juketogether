@@ -8,6 +8,7 @@ import {
   Share,
   Dimensions,
   TouchableOpacity,
+  Animated,
 } from 'react-native';
 import {
   Text,
@@ -69,6 +70,7 @@ import { hasTier } from '../utils/permissions';
 import { ShareRoomDialog } from '../components/ShareRoomDialog';
 import { QueueDialog } from '../components/QueueDialog';
 import { API_URL } from '../config/constants';
+import { getThumbnailUrl } from '../utils/imageUtils';
 
 type RoomScreenRouteProp = RouteProp<RootStackParamList, 'Room'>;
 type RoomScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Room'>;
@@ -97,6 +99,7 @@ interface RoomSettings {
   isPrivate: boolean;
   allowControls: boolean;
   allowQueue: boolean;
+  allowQueueRemoval: boolean;
   djMode: boolean;
   djPlayers: number;
   admins: string[];
@@ -140,6 +143,7 @@ const RoomScreen: React.FC = () => {
     isPrivate: false,
     allowControls: true,
     allowQueue: true,
+    allowQueueRemoval: true,
     djMode: false,
     djPlayers: 0,
     admins: [],
@@ -194,6 +198,11 @@ const RoomScreen: React.FC = () => {
   const [djPlayerBPMs, setDjPlayerBPMs] = useState<(number | null)[]>([null, null, null, null]);
   const [djPlayerPositions, setDjPlayerPositions] = useState<number[]>([0, 0, 0, 0]);
   const [djPlayerDurations, setDjPlayerDurations] = useState<number[]>([0, 0, 0, 0]);
+
+  // Scroll detection state
+  const [showHeaderControls, setShowHeaderControls] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const nowPlayingRef = useRef<View>(null);
 
   // Playback blocking state
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
@@ -322,6 +331,21 @@ const RoomScreen: React.FC = () => {
       setQueue(prev => prev.filter(t => t.id !== trackId));
     };
 
+    const handleRemoveTrack = (trackId: string) => {
+      if (!socketService.socket) return;
+      
+      // Check if user can remove tracks
+      const canRemove = isOwner || isAdmin || roomSettings.allowQueueRemoval || 
+        (queue.find(t => t.id === trackId)?.addedBy === user?.id);
+      
+      if (!canRemove) {
+        Alert.alert('Permission Denied', 'You do not have permission to remove tracks from the queue.');
+        return;
+      }
+      
+      socketService.removeTrack(trackId, roomId);
+    };
+
     const handlePlay = () => {
       setIsPlaying(true);
     };
@@ -427,6 +451,7 @@ const RoomScreen: React.FC = () => {
         isPrivate: updatedSettings.isPrivate || false,
         allowControls: updatedSettings.allowControls !== false,
         allowQueue: updatedSettings.allowQueue !== false,
+        allowQueueRemoval: updatedSettings.allowQueueRemoval !== false,
         djMode: updatedSettings.djMode || false,
         djPlayers: updatedSettings.djPlayers || 0,
         admins: updatedSettings.admins || roomSettings.admins || [],
@@ -732,6 +757,16 @@ const RoomScreen: React.FC = () => {
     } finally {
       setLoadingReaction(false);
     }
+  };
+
+  // Scroll handler to detect when scrolled past "Now Playing" section
+  const handleScroll = (event: any) => {
+    const scrollY = event.nativeEvent.contentOffset.y;
+    // Show header controls when scrolled past the "Now Playing" section
+    // The "Now Playing" section typically ends around 500-600px from top
+    // We add a small buffer to ensure smooth transition
+    const threshold = 500;
+    setShowHeaderControls(scrollY > threshold);
   };
 
   // Initialize DJ Audio Service
@@ -1258,6 +1293,7 @@ const RoomScreen: React.FC = () => {
         isPrivate: roomSettings.isPrivate,
         allowControls: roomSettings.allowControls,
         allowQueue: roomSettings.allowQueue,
+        allowQueueRemoval: roomSettings.allowQueueRemoval,
         djMode: roomSettings.djMode,
         djPlayers: roomSettings.djPlayers,
         allowPlaylistAdditions: roomSettings.allowPlaylistAdditions,
@@ -1340,7 +1376,12 @@ const RoomScreen: React.FC = () => {
     );
   }, [user, session, roomId, navigation]);
 
-  const renderMainTab = () => {
+  const handleNowPlayingLayout = useCallback((event: any) => {
+    // Handle layout measurements if needed
+    // This can be used for scroll-to functionality or other layout-based features
+  }, []);
+
+  const renderMainTab = useCallback(() => {
     // Show DJ Mode interface if active and user has PRO tier
     if (isDJModeActive && roomSettings.djMode && profile && hasTier(profile.subscription_tier, 'pro')) {
       return (
@@ -1387,7 +1428,7 @@ const RoomScreen: React.FC = () => {
                       left={() => (
                         <Avatar.Image
                           size={40}
-                          source={{ uri: track.info?.thumbnail || 'https://via.placeholder.com/40' }}
+                          source={{ uri: getThumbnailUrl(track.info?.thumbnail, 40) }}
                         />
                       )}
                       onPress={() => {
@@ -1418,7 +1459,13 @@ const RoomScreen: React.FC = () => {
 
     // Standard mode interface
     return (
-      <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        ref={scrollViewRef}
+        style={styles.tabContent} 
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
         {/* Show UpgradePrompt if playback is blocked, otherwise show NowPlayingCard */}
         {playbackBlocked && blockedInfo ? (
         <UpgradePrompt
@@ -1481,7 +1528,11 @@ const RoomScreen: React.FC = () => {
         />
       )}
 
-          <View style={styles.nowPlayingHeader}>
+          <View 
+            ref={nowPlayingRef}
+            onLayout={handleNowPlayingLayout}
+            style={styles.nowPlayingHeader}
+          >
             <View style={styles.nowPlayingHeaderLeft}>
               <View style={[styles.iconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
                 <MaterialCommunityIcons 
@@ -1543,7 +1594,7 @@ const RoomScreen: React.FC = () => {
                     <View style={[styles.thumbnailWrapper, isPlaying && styles.thumbnailWrapperPlaying]}>
                       <Avatar.Image
                         size={IS_MOBILE ? 110 : 130}
-                        source={{ uri: currentTrack.info?.thumbnail || 'https://via.placeholder.com/100' }}
+                        source={{ uri: getThumbnailUrl(currentTrack.info?.thumbnail, IS_MOBILE ? 110 : 130) }}
                         style={styles.trackThumbnail}
                       />
                       {isPlaying && (
@@ -1865,86 +1916,102 @@ const RoomScreen: React.FC = () => {
             </View>
           ) : (
             <ScrollView style={styles.queueList} showsVerticalScrollIndicator={false}>
-              {queue.map((track, index) => (
-                <TouchableOpacity
-                  key={track.id}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.queueItem, 
-                    { 
-                      backgroundColor: index === 0 
-                        ? `${theme.colors.primary}15` 
-                        : theme.colors.surfaceVariant,
-                      borderLeftColor: theme.colors.primary,
-                      borderLeftWidth: index === 0 ? 4 : 0,
-                    }
-                  ]}
-                >
-                  <View style={styles.queueItemContent}>
-                    <View style={[
-                      styles.queueItemNumber, 
+              {queue.map((track, index) => {
+                const canRemove = isOwner || isAdmin || roomSettings.allowQueueRemoval || 
+                  (track.addedBy === user?.id);
+                
+                return (
+                  <View
+                    key={track.id}
+                    style={[
+                      styles.queueItem, 
                       { 
                         backgroundColor: index === 0 
-                          ? theme.colors.primary 
-                          : `${theme.colors.primary}20` 
+                          ? `${theme.colors.primary}15` 
+                          : theme.colors.surfaceVariant,
+                        borderLeftColor: theme.colors.primary,
+                        borderLeftWidth: index === 0 ? 4 : 0,
                       }
-                    ]}>
-                      <Text style={[
-                        styles.queueNumber, 
+                    ]}
+                  >
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      style={styles.queueItemContent}
+                    >
+                      <View style={[
+                        styles.queueItemNumber, 
                         { 
-                          color: index === 0 
-                            ? theme.colors.onPrimary 
-                            : theme.colors.primary 
+                          backgroundColor: index === 0 
+                            ? theme.colors.primary 
+                            : `${theme.colors.primary}20` 
                         }
                       ]}>
-                        {index + 1}
-                      </Text>
-                      {index === 0 && (
-                        <View style={[styles.nextIndicator, { backgroundColor: theme.colors.onPrimary }]} />
-                      )}
-                    </View>
-                    <Avatar.Image
-                      size={IS_MOBILE ? 60 : 64}
-                      source={{ uri: track.info?.thumbnail || 'https://via.placeholder.com/50' }}
-                      style={styles.queueItemThumbnail}
-                    />
-                    <View style={styles.queueItemDetails}>
-                      <Text 
-                        style={[styles.queueItemTitle, { color: theme.colors.onSurface }]}
-                        numberOfLines={1}
-                      >
-                        {track.info?.fullTitle || 'Unknown Track'}
-                      </Text>
-                      <View style={styles.queueItemMeta}>
-                        <MaterialCommunityIcons 
-                          name="account" 
-                          size={14} 
-                          color={theme.colors.onSurfaceVariant} 
-                        />
-                        <Text 
-                          style={[styles.queueItemDescription, { color: theme.colors.onSurfaceVariant }]}
-                          numberOfLines={1}
-                        >
-                          {track.addedBy === user?.id ? 'You' : 'Someone'}
+                        <Text style={[
+                          styles.queueNumber, 
+                          { 
+                            color: index === 0 
+                              ? theme.colors.onPrimary 
+                              : theme.colors.primary 
+                          }
+                        ]}>
+                          {index + 1}
                         </Text>
                         {index === 0 && (
-                          <>
-                            <View style={[styles.metaDivider, { backgroundColor: theme.colors.onSurfaceVariant }]} />
-                            <MaterialCommunityIcons 
-                              name="arrow-right" 
-                              size={14} 
-                              color={theme.colors.primary} 
-                            />
-                            <Text style={[styles.nextLabel, { color: theme.colors.primary }]}>
-                              Next
-                            </Text>
-                          </>
+                          <View style={[styles.nextIndicator, { backgroundColor: theme.colors.onPrimary }]} />
                         )}
                       </View>
-                    </View>
+                      <Avatar.Image
+                        size={IS_MOBILE ? 60 : 64}
+                        source={{ uri: getThumbnailUrl(track.info?.thumbnail, IS_MOBILE ? 60 : 64) }}
+                        style={styles.queueItemThumbnail}
+                      />
+                      <View style={styles.queueItemDetails}>
+                        <Text 
+                          style={[styles.queueItemTitle, { color: theme.colors.onSurface }]}
+                          numberOfLines={1}
+                        >
+                          {track.info?.fullTitle || 'Unknown Track'}
+                        </Text>
+                        <View style={styles.queueItemMeta}>
+                          <MaterialCommunityIcons 
+                            name="account" 
+                            size={14} 
+                            color={theme.colors.onSurfaceVariant} 
+                          />
+                          <Text 
+                            style={[styles.queueItemDescription, { color: theme.colors.onSurfaceVariant }]}
+                            numberOfLines={1}
+                          >
+                            {track.addedBy === user?.id ? 'You' : 'Someone'}
+                          </Text>
+                          {index === 0 && (
+                            <>
+                              <View style={[styles.metaDivider, { backgroundColor: theme.colors.onSurfaceVariant }]} />
+                              <MaterialCommunityIcons 
+                                name="arrow-right" 
+                                size={14} 
+                                color={theme.colors.primary} 
+                              />
+                              <Text style={[styles.nextLabel, { color: theme.colors.primary }]}>
+                                Next
+                              </Text>
+                            </>
+                          )}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                    {canRemove && (
+                      <IconButton
+                        icon="delete-outline"
+                        size={20}
+                        iconColor={theme.colors.error}
+                        onPress={() => handleRemoveTrack(track.id)}
+                        style={styles.queueItemRemoveButton}
+                      />
+                    )}
                   </View>
-                </TouchableOpacity>
-              ))}
+                );
+              })}
             </ScrollView>
           )}
         </Card.Content>
@@ -2005,7 +2072,7 @@ const RoomScreen: React.FC = () => {
                     </View>
                     <Avatar.Image
                       size={IS_MOBILE ? 60 : 64}
-                      source={{ uri: track.info?.thumbnail || 'https://via.placeholder.com/50' }}
+                      source={{ uri: getThumbnailUrl(track.info?.thumbnail, IS_MOBILE ? 60 : 64) }}
                       style={[styles.queueItemThumbnail, styles.historyThumbnail]}
                     />
                     <View style={styles.queueItemDetails}>
@@ -2074,7 +2141,49 @@ const RoomScreen: React.FC = () => {
       )}
     </ScrollView>
   );
-  };
+  }, [
+    isDJModeActive,
+    roomSettings,
+    profile,
+    scrollViewRef,
+    handleScroll,
+    playbackBlocked,
+    blockedInfo,
+    currentTrack,
+    isPlaying,
+    trackReactions,
+    canControl,
+    user,
+    queue,
+    position,
+    roomId,
+    theme,
+    nowPlayingRef,
+    handleNowPlayingLayout,
+    playPause,
+    nextTrack,
+    syncToSession,
+    handleReaction,
+    loadingReaction,
+    handleDJPlayerPlayPause,
+    handleDJPlayerLoadTrack,
+    handleDJPlayerVolumeChange,
+    handleDJPlayerSeek,
+    handleDJPlayerSync,
+    purchaseBoost,
+    purchasingBoost,
+    activeBoost,
+    tierSettings,
+    navigation,
+    djPlayerTracks,
+    djPlayerPlayingStates,
+    djPlayerVolumes,
+    djPlayerBPMs,
+    djPlayerPositions,
+    djPlayerDurations,
+    setDjPlayerTracks,
+    setQueue,
+  ]);
 
   const renderUsersTab = () => (
     <ScrollView style={styles.tabContent}>
@@ -2365,7 +2474,7 @@ const RoomScreen: React.FC = () => {
                           <Avatar.Image
                             size={40}
                             source={{
-                              uri: track.album?.images?.[0]?.url || 'https://via.placeholder.com/40'
+                              uri: getThumbnailUrl(track.album?.images?.[0]?.url, 40)
                             }}
                           />
                         )}
@@ -2453,7 +2562,7 @@ const RoomScreen: React.FC = () => {
                       <Avatar.Image
                         size={50}
                         source={{
-                          uri: playlist.images?.[0]?.url || 'https://via.placeholder.com/50'
+                          uri: getThumbnailUrl(playlist.images?.[0]?.url, 50)
                         }}
                       />
                     )}
@@ -2645,7 +2754,7 @@ const RoomScreen: React.FC = () => {
                 />
               </View>
               <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
-                Only users with the room link can join
+                Only users with the reference code can join
               </Text>
             </View>
 
@@ -2887,6 +2996,7 @@ const RoomScreen: React.FC = () => {
             <View style={styles.connectionStatus}>
               <View style={[styles.statusDot, { backgroundColor: connected ? '#4CAF50' : '#FF9800' }]} />
             </View>
+            <View style={{ flex: 1 }} />
           </View>
           <View style={styles.headerRight}>
             {/* DJ Mode Toggle - Only for PRO users */}
@@ -2897,6 +3007,58 @@ const RoomScreen: React.FC = () => {
                 disabled={!roomSettings.djMode}
               />
             )}
+            {/* Playback Controls - Show when scrolled past "Now Playing" */}
+            {showHeaderControls && activeTab === 'main' && (
+              <>
+                <View style={styles.iconButtonWrapper}>
+                  <IconButton
+                    icon={isPlaying ? 'pause' : 'play'}
+                    iconColor={theme.colors.onSurface}
+                    size={20}
+                    onPress={playPause}
+                    disabled={!currentTrack || !canControl}
+                    style={styles.iconButton}
+                  />
+                </View>
+                <View style={styles.iconButtonWrapper}>
+                  <IconButton
+                    icon="skip-next"
+                    iconColor={theme.colors.onSurface}
+                    size={20}
+                    onPress={nextTrack}
+                    disabled={queue.length === 0 || !canControl}
+                    style={styles.iconButton}
+                  />
+                </View>
+                <View style={styles.iconButtonWrapper}>
+                  <IconButton
+                    icon="sync"
+                    iconColor={theme.colors.onSurface}
+                    size={20}
+                    onPress={syncToSession}
+                    style={styles.iconButton}
+                  />
+                </View>
+              </>
+            )}
+            <Chip
+              icon={({ size, color }) => (
+                <MaterialCommunityIcons name="account-group" size={size} color="#FFFFFF" />
+              )}
+              style={[styles.userCountChip, { backgroundColor: theme.colors.primaryContainer }]}
+              textStyle={[styles.userCountChipText, { color: '#FFFFFF' }]}
+            >
+              {userCount}
+            </Chip>
+            <Chip
+              icon={({ size, color }) => (
+                <MaterialCommunityIcons name="playlist-music" size={size} color="#FFFFFF" />
+              )}
+              style={[styles.userCountChip, { backgroundColor: theme.colors.secondaryContainer }]}
+              textStyle={[styles.userCountChipText, { color: '#FFFFFF' }]}
+            >
+              {queue.length}
+            </Chip>
             <View style={styles.iconButtonWrapper}>
               <IconButton
                 icon="playlist-plus"
@@ -2917,7 +3079,11 @@ const RoomScreen: React.FC = () => {
             </View>
           </View>
         </View>
-        <Text style={[styles.roomId, { color: theme.colors.onSurfaceVariant }]}>Room ID: {roomId} • {userCount} users</Text>
+        {shortCode && (
+          <Text style={[styles.roomId, { color: theme.colors.onSurfaceVariant }]}>
+            Reference: {shortCode}
+          </Text>
+        )}
         {!connected && <ActivityIndicator size="small" color={theme.colors.onSurface} style={styles.connectingIndicator} />}
       </View>
 
@@ -3240,17 +3406,17 @@ const RoomScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   youtubePlayerContainer: {
-    marginBottom: IS_MOBILE ? 16 : 20,
+    marginBottom: IS_MOBILE ? 12 : 16,
     width: '100%',
   },
   container: {
     flex: 1,
   },
   header: {
-    padding: IS_MOBILE ? 16 : 20,
-    paddingTop: Platform.OS === 'web' ? 20 : (IS_MOBILE ? 50 : 60),
-    paddingBottom: IS_MOBILE ? 20 : 24,
-    marginBottom: IS_MOBILE ? 8 : 12,
+    padding: IS_MOBILE ? 12 : 16,
+    paddingTop: Platform.OS === 'web' ? 16 : (IS_MOBILE ? 50 : 60),
+    paddingBottom: IS_MOBILE ? 12 : 16,
+    marginBottom: IS_MOBILE ? 4 : 6,
     elevation: 8,
     ...(Platform.OS === 'web' ? {
       boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.25)',
@@ -3265,7 +3431,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: IS_MOBILE ? 12 : 8,
+    marginBottom: IS_MOBILE ? 8 : 6,
     flexWrap: IS_MOBILE ? 'wrap' : 'nowrap',
   },
   headerLeft: {
@@ -3279,9 +3445,8 @@ const styles = StyleSheet.create({
     margin: 0,
   },
   roomTitle: {
-    fontSize: IS_MOBILE ? 22 : 26,
+    fontSize: IS_MOBILE ? 20 : 24,
     fontWeight: '700',
-    flex: 1,
     minWidth: 0,
     letterSpacing: -0.5,
   },
@@ -3314,8 +3479,10 @@ const styles = StyleSheet.create({
   connectionStatus: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 4,
-    marginLeft: 12,
+    paddingLeft: IS_MOBILE ? 8 : 10,
+    paddingRight: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   statusDot: {
     width: 14,
@@ -3338,13 +3505,24 @@ const styles = StyleSheet.create({
     fontSize: IS_MOBILE ? 12 : 14,
     marginTop: IS_MOBILE ? 8 : 4,
   },
+  userCountChip: {
+    height: IS_MOBILE ? 32 : 36,
+    marginRight: IS_MOBILE ? 4 : 6,
+    ...(Platform.OS === 'web' ? {
+      cursor: 'default',
+    } : {}),
+  },
+  userCountChipText: {
+    fontSize: IS_MOBILE ? 12 : 13,
+    fontWeight: '600',
+  },
   tabs: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     paddingHorizontal: IS_MOBILE ? 4 : 8,
-    paddingTop: IS_MOBILE ? 8 : 4,
-    paddingBottom: IS_MOBILE ? 8 : 4,
-    marginBottom: IS_MOBILE ? 4 : 0,
+    paddingTop: IS_MOBILE ? 6 : 4,
+    paddingBottom: IS_MOBILE ? 6 : 4,
+    marginBottom: IS_MOBILE ? 2 : 0,
     ...(Platform.OS === 'web' ? {
       boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
     } : {}),
@@ -3355,11 +3533,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: IS_MOBILE ? 12 : 14,
-    paddingHorizontal: IS_MOBILE ? 8 : 12,
+    paddingVertical: IS_MOBILE ? 8 : 10,
+    paddingHorizontal: IS_MOBILE ? 6 : 10,
     borderRadius: 12,
     marginHorizontal: 4,
-    marginBottom: 4,
+    marginBottom: 2,
     ...(Platform.OS === 'web' ? {
       cursor: 'pointer',
       userSelect: 'none',
@@ -3375,13 +3553,13 @@ const styles = StyleSheet.create({
   },
   tabContent: {
     flex: 1,
-    paddingTop: IS_MOBILE ? 8 : 0,
-    paddingBottom: IS_MOBILE ? 20 : 40,
+    paddingTop: IS_MOBILE ? 4 : 0,
+    paddingBottom: IS_MOBILE ? 16 : 32,
   },
   card: {
-    marginHorizontal: IS_MOBILE ? 16 : 16,
-    marginTop: IS_MOBILE ? 20 : 16,
-    marginBottom: IS_MOBILE ? 20 : 16,
+    marginHorizontal: IS_MOBILE ? 12 : 16,
+    marginTop: IS_MOBILE ? 12 : 12,
+    marginBottom: IS_MOBILE ? 12 : 12,
     borderRadius: 24,
     elevation: 8,
     overflow: 'hidden',
@@ -3408,13 +3586,13 @@ const styles = StyleSheet.create({
     }),
   },
   nowPlayingContent: {
-    padding: IS_MOBILE ? 20 : 20,
+    padding: IS_MOBILE ? 14 : 16,
   },
   nowPlayingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: IS_MOBILE ? 20 : 20,
+    marginBottom: IS_MOBILE ? 12 : 14,
     gap: 8,
   },
   nowPlayingHeaderLeft: {
@@ -3455,8 +3633,8 @@ const styles = StyleSheet.create({
   },
   trackInfoContainer: {
     borderRadius: 20,
-    padding: IS_MOBILE ? 16 : 20,
-    marginVertical: IS_MOBILE ? 12 : 16,
+    padding: IS_MOBILE ? 12 : 16,
+    marginVertical: IS_MOBILE ? 8 : 12,
     ...(Platform.OS === 'web' ? {
       boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.1)',
     } : {
@@ -3524,24 +3702,24 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   trackDetails: {
-    marginLeft: IS_MOBILE ? 18 : 24,
+    marginLeft: IS_MOBILE ? 14 : 20,
     flex: 1,
     justifyContent: 'center',
   },
   trackTitle: {
-    fontSize: IS_MOBILE ? 20 : 24,
+    fontSize: IS_MOBILE ? 18 : 22,
     fontWeight: '700',
     letterSpacing: -0.4,
-    marginBottom: 10,
-    lineHeight: IS_MOBILE ? 26 : 30,
+    marginBottom: 8,
+    lineHeight: IS_MOBILE ? 24 : 28,
   },
   platformBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     alignSelf: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 18,
     marginTop: 4,
   },
@@ -3554,13 +3732,13 @@ const styles = StyleSheet.create({
   noTrack: {
     textAlign: 'center',
     fontStyle: 'italic',
-    paddingVertical: IS_MOBILE ? 20 : 20,
+    paddingVertical: IS_MOBILE ? 16 : 16,
   },
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: IS_MOBILE ? 10 : 12,
-    marginTop: IS_MOBILE ? 20 : 20,
+    gap: IS_MOBILE ? 8 : 10,
+    marginTop: IS_MOBILE ? 12 : 14,
     flexWrap: 'wrap',
   },
   controlButton: {
@@ -3584,9 +3762,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 12,
+    padding: 10,
     borderRadius: 12,
-    marginTop: 12,
+    marginTop: 8,
   },
   permissionNotice: {
     fontSize: IS_MOBILE ? 11 : 12,
@@ -3597,9 +3775,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 12,
+    padding: 10,
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 10,
   },
   infoNoticeText: {
     fontSize: IS_MOBILE ? 12 : 14,
@@ -3615,8 +3793,8 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: IS_MOBILE ? 40 : 50,
-    gap: 12,
+    paddingVertical: IS_MOBILE ? 24 : 32,
+    gap: 10,
   },
   emptyQueue: {
     textAlign: 'center',
@@ -3627,7 +3805,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: IS_MOBILE ? 16 : 20,
+    marginBottom: IS_MOBILE ? 10 : 12,
     gap: 12,
   },
   sectionHeaderLeft: {
@@ -3637,7 +3815,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sectionTitle: {
-    fontSize: IS_MOBILE ? 18 : 20,
+    fontSize: IS_MOBILE ? 16 : 18,
     fontWeight: '700',
     letterSpacing: -0.3,
   },
@@ -3783,10 +3961,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: IS_MOBILE ? 20 : 28,
-    marginVertical: IS_MOBILE ? 20 : 24,
-    paddingVertical: IS_MOBILE ? 16 : 20,
-    paddingHorizontal: IS_MOBILE ? 12 : 16,
+    gap: IS_MOBILE ? 16 : 24,
+    marginVertical: IS_MOBILE ? 12 : 16,
+    paddingVertical: IS_MOBILE ? 12 : 16,
+    paddingHorizontal: IS_MOBILE ? 10 : 14,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderRadius: 16,
@@ -3797,7 +3975,7 @@ const styles = StyleSheet.create({
     gap: IS_MOBILE ? 6 : 8,
   },
   reactionButtonTouchable: {
-    padding: IS_MOBILE ? 12 : 14,
+    padding: IS_MOBILE ? 10 : 12,
     borderRadius: 16,
     ...(Platform.OS === 'web' ? {
       cursor: 'pointer',
@@ -3820,7 +3998,7 @@ const styles = StyleSheet.create({
     }),
   },
   queueCardContent: {
-    padding: IS_MOBILE ? 16 : 20,
+    padding: IS_MOBILE ? 12 : 16,
   },
   historyCard: {
     ...(Platform.OS === 'web' ? {
@@ -3834,7 +4012,7 @@ const styles = StyleSheet.create({
     }),
   },
   historyCardContent: {
-    padding: IS_MOBILE ? 16 : 20,
+    padding: IS_MOBILE ? 12 : 16,
   },
   sectionIconContainer: {
     width: 36,
@@ -3848,6 +4026,8 @@ const styles = StyleSheet.create({
     marginHorizontal: IS_MOBILE ? 4 : 8,
     borderRadius: 16,
     padding: IS_MOBILE ? 14 : 16,
+    flexDirection: 'row',
+    alignItems: 'center',
     ...(Platform.OS === 'web' ? {
       cursor: 'pointer',
       transition: 'all 0.2s ease',
@@ -3861,6 +4041,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: IS_MOBILE ? 12 : 16,
+    flex: 1,
   },
   queueItemNumber: {
     width: IS_MOBILE ? 36 : 40,
@@ -3919,6 +4100,10 @@ const styles = StyleSheet.create({
   queueItemDescription: {
     fontSize: IS_MOBILE ? 12 : 13,
     fontWeight: '500',
+  },
+  queueItemRemoveButton: {
+    margin: 0,
+    marginLeft: 8,
   },
   metaDivider: {
     width: 1,

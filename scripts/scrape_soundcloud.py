@@ -233,6 +233,30 @@ def scrape_playlist(url):
         owner_match = re.search(r'soundcloud\.com/([^/]+)', url)
         owner = owner_match.group(1) if owner_match else None
         
+        # Method 0: Extract tracks from track station pages (systemPlaylistTrackList)
+        # Track stations have a specific structure with systemPlaylistTrackList__item
+        # Also works for regular playlists that use trackItem__trackTitle
+        track_station_pattern = r'<a[^>]*class="[^"]*trackItem__trackTitle[^"]*"[^>]*href="/([^/]+/[^?"#]+)'
+        track_station_matches = re.findall(track_station_pattern, html)
+        for match in track_station_matches:
+            # Remove query parameters
+            clean_match = match.split('?')[0]
+            track_url = f"https://soundcloud.com/{clean_match}"
+            if track_url not in seen_urls and '/sets/' not in track_url and '/playlists/' not in track_url:
+                seen_urls.add(track_url)
+                url_parts = clean_match.split('/')
+                if len(url_parts) == 2 and url_parts[0] and url_parts[1]:
+                    track_name = url_parts[1]
+                    display_name = track_name.replace('-', ' ').replace('_', ' ').title()
+                    artist_name = url_parts[0].replace('-', ' ').title()
+                    tracks.append({
+                        'url': track_url,
+                        'title': display_name,
+                        'artist': artist_name,
+                        'fullTitle': f"{artist_name} - {display_name}",
+                        'thumbnail': None
+                    })
+        
         # Method 1: Extract track information from sound list items (best method)
         # Look for sound list items with aria-label containing track info
         sound_item_pattern = r'<li[^>]*class="soundList__item"[^>]*>.*?aria-label="Track:\s*([^"]+)\s+by\s+([^"]+)"[^>]*>.*?</li>'
@@ -270,9 +294,12 @@ def scrape_playlist(url):
             for match in matches:
                 # Build full URL if it's relative
                 if not match.startswith('http'):
-                    track_url = f"https://soundcloud.com/{match}"
+                    # Remove query parameters from relative URLs (e.g., ?in_system_playlist=...)
+                    clean_match = match.split('?')[0]
+                    track_url = f"https://soundcloud.com/{clean_match}"
                 else:
-                    track_url = match
+                    # Remove query parameters from full URLs
+                    track_url = match.split('?')[0]
                 
                 # Skip if it's a playlist, set, or other non-track URL
                 if '/sets/' in track_url or '/playlists/' in track_url:
