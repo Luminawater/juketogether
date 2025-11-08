@@ -62,20 +62,16 @@ const getSocketUrl = () => {
       hostname.includes('juketogether.com');
 
     if (isStaticHosting) {
-      // For Cloudflare Pages/Vercel static hosting, use the API server for WebSockets
-      // Priority: Environment variable > app.json socketUrl > API URL
+      // For Cloudflare Pages static hosting, WebSockets are not supported
+      // Use Supabase Realtime instead of Socket.io
+      // Return empty string to disable Socket.io connection
       const socketOverride = process.env.EXPO_PUBLIC_SOCKET_URL;
       if (socketOverride) {
         return socketOverride;
       }
       
-      const socketUrl = Constants.expoConfig?.extra?.socketUrl;
-      if (socketUrl && !socketUrl.includes('your-websocket-server')) {
-        return socketUrl;
-      }
-      
-      // Fallback to API URL (Vercel has limited WebSocket support)
-      return getApiUrl();
+      // Return empty string - app should use Supabase Realtime instead
+      return '';
     }
 
     // For other domains (self-hosted), use the same origin
