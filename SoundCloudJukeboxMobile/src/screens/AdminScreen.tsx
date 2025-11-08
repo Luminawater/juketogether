@@ -20,6 +20,7 @@ import {
   TextInput,
   RadioButton,
   DataTable,
+  Checkbox,
   useTheme,
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
@@ -41,6 +42,11 @@ interface UserProfile {
   songs_played_count: number;
   created_at: string;
   avatar_url?: string;
+  is_banned?: boolean;
+  banned_at?: string;
+  banned_by?: string;
+  ban_reason?: string;
+  banned_until?: string;
 }
 
 interface Payment {
@@ -63,6 +69,7 @@ const AdminScreen: React.FC = () => {
   const theme = useTheme();
 
   const [activeTab, setActiveTab] = useState(0);
+  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'subscription'>('general');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,7 +86,13 @@ const AdminScreen: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [usageHistory, setUsageHistory] = useState<UsageHistory[]>([]);
   const [loadingUserData, setLoadingUserData] = useState(false);
-  const [userDialogTab, setUserDialogTab] = useState<'general' | 'role' | 'subscription' | 'activity'>('general');
+  const [userDialogTab, setUserDialogTab] = useState<'general' | 'role' | 'subscription' | 'activity' | 'access'>('general');
+  const [banReason, setBanReason] = useState('');
+  const [banType, setBanType] = useState<'permanent' | 'temporary'>('permanent');
+  const [banUntilDate, setBanUntilDate] = useState<string>('');
+  const [banUntilTime, setBanUntilTime] = useState<string>('');
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [banConfirmVisible, setBanConfirmVisible] = useState(false);
   
   // Activity data
   const [activityData, setActivityData] = useState({
@@ -93,6 +106,41 @@ const AdminScreen: React.FC = () => {
     tracksPlayed: 0,
     roomsJoined: 0,
   });
+
+  // Subscription tier settings
+  const [subscriptionTiers, setSubscriptionTiers] = useState({
+    free: {
+      name: 'Free',
+      price: 0,
+      maxSongs: 1,
+      queueLimit: 1,
+      djMode: false,
+      listedOnDiscovery: false,
+      listedOnLeaderboard: false,
+      description: 'Basic access with limited features',
+    },
+    standard: {
+      name: 'Standard',
+      price: 1,
+      maxSongs: 10,
+      queueLimit: 10,
+      djMode: false,
+      listedOnDiscovery: true,
+      listedOnLeaderboard: true,
+      description: 'Standard access with more features',
+    },
+    pro: {
+      name: 'Pro',
+      price: 5,
+      maxSongs: Infinity,
+      queueLimit: Infinity,
+      djMode: true,
+      listedOnDiscovery: true,
+      listedOnLeaderboard: true,
+      description: 'Premium access with unlimited features',
+    },
+  });
+  const [savingTiers, setSavingTiers] = useState(false);
 
   useEffect(() => {
     if (profile?.role !== 'admin') {
@@ -129,6 +177,10 @@ const AdminScreen: React.FC = () => {
           songs_played_count: u.songs_played_count || 0,
           created_at: u.created_at || '',
           avatar_url: u.avatar_url,
+          is_banned: u.is_banned || false,
+          banned_at: u.banned_at,
+          banned_by: u.banned_by,
+          ban_reason: u.ban_reason,
         }));
 
         setUsers(usersWithEmails);
@@ -349,9 +401,488 @@ const AdminScreen: React.FC = () => {
     }
   };
 
+  const handleBanUser = async () => {
+    if (!selectedUser || !profile) return;
+
+    try {
+      // Calculate banned_until date if temporary ban
+      let bannedUntil: string | null = null;
+      if (banType === 'temporary' && banUntilDate && banUntilTime) {
+        const dateTime = new Date(`${banUntilDate}T${banUntilTime}`);
+        if (isNaN(dateTime.getTime())) {
+          Alert.alert('Error', 'Invalid date or time');
+          return;
+        }
+        if (dateTime <= new Date()) {
+          Alert.alert('Error', 'Ban expiration date must be in the future');
+          return;
+        }
+        bannedUntil = dateTime.toISOString();
+      } else if (banType === 'temporary') {
+        Alert.alert('Error', 'Please select both date and time for temporary ban');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          is_banned: true,
+          banned_at: new Date().toISOString(),
+          banned_by: profile.id,
+          ban_reason: banReason || null,
+          banned_until: bannedUntil,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', selectedUser.id);
+
+      if (error) throw error;
+
+      const banMessage = banType === 'permanent' 
+        ? 'User has been permanently banned'
+        : `User has been banned until ${new Date(bannedUntil!).toLocaleString()}`;
+      
+      Alert.alert('Success', banMessage);
+      setBanConfirmVisible(false);
+      setBanReason('');
+      setBanType('permanent');
+      setBanUntilDate('');
+      setBanUntilTime('');
+      await loadUsers();
+      setUserDialogVisible(false);
+      setSelectedUser(null);
+    } catch (error: any) {
+      console.error('Error banning user:', error);
+      Alert.alert('Error', error.message || 'Failed to ban user');
+    }
+  };
+
+  const handleUnbanUser = async () => {
+    if (!selectedUser) return;
+
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          is_banned: false,
+          banned_at: null,
+          banned_by: null,
+          ban_reason: null,
+          banned_until: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', selectedUser.id);
+
+      if (error) throw error;
+
+      Alert.alert('Success', 'User has been unbanned');
+      await loadUsers();
+      // Update selected user to reflect unban
+      if (selectedUser) {
+        setSelectedUser({ 
+          ...selectedUser, 
+          is_banned: false, 
+          banned_at: undefined, 
+          banned_by: undefined, 
+          ban_reason: undefined,
+          banned_until: undefined,
+        });
+      }
+    } catch (error: any) {
+      console.error('Error unbanning user:', error);
+      Alert.alert('Error', error.message || 'Failed to unban user');
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+
+    try {
+      // Delete user profile (this will cascade delete related data due to ON DELETE CASCADE)
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .delete()
+        .eq('id', selectedUser.id);
+
+      if (profileError) throw profileError;
+
+      // Note: Deleting from auth.users requires admin API access
+      // For now, we'll just delete the profile and mark the user as deleted
+      Alert.alert('Success', 'User profile has been deleted. Note: User account deletion requires admin API access.');
+      setDeleteConfirmVisible(false);
+      await loadUsers();
+      setUserDialogVisible(false);
+      setSelectedUser(null);
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      Alert.alert('Error', error.message || 'Failed to delete user');
+    }
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
     loadUsers();
+  };
+
+  const loadSubscriptionTiers = async () => {
+    try {
+      // Try to load from database if table exists
+      const { data, error } = await supabase
+        .from('subscription_tier_settings')
+        .select('*')
+        .order('tier');
+
+      if (!error && data && data.length > 0) {
+        const tiers: any = {};
+        data.forEach((item: any) => {
+          tiers[item.tier] = {
+            name: item.display_name || item.tier,
+            price: parseFloat(item.price || 0),
+            maxSongs: item.max_songs === null ? Infinity : item.max_songs,
+            queueLimit: item.queue_limit === null ? Infinity : item.queue_limit,
+            djMode: item.dj_mode || false,
+            listedOnDiscovery: item.listed_on_discovery || false,
+            listedOnLeaderboard: item.listed_on_leaderboard || false,
+            description: item.description || '',
+          };
+        });
+        setSubscriptionTiers((prev) => ({ ...prev, ...tiers }));
+      }
+    } catch (error) {
+      console.log('Subscription tier settings table may not exist yet, using defaults');
+    }
+  };
+
+  const saveSubscriptionTiers = async () => {
+    try {
+      setSavingTiers(true);
+      
+      // Save to database (create table if needed via migration)
+      for (const [tier, config] of Object.entries(subscriptionTiers)) {
+        const { error } = await supabase
+          .from('subscription_tier_settings')
+          .upsert({
+            tier,
+            display_name: config.name,
+            price: config.price,
+            max_songs: config.maxSongs === Infinity ? null : config.maxSongs,
+            queue_limit: config.queueLimit === Infinity ? null : config.queueLimit,
+            dj_mode: config.djMode,
+            listed_on_discovery: config.listedOnDiscovery,
+            listed_on_leaderboard: config.listedOnLeaderboard,
+            description: config.description,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'tier',
+          });
+
+        if (error) {
+          console.error(`Error saving tier ${tier}:`, error);
+          // If table doesn't exist, show message
+          if (error.message?.includes('does not exist')) {
+            Alert.alert(
+              'Database Table Required',
+              'The subscription_tier_settings table needs to be created. Please run the migration to create it.',
+            );
+            return;
+          }
+        }
+      }
+
+      Alert.alert('Success', 'Subscription tier settings saved successfully');
+    } catch (error: any) {
+      console.error('Error saving subscription tiers:', error);
+      Alert.alert('Error', error.message || 'Failed to save subscription tier settings');
+    } finally {
+      setSavingTiers(false);
+    }
+  };
+
+  const renderSettingsTab = () => (
+    <View style={styles.settingsContainer}>
+      <View style={[styles.subTabContainer, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.outline }]}>
+        <Button
+          mode={settingsSubTab === 'general' ? 'contained' : 'outlined'}
+          onPress={() => setSettingsSubTab('general')}
+          style={styles.subTabButton}
+          icon="cog-outline"
+        >
+          General
+        </Button>
+        <Button
+          mode={settingsSubTab === 'subscription' ? 'contained' : 'outlined'}
+          onPress={() => setSettingsSubTab('subscription')}
+          style={styles.subTabButton}
+          icon="credit-card-outline"
+        >
+          Subscription
+        </Button>
+      </View>
+
+      <ScrollView style={styles.tabContent}>
+        {settingsSubTab === 'general' && renderGeneralSettings()}
+        {settingsSubTab === 'subscription' && renderSubscriptionSettings()}
+      </ScrollView>
+    </View>
+  );
+
+  const renderGeneralSettings = () => (
+    <Card style={[styles.settingsCard, { backgroundColor: theme.colors.surface }]}>
+      <Card.Content>
+        <Title style={{ color: theme.colors.onSurface }}>General Settings</Title>
+        <Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+          General system configuration options will be available here.
+        </Text>
+      </Card.Content>
+    </Card>
+  );
+
+  const renderSubscriptionSettings = () => {
+    const updateTier = (tier: SubscriptionTier, field: string, value: string | number | boolean) => {
+      setSubscriptionTiers((prev) => ({
+        ...prev,
+        [tier]: {
+          ...prev[tier],
+          [field]: value,
+        },
+      }));
+    };
+
+    return (
+      <>
+        <Card style={[styles.settingsCard, { backgroundColor: theme.colors.surface }]}>
+          <Card.Content>
+            <Title style={{ color: theme.colors.onSurface }}>Subscription Tier Configuration</Title>
+            <Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 8, marginBottom: 16 }}>
+              Configure pricing and features for each subscription tier
+            </Text>
+
+            {/* Free Tier */}
+            <View style={[styles.tierCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <Title style={[styles.tierTitle, { color: theme.colors.onSurface }]}>Tier 1 - Free</Title>
+              
+              <TextInput
+                label="Display Name"
+                value={subscriptionTiers.free.name}
+                onChangeText={(text) => updateTier('free', 'name', text)}
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Price (USD)"
+                value={subscriptionTiers.free.price.toString()}
+                onChangeText={(text) => {
+                  const num = parseFloat(text) || 0;
+                  updateTier('free', 'price', num);
+                }}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Queue Limit"
+                value={subscriptionTiers.free.queueLimit === Infinity ? 'Unlimited' : subscriptionTiers.free.queueLimit.toString()}
+                onChangeText={(text) => {
+                  const num = text.toLowerCase() === 'unlimited' || text === '' ? Infinity : (parseInt(text) || 1);
+                  updateTier('free', 'queueLimit', num);
+                }}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.free.djMode ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('free', 'djMode', !subscriptionTiers.free.djMode)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>DJ Mode</Text>
+              </View>
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.free.listedOnDiscovery ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('free', 'listedOnDiscovery', !subscriptionTiers.free.listedOnDiscovery)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Listed on Discovery</Text>
+              </View>
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.free.listedOnLeaderboard ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('free', 'listedOnLeaderboard', !subscriptionTiers.free.listedOnLeaderboard)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Listed on Leaderboard</Text>
+              </View>
+              
+              <TextInput
+                label="Description"
+                value={subscriptionTiers.free.description}
+                onChangeText={(text) => updateTier('free', 'description', text)}
+                mode="outlined"
+                multiline
+                numberOfLines={2}
+                style={styles.tierInput}
+              />
+            </View>
+
+            {/* Standard Tier */}
+            <View style={[styles.tierCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <Title style={[styles.tierTitle, { color: theme.colors.onSurface }]}>Tier 2 - Standard</Title>
+              
+              <TextInput
+                label="Display Name"
+                value={subscriptionTiers.standard.name}
+                onChangeText={(text) => updateTier('standard', 'name', text)}
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Price (USD)"
+                value={subscriptionTiers.standard.price.toString()}
+                onChangeText={(text) => {
+                  const num = parseFloat(text) || 0;
+                  updateTier('standard', 'price', num);
+                }}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Queue Limit"
+                value={subscriptionTiers.standard.queueLimit === Infinity ? 'Unlimited' : subscriptionTiers.standard.queueLimit.toString()}
+                onChangeText={(text) => {
+                  const num = text.toLowerCase() === 'unlimited' || text === '' ? Infinity : (parseInt(text) || 10);
+                  updateTier('standard', 'queueLimit', num);
+                }}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.standard.djMode ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('standard', 'djMode', !subscriptionTiers.standard.djMode)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>DJ Mode</Text>
+              </View>
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.standard.listedOnDiscovery ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('standard', 'listedOnDiscovery', !subscriptionTiers.standard.listedOnDiscovery)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Listed on Discovery</Text>
+              </View>
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.standard.listedOnLeaderboard ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('standard', 'listedOnLeaderboard', !subscriptionTiers.standard.listedOnLeaderboard)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Listed on Leaderboard</Text>
+              </View>
+              
+              <TextInput
+                label="Description"
+                value={subscriptionTiers.standard.description}
+                onChangeText={(text) => updateTier('standard', 'description', text)}
+                mode="outlined"
+                multiline
+                numberOfLines={2}
+                style={styles.tierInput}
+              />
+            </View>
+
+            {/* Pro Tier */}
+            <View style={[styles.tierCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <Title style={[styles.tierTitle, { color: theme.colors.onSurface }]}>Tier 3 - Pro</Title>
+              
+              <TextInput
+                label="Display Name"
+                value={subscriptionTiers.pro.name}
+                onChangeText={(text) => updateTier('pro', 'name', text)}
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Price (USD)"
+                value={subscriptionTiers.pro.price.toString()}
+                onChangeText={(text) => {
+                  const num = parseFloat(text) || 0;
+                  updateTier('pro', 'price', num);
+                }}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Queue Limit"
+                value={subscriptionTiers.pro.queueLimit === Infinity ? 'Unlimited' : subscriptionTiers.pro.queueLimit.toString()}
+                onChangeText={(text) => {
+                  const num = text.toLowerCase() === 'unlimited' || text === '' ? Infinity : (parseInt(text) || 0);
+                  updateTier('pro', 'queueLimit', num);
+                }}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.pro.djMode ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('pro', 'djMode', !subscriptionTiers.pro.djMode)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>DJ Mode</Text>
+              </View>
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.pro.listedOnDiscovery ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('pro', 'listedOnDiscovery', !subscriptionTiers.pro.listedOnDiscovery)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Listed on Discovery</Text>
+              </View>
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.pro.listedOnLeaderboard ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('pro', 'listedOnLeaderboard', !subscriptionTiers.pro.listedOnLeaderboard)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Listed on Leaderboard</Text>
+              </View>
+              
+              <TextInput
+                label="Description"
+                value={subscriptionTiers.pro.description}
+                onChangeText={(text) => updateTier('pro', 'description', text)}
+                mode="outlined"
+                multiline
+                numberOfLines={2}
+                style={styles.tierInput}
+              />
+            </View>
+
+            <Button
+              mode="contained"
+              onPress={saveSubscriptionTiers}
+              loading={savingTiers}
+              disabled={savingTiers}
+              style={styles.saveButton}
+              icon="content-save"
+            >
+              Save Subscription Settings
+            </Button>
+          </Card.Content>
+        </Card>
+      </>
+    );
   };
 
   const renderUsersTab = () => (
@@ -467,16 +998,7 @@ const AdminScreen: React.FC = () => {
       </View>
 
       {activeTab === 0 && renderUsersTab()}
-      {activeTab === 1 && (
-        <ScrollView style={styles.tabContent}>
-          <Card style={[styles.settingsCard, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
-              <Title style={{ color: theme.colors.onSurface }}>System Settings</Title>
-              <Text style={{ color: theme.colors.onSurfaceVariant }}>Settings coming soon...</Text>
-            </Card.Content>
-          </Card>
-        </ScrollView>
-      )}
+      {activeTab === 1 && renderSettingsTab()}
 
       {/* User Detail Dialog */}
       <Portal>
@@ -520,6 +1042,14 @@ const AdminScreen: React.FC = () => {
               compact
             >
               Activity
+            </Button>
+            <Button
+              mode={userDialogTab === 'access' ? 'contained' : 'text'}
+              onPress={() => setUserDialogTab('access')}
+              style={styles.dialogTabButton}
+              compact
+            >
+              Access
             </Button>
           </View>
 
@@ -626,16 +1156,12 @@ const AdminScreen: React.FC = () => {
                             <Text style={{ color: theme.colors.onSurface }}>Free - 1 song limit</Text>
                           </View>
                           <View style={styles.radioOption}>
-                            <RadioButton value="rookie" />
-                            <Text style={{ color: theme.colors.onSurface }}>Rookie ($2) - 10 songs</Text>
-                          </View>
-                          <View style={styles.radioOption}>
                             <RadioButton value="standard" />
-                            <Text style={{ color: theme.colors.onSurface }}>Standard ($5) - Unlimited</Text>
+                            <Text style={{ color: theme.colors.onSurface }}>Standard - 10 songs</Text>
                           </View>
                           <View style={styles.radioOption}>
                             <RadioButton value="pro" />
-                            <Text style={{ color: theme.colors.onSurface }}>Pro ($10) - Unlimited + Premium</Text>
+                            <Text style={{ color: theme.colors.onSurface }}>Pro - Unlimited</Text>
                           </View>
                         </RadioButton.Group>
 
@@ -788,6 +1314,139 @@ const AdminScreen: React.FC = () => {
                         )}
                       </View>
                     )}
+
+                    {/* Access Tab */}
+                    {userDialogTab === 'access' && (
+                      <View style={styles.dialogSection}>
+                        <Title style={styles.sectionTitle}>Access Control</Title>
+                        <Text style={[styles.sectionDescription, { color: theme.colors.onSurfaceVariant }]}>
+                          Manage user access, bans, and account deletion
+                        </Text>
+
+                        {/* Ban Status */}
+                        {selectedUser.is_banned && (
+                          <View style={[styles.banStatusCard, { backgroundColor: theme.colors.errorContainer }]}>
+                            <Text style={[styles.banStatusTitle, { color: theme.colors.onErrorContainer }]}>
+                              🚫 User is Banned
+                            </Text>
+                            {selectedUser.banned_until ? (
+                              <Text style={[styles.banStatusText, { color: theme.colors.onErrorContainer }]}>
+                                Until: {new Date(selectedUser.banned_until).toLocaleString()}
+                                {new Date(selectedUser.banned_until) > new Date() ? ' (Active)' : ' (Expired)'}
+                              </Text>
+                            ) : (
+                              <Text style={[styles.banStatusText, { color: theme.colors.onErrorContainer }]}>
+                                Permanent Ban
+                              </Text>
+                            )}
+                            {selectedUser.ban_reason && (
+                              <Text style={[styles.banStatusText, { color: theme.colors.onErrorContainer }]}>
+                                Reason: {selectedUser.ban_reason}
+                              </Text>
+                            )}
+                            {selectedUser.banned_at && (
+                              <Text style={[styles.banStatusText, { color: theme.colors.onErrorContainer }]}>
+                                Banned on: {new Date(selectedUser.banned_at).toLocaleString()}
+                              </Text>
+                            )}
+                            <Button
+                              mode="contained"
+                              onPress={handleUnbanUser}
+                              style={[styles.actionButton, { marginTop: 12 }]}
+                              buttonColor={theme.colors.primary}
+                            >
+                              Unban User
+                            </Button>
+                          </View>
+                        )}
+
+                        {!selectedUser.is_banned && (
+                          <>
+                            {/* Ban User Section */}
+                            <View style={[styles.actionSection, { backgroundColor: theme.colors.surfaceVariant }]}>
+                              <Title style={[styles.actionSectionTitle, { color: theme.colors.onSurface }]}>
+                                Ban User
+                              </Title>
+                              
+                              <RadioButton.Group
+                                onValueChange={(value) => setBanType(value as 'permanent' | 'temporary')}
+                                value={banType}
+                              >
+                                <View style={styles.radioOption}>
+                                  <RadioButton value="permanent" />
+                                  <Text style={{ color: theme.colors.onSurface }}>Permanent Ban</Text>
+                                </View>
+                                <View style={styles.radioOption}>
+                                  <RadioButton value="temporary" />
+                                  <Text style={{ color: theme.colors.onSurface }}>Temporary Ban</Text>
+                                </View>
+                              </RadioButton.Group>
+
+                              {banType === 'temporary' && (
+                                <View style={styles.temporaryBanFields}>
+                                  <TextInput
+                                    label="Ban Until Date"
+                                    value={banUntilDate}
+                                    onChangeText={setBanUntilDate}
+                                    mode="outlined"
+                                    placeholder="YYYY-MM-DD"
+                                    style={styles.dialogInput}
+                                  />
+                                  <TextInput
+                                    label="Ban Until Time"
+                                    value={banUntilTime}
+                                    onChangeText={setBanUntilTime}
+                                    mode="outlined"
+                                    placeholder="HH:MM (24-hour format)"
+                                    style={styles.dialogInput}
+                                  />
+                                </View>
+                              )}
+
+                              <TextInput
+                                label="Ban Reason (optional)"
+                                value={banReason}
+                                onChangeText={setBanReason}
+                                mode="outlined"
+                                multiline
+                                numberOfLines={3}
+                                style={styles.dialogInput}
+                                placeholder="Enter reason for ban..."
+                              />
+
+                              <Button
+                                mode="contained"
+                                onPress={() => setBanConfirmVisible(true)}
+                                style={[styles.actionButton, { backgroundColor: theme.colors.error }]}
+                                buttonColor={theme.colors.error}
+                              >
+                                Ban User
+                              </Button>
+                            </View>
+                          </>
+                        )}
+
+                        <Divider style={styles.divider} />
+
+                        {/* Delete User Section */}
+                        <View style={[styles.actionSection, { backgroundColor: theme.colors.errorContainer }]}>
+                          <Title style={[styles.actionSectionTitle, { color: theme.colors.onErrorContainer }]}>
+                            ⚠️ Delete User Account
+                          </Title>
+                          <Text style={[styles.sectionDescription, { color: theme.colors.onErrorContainer }]}>
+                            This will permanently delete the user profile and all associated data. This action cannot be undone.
+                          </Text>
+                          <Button
+                            mode="contained"
+                            onPress={() => setDeleteConfirmVisible(true)}
+                            style={[styles.actionButton, { backgroundColor: theme.colors.error }]}
+                            buttonColor={theme.colors.error}
+                          >
+                            Delete User Account
+                          </Button>
+                        </View>
+                      </View>
+                    )}
                   </>
                 )}
               </Dialog.Content>
@@ -800,6 +1459,47 @@ const AdminScreen: React.FC = () => {
                 Save Changes
               </Button>
             )}
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Ban Confirmation Dialog */}
+        <Dialog
+          visible={banConfirmVisible}
+          onDismiss={() => setBanConfirmVisible(false)}
+        >
+          <Dialog.Title>Confirm Ban</Dialog.Title>
+          <Dialog.Content>
+            <Text>
+              Are you sure you want to {banType === 'permanent' ? 'permanently ban' : 'temporarily ban'} this user?
+              {banType === 'temporary' && banUntilDate && banUntilTime && (
+                <Text> The ban will expire on {new Date(`${banUntilDate}T${banUntilTime}`).toLocaleString()}.</Text>
+              )}
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setBanConfirmVisible(false)}>Cancel</Button>
+            <Button onPress={handleBanUser} mode="contained" buttonColor={theme.colors.error}>
+              Confirm Ban
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog
+          visible={deleteConfirmVisible}
+          onDismiss={() => setDeleteConfirmVisible(false)}
+        >
+          <Dialog.Title>Confirm Deletion</Dialog.Title>
+          <Dialog.Content>
+            <Text>
+              Are you sure you want to permanently delete this user account? This action cannot be undone and will delete all user data.
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setDeleteConfirmVisible(false)}>Cancel</Button>
+            <Button onPress={handleDeleteUser} mode="contained" buttonColor={theme.colors.error}>
+              Delete User
+            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -910,10 +1610,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 4,
   },
+  settingsContainer: {
+    flex: 1,
+  },
+  subTabContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 8,
+    borderBottomWidth: 1,
+    elevation: 1,
+  },
+  subTabButton: {
+    flex: 1,
+  },
   settingsCard: {
     margin: 16,
     borderRadius: 16,
     elevation: 2,
+  },
+  tierCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  tierTitle: {
+    fontSize: 18,
+    marginBottom: 12,
+  },
+  tierInput: {
+    marginBottom: 12,
+  },
+  saveButton: {
+    marginTop: 16,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  checkboxLabel: {
+    marginLeft: 8,
+    fontSize: 16,
   },
   dialog: {
     maxHeight: '90%',
@@ -1009,6 +1746,36 @@ const styles = StyleSheet.create({
   activityValue: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  banStatusCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  banStatusTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  banStatusText: {
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  actionSection: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  actionSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  actionButton: {
+    marginTop: 8,
+  },
+  temporaryBanFields: {
+    marginTop: 12,
   },
 });
 
