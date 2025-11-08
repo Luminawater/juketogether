@@ -994,6 +994,59 @@ async function trackTrackPlay(roomId, hostUserId, userId, track) {
   }
 }
 
+// Track queue addition
+async function trackQueueAddition(roomId, hostUserId, userId, track) {
+  if (!supabaseConfig) {
+    return true;
+  }
+  
+  try {
+    // Determine platform
+    let platform = 'soundcloud';
+    if (track.url?.includes('spotify')) {
+      platform = 'spotify';
+    } else if (track.url?.includes('youtube') || track.url?.includes('youtu.be')) {
+      platform = 'youtube';
+    }
+    
+    // Extract track info
+    const trackTitle = track.info?.fullTitle || track.info?.title || 'Unknown Track';
+    const trackArtist = track.info?.artist || null;
+    
+    // Insert queue addition record (use service role key to bypass RLS)
+    const serviceKey = supabaseConfig.serviceRoleKey || supabaseConfig.key;
+    const response = await fetch(`${supabaseConfig.restUrl}/queue_additions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({
+        room_id: roomId,
+        user_id: userId || null,
+        host_user_id: hostUserId || null,
+        track_id: track.id || track.url,
+        track_url: track.url || '',
+        track_title: trackTitle,
+        track_artist: trackArtist,
+        platform: platform,
+        added_at: new Date().toISOString()
+      })
+    });
+    
+    if (!response.ok) {
+      console.warn('Failed to track queue addition:', await response.text());
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error tracking queue addition:', error);
+    return false;
+  }
+}
+
 // Get leaderboard data
 async function getLeaderboard(type = 'total_listeners', limit = 100) {
   if (!supabaseConfig) {
@@ -1074,6 +1127,7 @@ module.exports = {
   trackUserJoin,
   trackUserLeave,
   trackTrackPlay,
+  trackQueueAddition,
   getLeaderboard,
   getRoomAnalytics,
   getUserAnalytics

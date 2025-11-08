@@ -60,6 +60,7 @@ import {
   SpotifyTrack,
 } from '../services/spotifyService';
 import { fetchSoundCloudTrackMetadata } from '../services/soundcloudService';
+import { fetchYouTubeTrackMetadata } from '../services/youtubeService';
 import {
   getTrackReactions,
   setTrackReaction,
@@ -1250,9 +1251,14 @@ const RoomScreen: React.FC = () => {
             // Spotify tracks should be added via the Spotify search/playlist interface
             // For direct URLs, we'll let the server handle it
           } else if (isYouTube) {
-            platform = 'youtube';
-            // YouTube tracks should be added via the YouTube search interface
-            // For direct URLs, we'll let the server handle it
+            try {
+              trackInfo = await fetchYouTubeTrackMetadata(url);
+              platform = 'youtube';
+            } catch (error) {
+              console.error('Error fetching YouTube metadata:', error);
+              platform = 'youtube';
+              // Continue with null trackInfo - server will use fallback
+            }
           }
 
           // Emit add-track event with metadata if available

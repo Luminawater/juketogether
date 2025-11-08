@@ -114,7 +114,8 @@ const {
   getCollaborationRequest,
   trackUserJoin,
   trackUserLeave,
-  trackTrackPlay
+  trackTrackPlay,
+  trackQueueAddition
 } = supabaseFunctions;
 
 // Test Supabase connection on startup
@@ -788,6 +789,13 @@ io.on('connection', (socket) => {
 
     io.to(roomId).emit('track-added', trackWithUser);
     console.log(`✅ Track added to room "${roomId}":`, trackUrl);
+    
+    // Track queue addition for analytics
+    if (trackQueueAddition) {
+      trackQueueAddition(roomId, room.hostUserId, userId, track).catch(err => {
+        console.error('Error tracking queue addition:', err);
+      });
+    }
     
     // Auto-play first track if no track is currently playing
     // Check if the user who added the track can play

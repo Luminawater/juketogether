@@ -358,10 +358,9 @@ const AdminScreen: React.FC = () => {
           .select('id')
           .eq('user_id', userId),
         
-        // Queue additions - count tracks in queue JSONB where addedBy matches
-        // This is approximate - we'll count from room analytics or track_plays
+        // Queue additions - count from queue_additions table
         supabase
-          .from('track_plays')
+          .from('queue_additions')
           .select('id')
           .eq('user_id', userId),
       ]);
