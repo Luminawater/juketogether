@@ -53,20 +53,32 @@ const getSocketUrl = () => {
       return 'http://localhost:60000';
     }
 
-    // For Vercel deployments, you need a separate WebSocket server
-    // Check if we're on a Vercel domain (or your production domain)
-    // If so, use the separate WebSocket server URL
-    // Otherwise, try to use the same origin (won't work on Vercel serverless)
-    const isVercelDomain = hostname.includes('vercel.app') || hostname.includes('juketogether.com');
+    // For Vercel/Cloudflare Pages deployments, you need a separate WebSocket server
+    // Check if we're on a Vercel, Cloudflare Pages, or production domain
+    const isStaticHosting = 
+      hostname.includes('vercel.app') || 
+      hostname.includes('pages.dev') || 
+      hostname.includes('netlify.app') ||
+      hostname.includes('juketogether.com');
 
-    if (isVercelDomain) {
-      // Use a separate WebSocket server (Railway, Render, Fly.io, etc.)
-      // Set EXPO_PUBLIC_SOCKET_URL environment variable in Vercel
-      // For now, fallback to the API URL (will fail, but shows the issue)
-      return Constants.expoConfig?.extra?.socketUrl || getApiUrl();
+    if (isStaticHosting) {
+      // For Cloudflare Pages/Vercel static hosting, use the API server for WebSockets
+      // Priority: Environment variable > app.json socketUrl > API URL
+      const socketOverride = process.env.EXPO_PUBLIC_SOCKET_URL;
+      if (socketOverride) {
+        return socketOverride;
+      }
+      
+      const socketUrl = Constants.expoConfig?.extra?.socketUrl;
+      if (socketUrl && !socketUrl.includes('your-websocket-server')) {
+        return socketUrl;
+      }
+      
+      // Fallback to API URL (Vercel has limited WebSocket support)
+      return getApiUrl();
     }
 
-    // For other domains, use the same origin
+    // For other domains (self-hosted), use the same origin
     return window.location.origin;
   }
 

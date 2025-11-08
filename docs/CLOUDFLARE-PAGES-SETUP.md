@@ -44,7 +44,11 @@ Configure the following settings in Cloudflare Pages:
 Add the following environment variables in Cloudflare Pages:
 
 - `NODE_VERSION`: `18` or `20` (recommended)
-- Any Expo-specific environment variables if needed
+- `EXPO_PUBLIC_SOCKET_URL`: Your WebSocket server URL (optional)
+  - **Default**: Uses the API URL from `app.json` (`https://juketogether.vercel.app`)
+  - **Note**: Vercel serverless functions have limited WebSocket support
+  - If you need full WebSocket support, deploy a separate WebSocket server (e.g., on Railway, Render, or Fly.io)
+  - Then set this variable to your WebSocket server URL
 
 ### 3. Build Script
 
