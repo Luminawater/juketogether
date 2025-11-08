@@ -1,5 +1,6 @@
 # Cloudflare Pages SPA redirects
 # Redirect all non-file routes to index.html for client-side routing
-# Cloudflare Pages serves actual files (JS, CSS, images) automatically before applying redirects
+# Cloudflare Pages serves actual files (JS, CSS, images, fonts) automatically before applying redirects
+# This catch-all only applies if no actual file is found
 /*  /index.html  200
 
