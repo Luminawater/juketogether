@@ -13,9 +13,9 @@ const getApiUrl = () => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const hostname = window.location.hostname;
 
-    // If on localhost, use localhost:8080 for socket server
+    // If on localhost, use localhost:8082 for socket server
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:8080';
+      return 'http://localhost:60000';
     }
 
     // Otherwise, use the current origin (production domain)
@@ -29,7 +29,7 @@ const getApiUrl = () => {
 
   // In development, use localhost
   if (isDev) {
-    return 'http://localhost:8080';
+    return 'http://localhost:8082';
   }
 
   // In production, use your Vercel/deployed URL from app.json or fallback
@@ -48,9 +48,9 @@ const getSocketUrl = () => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const hostname = window.location.hostname;
 
-    // If on localhost, use localhost:8080
+    // If on localhost, use localhost:8082
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:8080';
+      return 'http://localhost:60000';
     }
 
     // For Vercel deployments, you need a separate WebSocket server
@@ -75,7 +75,7 @@ const getSocketUrl = () => {
 
   // In development, use localhost
   if (isDev) {
-    return 'http://localhost:8080';
+    return 'http://localhost:8082';
   }
 
   // In production, use separate WebSocket server or fallback

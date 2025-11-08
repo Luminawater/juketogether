@@ -4348,7 +4348,7 @@ setInterval(async () => {
   }
 }, 5 * 60 * 1000); // Check every 5 minutes
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 60000;
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Share this URL via ngrok to let others join!`);
