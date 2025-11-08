@@ -110,6 +110,146 @@ interface RoomSettings {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const IS_MOBILE = SCREEN_WIDTH < 768;
 
+// Animated Queue Item Component
+interface AnimatedQueueItemProps {
+  track: Track;
+  index: number;
+  canRemove: boolean;
+  isRemoving: boolean;
+  theme: any;
+  user: any;
+  onRemove: (trackId: string) => void;
+  getThumbnailUrl: (thumbnail: string | null | undefined, size: number) => string;
+}
+
+const AnimatedQueueItem: React.FC<AnimatedQueueItemProps> = ({
+  track,
+  index,
+  canRemove,
+  isRemoving,
+  theme,
+  user,
+  onRemove,
+  getThumbnailUrl,
+}) => {
+  const animatedValue = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (isRemoving) {
+      Animated.parallel([
+        Animated.timing(animatedValue, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(slideAnim, {
+          toValue: -100,
+          duration: 300,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ]).start();
+    } else {
+      // Reset when item is added
+      animatedValue.setValue(1);
+      slideAnim.setValue(0);
+    }
+  }, [isRemoving, animatedValue, slideAnim]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.queueItem, 
+        { 
+          backgroundColor: index === 0 
+            ? `${theme.colors.primary}15` 
+            : theme.colors.surfaceVariant,
+          borderLeftColor: theme.colors.primary,
+          borderLeftWidth: index === 0 ? 4 : 0,
+          opacity: animatedValue,
+          transform: [{ translateX: slideAnim }],
+        }
+      ]}
+    >
+      <TouchableOpacity
+        activeOpacity={0.8}
+        style={styles.queueItemContent}
+      >
+        <View style={[
+          styles.queueItemNumber, 
+          { 
+            backgroundColor: index === 0 
+              ? theme.colors.primary 
+              : `${theme.colors.primary}20` 
+          }
+        ]}>
+          <Text style={[
+            styles.queueNumber, 
+            { 
+              color: index === 0 
+                ? theme.colors.onPrimary 
+                : theme.colors.primary 
+            }
+          ]}>
+            {index + 1}
+          </Text>
+          {index === 0 && (
+            <View style={[styles.nextIndicator, { backgroundColor: theme.colors.onPrimary }]} />
+          )}
+        </View>
+        <Avatar.Image
+          size={IS_MOBILE ? 60 : 64}
+          source={{ uri: getThumbnailUrl(track.info?.thumbnail, IS_MOBILE ? 60 : 64) }}
+          style={styles.queueItemThumbnail}
+        />
+        <View style={styles.queueItemDetails}>
+          <Text 
+            style={[styles.queueItemTitle, { color: theme.colors.onSurface }]}
+            numberOfLines={1}
+          >
+            {track.info?.fullTitle || 'Unknown Track'}
+          </Text>
+          <View style={styles.queueItemMeta}>
+            <MaterialCommunityIcons 
+              name="account" 
+              size={14} 
+              color={theme.colors.onSurfaceVariant} 
+            />
+            <Text 
+              style={[styles.queueItemDescription, { color: theme.colors.onSurfaceVariant }]}
+              numberOfLines={1}
+            >
+              {track.addedBy === user?.id ? 'You' : 'Someone'}
+            </Text>
+            {index === 0 && (
+              <>
+                <View style={[styles.metaDivider, { backgroundColor: theme.colors.onSurfaceVariant }]} />
+                <MaterialCommunityIcons 
+                  name="arrow-right" 
+                  size={14} 
+                  color={theme.colors.primary} 
+                />
+                <Text style={[styles.nextLabel, { color: theme.colors.primary }]}>
+                  Next
+                </Text>
+              </>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+      {canRemove && (
+        <IconButton
+          icon="delete-outline"
+          size={20}
+          iconColor={theme.colors.error}
+          onPress={() => onRemove(track.id)}
+          style={styles.queueItemRemoveButton}
+        />
+      )}
+    </Animated.View>
+  );
+};
+
 const RoomScreen: React.FC = () => {
   const route = useRoute<RoomScreenRouteProp>();
   const navigation = useNavigation<RoomScreenNavigationProp>();
@@ -122,6 +262,7 @@ const RoomScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'main' | 'users' | 'settings' | 'spotify' | 'chat' | 'djmode'>('main');
   const [queue, setQueue] = useState<Track[]>([]);
   const [history, setHistory] = useState<Track[]>([]);
+  const [removingTrackIds, setRemovingTrackIds] = useState<Set<string>>(new Set());
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
@@ -328,7 +469,18 @@ const RoomScreen: React.FC = () => {
     };
 
     const handleTrackRemoved = (trackId: string) => {
-      setQueue(prev => prev.filter(t => t.id !== trackId));
+      // Mark track as being removed to trigger animation
+      setRemovingTrackIds(prev => new Set(prev).add(trackId));
+      
+      // After animation completes, remove from queue
+      setTimeout(() => {
+        setQueue(prev => prev.filter(t => t.id !== trackId));
+        setRemovingTrackIds(prev => {
+          const next = new Set(prev);
+          next.delete(trackId);
+          return next;
+        });
+      }, 300); // Match animation duration
     };
 
     const handleRemoveTrack = (trackId: string) => {
@@ -1919,97 +2071,20 @@ const RoomScreen: React.FC = () => {
               {queue.map((track, index) => {
                 const canRemove = isOwner || isAdmin || roomSettings.allowQueueRemoval || 
                   (track.addedBy === user?.id);
+                const isRemoving = removingTrackIds.has(track.id);
                 
                 return (
-                  <View
+                  <AnimatedQueueItem
                     key={track.id}
-                    style={[
-                      styles.queueItem, 
-                      { 
-                        backgroundColor: index === 0 
-                          ? `${theme.colors.primary}15` 
-                          : theme.colors.surfaceVariant,
-                        borderLeftColor: theme.colors.primary,
-                        borderLeftWidth: index === 0 ? 4 : 0,
-                      }
-                    ]}
-                  >
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      style={styles.queueItemContent}
-                    >
-                      <View style={[
-                        styles.queueItemNumber, 
-                        { 
-                          backgroundColor: index === 0 
-                            ? theme.colors.primary 
-                            : `${theme.colors.primary}20` 
-                        }
-                      ]}>
-                        <Text style={[
-                          styles.queueNumber, 
-                          { 
-                            color: index === 0 
-                              ? theme.colors.onPrimary 
-                              : theme.colors.primary 
-                          }
-                        ]}>
-                          {index + 1}
-                        </Text>
-                        {index === 0 && (
-                          <View style={[styles.nextIndicator, { backgroundColor: theme.colors.onPrimary }]} />
-                        )}
-                      </View>
-                      <Avatar.Image
-                        size={IS_MOBILE ? 60 : 64}
-                        source={{ uri: getThumbnailUrl(track.info?.thumbnail, IS_MOBILE ? 60 : 64) }}
-                        style={styles.queueItemThumbnail}
-                      />
-                      <View style={styles.queueItemDetails}>
-                        <Text 
-                          style={[styles.queueItemTitle, { color: theme.colors.onSurface }]}
-                          numberOfLines={1}
-                        >
-                          {track.info?.fullTitle || 'Unknown Track'}
-                        </Text>
-                        <View style={styles.queueItemMeta}>
-                          <MaterialCommunityIcons 
-                            name="account" 
-                            size={14} 
-                            color={theme.colors.onSurfaceVariant} 
-                          />
-                          <Text 
-                            style={[styles.queueItemDescription, { color: theme.colors.onSurfaceVariant }]}
-                            numberOfLines={1}
-                          >
-                            {track.addedBy === user?.id ? 'You' : 'Someone'}
-                          </Text>
-                          {index === 0 && (
-                            <>
-                              <View style={[styles.metaDivider, { backgroundColor: theme.colors.onSurfaceVariant }]} />
-                              <MaterialCommunityIcons 
-                                name="arrow-right" 
-                                size={14} 
-                                color={theme.colors.primary} 
-                              />
-                              <Text style={[styles.nextLabel, { color: theme.colors.primary }]}>
-                                Next
-                              </Text>
-                            </>
-                          )}
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                    {canRemove && (
-                      <IconButton
-                        icon="delete-outline"
-                        size={20}
-                        iconColor={theme.colors.error}
-                        onPress={() => handleRemoveTrack(track.id)}
-                        style={styles.queueItemRemoveButton}
-                      />
-                    )}
-                  </View>
+                    track={track}
+                    index={index}
+                    canRemove={canRemove}
+                    isRemoving={isRemoving}
+                    theme={theme}
+                    user={user}
+                    onRemove={handleRemoveTrack}
+                    getThumbnailUrl={getThumbnailUrl}
+                  />
                 );
               })}
             </ScrollView>
