@@ -8,30 +8,30 @@ const getApiUrl = () => {
   if (envOverride) {
     return envOverride;
   }
-  
+
   // On web, detect the current hostname and use it
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    
+
     // If on localhost, use localhost:8080 for socket server
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:8080';
     }
-    
+
     // Otherwise, use the current origin (production domain)
     // This includes protocol, hostname, and port if present
     // Socket.io will automatically handle websocket upgrade
     return window.location.origin;
   }
-  
+
   // Check if we're in development mode
   const isDev = __DEV__ || process.env.NODE_ENV === 'development';
-  
+
   // In development, use localhost
   if (isDev) {
     return 'http://localhost:8080';
   }
-  
+
   // In production, use your Vercel/deployed URL from app.json or fallback
   return Constants.expoConfig?.extra?.apiUrl || 'https://juketogether.com';
 };
@@ -43,41 +43,41 @@ const getSocketUrl = () => {
   if (socketOverride) {
     return socketOverride;
   }
-  
+
   // On web, detect the current hostname
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    
+
     // If on localhost, use localhost:8080
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:8080';
     }
-    
+
     // For Vercel deployments, you need a separate WebSocket server
     // Check if we're on a Vercel domain (or your production domain)
     // If so, use the separate WebSocket server URL
     // Otherwise, try to use the same origin (won't work on Vercel serverless)
     const isVercelDomain = hostname.includes('vercel.app') || hostname.includes('juketogether.com');
-    
+
     if (isVercelDomain) {
       // Use a separate WebSocket server (Railway, Render, Fly.io, etc.)
       // Set EXPO_PUBLIC_SOCKET_URL environment variable in Vercel
       // For now, fallback to the API URL (will fail, but shows the issue)
       return Constants.expoConfig?.extra?.socketUrl || getApiUrl();
     }
-    
+
     // For other domains, use the same origin
     return window.location.origin;
   }
-  
+
   // Check if we're in development mode
   const isDev = __DEV__ || process.env.NODE_ENV === 'development';
-  
+
   // In development, use localhost
   if (isDev) {
     return 'http://localhost:8080';
   }
-  
+
   // In production, use separate WebSocket server or fallback
   return Constants.expoConfig?.extra?.socketUrl || getApiUrl();
 };

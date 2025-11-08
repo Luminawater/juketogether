@@ -35,7 +35,7 @@ class SocketService {
     return this._socket;
   }
 
-  connect(roomId: string, userId: string, authToken?: string) {
+  connect(roomId: string, userId: string, authToken?: string, providerToken?: string) {
     if (this._socket?.connected && this.roomId === roomId) {
       return; // Already connected to this room
     }
@@ -55,6 +55,7 @@ class SocketService {
       },
       auth: {
         token: authToken,
+        providerToken: providerToken,
       },
       // Add error handling for connection failures
       autoConnect: true,

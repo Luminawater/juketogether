@@ -571,6 +571,38 @@ io.on('connection', (socket) => {
     const savedVolume = savedVolumes.get(userId) || 50;
     room.userVolumes.set(userId, savedVolume);
     
+    // If current track has unknown metadata and is Spotify, try to refresh it
+    // Can use Client Credentials flow even without user authentication
+    if (room.currentTrack && 
+        (room.currentTrack.platform === 'spotify' || (room.currentTrack.url && room.currentTrack.url.includes('spotify.com'))) &&
+        (!room.currentTrack.info || !room.currentTrack.info.title || room.currentTrack.info.title === 'Unknown Track' || room.currentTrack.info.title.trim() === '')) {
+      console.log(`[SPOTIFY] Current track has unknown metadata on room join, refreshing: ${room.currentTrack.url}`);
+      console.log(`[SPOTIFY] Socket has providerToken: ${!!socket.providerToken}`);
+      // Refresh metadata asynchronously (don't block room join)
+      fetchSpotifyMetadata(room.currentTrack.url, socket)
+        .then(metadata => {
+          if (metadata && metadata.title && metadata.title !== 'Unknown Track') {
+            room.currentTrack.info = {
+              title: metadata.title,
+              artist: metadata.artist,
+              fullTitle: metadata.fullTitle,
+              url: metadata.url,
+              thumbnail: metadata.thumbnail,
+              duration: metadata.duration
+            };
+            console.log(`[SPOTIFY] Refreshed current track metadata on join: "${metadata.title}" by ${metadata.artist}`);
+            scheduleSave(roomId);
+            // Broadcast updated track to all clients in the room
+            io.to(roomId).emit('track-changed', room.currentTrack);
+          } else {
+            console.log(`[SPOTIFY] Metadata refresh returned null or invalid data`);
+          }
+        })
+        .catch(error => {
+          console.error('[SPOTIFY] Failed to refresh metadata on room join:', error.message);
+        });
+    }
+    
     const authoritativePosition = room.position;
     const authoritativeIsPlaying = room.isPlaying;
     
@@ -773,11 +805,16 @@ io.on('connection', (socket) => {
     let finalTrackInfo = trackInfo;
     if (platform === 'spotify' && (!trackInfo || !trackInfo.title || trackInfo.title === 'Unknown Track')) {
       try {
-        console.log(`Fetching Spotify metadata for track: ${trackUrl}`);
+        console.log(`[SPOTIFY] Fetching metadata for track: ${trackUrl}`);
+        console.log(`[SPOTIFY] Socket authenticated: ${socket.isAuthenticated}, has token: ${!!socket.supabaseToken}`);
         finalTrackInfo = await fetchSpotifyMetadata(trackUrl, socket);
-        console.log(`Fetched Spotify metadata:`, finalTrackInfo?.title);
+        if (finalTrackInfo) {
+          console.log(`[SPOTIFY] Successfully fetched metadata: "${finalTrackInfo.title}" by ${finalTrackInfo.artist}`);
+        } else {
+          console.log(`[SPOTIFY] Metadata fetch returned null`);
+        }
       } catch (error) {
-        console.error('Failed to fetch Spotify metadata:', error);
+        console.error('[SPOTIFY] Failed to fetch metadata:', error.message);
         // Continue with null trackInfo - will use fallbacks
       }
     }
@@ -877,6 +914,30 @@ io.on('connection', (socket) => {
       room.isPlaying = true;
       room.position = 0;
       room.lastBroadcastPosition = 0;
+      
+      // If current track has unknown metadata and is Spotify, try to fetch it
+      if (room.currentTrack && 
+          room.currentTrack.platform === 'spotify' &&
+          (!room.currentTrack.info || !room.currentTrack.info.title || room.currentTrack.info.title === 'Unknown Track')) {
+        console.log(`[SPOTIFY] Current track has unknown metadata, fetching: ${room.currentTrack.url}`);
+        try {
+          const metadata = await fetchSpotifyMetadata(room.currentTrack.url, socket);
+          if (metadata && metadata.title && metadata.title !== 'Unknown Track') {
+            room.currentTrack.info = {
+              title: metadata.title,
+              artist: metadata.artist,
+              fullTitle: metadata.fullTitle,
+              url: metadata.url,
+              thumbnail: metadata.thumbnail,
+              duration: metadata.duration
+            };
+            console.log(`[SPOTIFY] Updated current track metadata: "${metadata.title}" by ${metadata.artist}`);
+            scheduleSave(roomId);
+          }
+        } catch (error) {
+          console.error('[SPOTIFY] Failed to fetch metadata for current track:', error.message);
+        }
+      }
       
       scheduleSave(roomId);
       
@@ -1052,6 +1113,30 @@ io.on('connection', (socket) => {
       room.position = 0; // Reset position for new track
       room.lastBroadcastPosition = 0; // Reset broadcast position too
       
+      // If current track has unknown metadata and is Spotify, try to fetch it
+      if (room.currentTrack && 
+          room.currentTrack.platform === 'spotify' &&
+          (!room.currentTrack.info || !room.currentTrack.info.title || room.currentTrack.info.title === 'Unknown Track')) {
+        console.log(`[SPOTIFY] Next track has unknown metadata, fetching: ${room.currentTrack.url}`);
+        try {
+          const metadata = await fetchSpotifyMetadata(room.currentTrack.url, socket);
+          if (metadata && metadata.title && metadata.title !== 'Unknown Track') {
+            room.currentTrack.info = {
+              title: metadata.title,
+              artist: metadata.artist,
+              fullTitle: metadata.fullTitle,
+              url: metadata.url,
+              thumbnail: metadata.thumbnail,
+              duration: metadata.duration
+            };
+            console.log(`[SPOTIFY] Updated next track metadata: "${metadata.title}" by ${metadata.artist}`);
+            scheduleSave(roomId);
+          }
+        } catch (error) {
+          console.error('[SPOTIFY] Failed to fetch metadata for next track:', error.message);
+        }
+      }
+      
       // Emit track change first, then play after a delay
       io.to(roomId).emit('track-changed', room.currentTrack);
       io.to(roomId).emit('history-updated', room.history);
@@ -1076,6 +1161,77 @@ io.on('connection', (socket) => {
       io.to(roomId).emit('pause-track');
       scheduleSave(roomId);
       console.log(`No more tracks in queue for room ${roomId}, stopping playback`);
+    }
+  });
+
+  // Refresh current track metadata
+  socket.on('refresh-track-metadata', async (data) => {
+    const { roomId } = data;
+    
+    if (!roomId) {
+      socket.emit('error', { message: 'Room ID required' });
+      return;
+    }
+
+    const room = rooms.get(roomId);
+    if (!room) {
+      socket.emit('error', { message: 'Room not found' });
+      return;
+    }
+
+    if (!room.currentTrack) {
+      socket.emit('error', { message: 'No current track to refresh' });
+      return;
+    }
+
+    // Check if it's a Spotify track (by URL or platform)
+    const isSpotifyTrack = room.currentTrack.platform === 'spotify' || 
+                          (room.currentTrack.url && room.currentTrack.url.includes('spotify.com'));
+    
+    // Check if metadata is missing or unknown
+    const hasUnknownMetadata = !room.currentTrack.info || 
+                               !room.currentTrack.info.title || 
+                               room.currentTrack.info.title === 'Unknown Track' ||
+                               room.currentTrack.info.title.trim() === '';
+    
+    console.log(`[SPOTIFY] Refresh request - isSpotifyTrack: ${isSpotifyTrack}, hasUnknownMetadata: ${hasUnknownMetadata}`);
+    console.log(`[SPOTIFY] Track platform: ${room.currentTrack.platform}, URL: ${room.currentTrack.url}`);
+    console.log(`[SPOTIFY] Track info:`, room.currentTrack.info);
+    
+    // Only refresh if it's a Spotify track with unknown metadata
+    if (isSpotifyTrack && hasUnknownMetadata) {
+      console.log(`[SPOTIFY] Refreshing metadata for current track: ${room.currentTrack.url}`);
+      try {
+        const metadata = await fetchSpotifyMetadata(room.currentTrack.url, socket);
+        if (metadata && metadata.title && metadata.title !== 'Unknown Track') {
+          room.currentTrack.info = {
+            title: metadata.title,
+            artist: metadata.artist,
+            fullTitle: metadata.fullTitle,
+            url: metadata.url,
+            thumbnail: metadata.thumbnail,
+            duration: metadata.duration
+          };
+          // Ensure platform is set correctly
+          room.currentTrack.platform = 'spotify';
+          
+          console.log(`[SPOTIFY] Refreshed current track metadata: "${metadata.title}" by ${metadata.artist}`);
+          scheduleSave(roomId);
+          
+          // Broadcast updated track to all clients
+          io.to(roomId).emit('track-changed', room.currentTrack);
+          socket.emit('success', { message: 'Track metadata refreshed' });
+        } else {
+          console.log(`[SPOTIFY] Metadata fetch returned null or invalid data`);
+          socket.emit('error', { message: 'Failed to fetch track metadata' });
+        }
+      } catch (error) {
+        console.error('[SPOTIFY] Failed to refresh track metadata:', error.message);
+        socket.emit('error', { message: `Failed to refresh metadata: ${error.message}` });
+      }
+    } else {
+      console.log(`[SPOTIFY] Refresh rejected - isSpotifyTrack: ${isSpotifyTrack}, hasUnknownMetadata: ${hasUnknownMetadata}`);
+      socket.emit('error', { message: 'Current track does not need metadata refresh' });
     }
   });
 
@@ -2474,40 +2630,106 @@ app.post('/api/spotify-metadata', async (req, res) => {
 // Helper function to fetch Spotify metadata for a track URL
 async function fetchSpotifyMetadata(trackUrl, socket) {
   try {
+    console.log(`[SPOTIFY] Starting metadata fetch for: ${trackUrl}`);
+
     // Extract Spotify ID from URL
     const spotifyId = extractSpotifyId(trackUrl);
+    console.log(`[SPOTIFY] Extracted ID from "${trackUrl}": ${spotifyId}`);
     if (!spotifyId) {
-      throw new Error('Invalid Spotify URL');
+      console.error(`[SPOTIFY] Failed to extract track ID from URL: ${trackUrl}`);
+      throw new Error('Invalid Spotify URL - could not extract track ID');
+    }
+    
+    // Validate track ID format (Spotify IDs are 22 characters alphanumeric)
+    if (!/^[a-zA-Z0-9]{22}$/.test(spotifyId)) {
+      console.warn(`[SPOTIFY] Track ID format may be invalid: ${spotifyId} (expected 22 alphanumeric characters)`);
+      // Continue anyway as some IDs might be valid but in different format
     }
 
-    // Get the user's Spotify access token from the socket session
-    if (!socket.isAuthenticated || !socket.supabaseToken) {
-      throw new Error('User not authenticated with Supabase');
-    }
+    // Try to get user's Spotify access token first, then fallback to Client Credentials
+    let access_token = null;
 
-    // Get user's Spotify token by calling the user-token endpoint
-    // We need to construct the URL manually since we're not in a request context
-    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-    const host = process.env.HOST || 'localhost:3000';
-    const baseUrl = `${protocol}://${host}`;
+    // Try user token if authenticated
+    if (socket.isAuthenticated && socket.supabaseToken) {
+      console.log(`[SPOTIFY] Getting Spotify token for user...`);
+      console.log(`[SPOTIFY] Socket has providerToken: ${!!socket.providerToken}`);
 
-    const tokenResponse = await fetch(`${baseUrl}/api/spotify/user-token`, {
-      headers: {
-        'Authorization': `Bearer ${socket.supabaseToken}`
+      // Use the provider token sent from the client
+      access_token = socket.providerToken;
+
+      if (!access_token) {
+        console.log(`[SPOTIFY] No provider token in socket, trying fallback methods...`);
+
+        // Fallback: Get user's Spotify token using Supabase user data
+        const { data: { user }, error } = await supabase.auth.getUser(socket.supabaseToken);
+
+        if (!error && user) {
+          console.log(`[SPOTIFY] User authenticated: ${user.id}`);
+
+          // Check if user signed in with Spotify
+          const isSpotifyUser = user.app_metadata?.provider === 'spotify' ||
+                               user.identities?.some(identity => identity.provider === 'spotify');
+
+          console.log(`[SPOTIFY] User is Spotify user: ${isSpotifyUser}`);
+
+          if (isSpotifyUser) {
+            // Try user metadata as fallback
+            access_token = user.user_metadata?.spotify_access_token ||
+                          user.identities?.find(i => i.provider === 'spotify')?.identity_data?.access_token;
+            if (access_token) {
+              console.log(`[SPOTIFY] Using stored token from metadata as fallback`);
+            }
+          }
+        }
       }
-    });
-
-    if (!tokenResponse.ok) {
-      throw new Error('Failed to get Spotify token');
     }
 
-    const { access_token } = await tokenResponse.json();
+    // Fallback to Client Credentials flow for public track metadata
     if (!access_token) {
-      throw new Error('No Spotify access token available');
+      console.log(`[SPOTIFY] No user token available, using Client Credentials flow for public track metadata...`);
+      const clientId = process.env.SPOTIFY_CLIENT_ID;
+      const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+
+      if (clientId && clientSecret) {
+        try {
+          const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+          const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${auth}`,
+              'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: 'grant_type=client_credentials'
+          });
+
+          if (tokenResponse.ok) {
+            const tokenData = await tokenResponse.json();
+            access_token = tokenData.access_token;
+            console.log(`[SPOTIFY] Got access token via Client Credentials (expires in ${tokenData.expires_in}s)`);
+          } else {
+            const errorText = await tokenResponse.text().catch(() => '');
+            console.error(`[SPOTIFY] Failed to get Client Credentials token: ${tokenResponse.status}`, errorText);
+          }
+        } catch (error) {
+          console.error(`[SPOTIFY] Error getting Client Credentials token:`, error.message);
+        }
+      } else {
+        console.warn(`[SPOTIFY] SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET not configured`);
+      }
     }
+
+    if (!access_token) {
+      throw new Error('No Spotify access token available (tried user token and Client Credentials)');
+    }
+
+    console.log(`[SPOTIFY] Got access token, making API call to Spotify for track ${spotifyId}`);
 
     // Fetch track from Spotify API
-    const response = await fetch(`https://api.spotify.com/v1/tracks/${spotifyId}`, {
+    // Using market parameter for better availability (optional but recommended)
+    const apiUrl = `https://api.spotify.com/v1/tracks/${spotifyId}`;
+    console.log(`[SPOTIFY] Calling: ${apiUrl}`);
+    
+    const response = await fetch(apiUrl, {
       headers: {
         'Authorization': `Bearer ${access_token}`,
         'Content-Type': 'application/json'
@@ -2515,21 +2737,45 @@ async function fetchSpotifyMetadata(trackUrl, socket) {
     });
 
     if (!response.ok) {
-      throw new Error(`Spotify API error: ${response.status}`);
+      const errorText = await response.text().catch(() => '');
+      console.error(`[SPOTIFY] API error response: ${response.status} ${response.statusText}`, errorText);
+      
+      if (response.status === 401) {
+        throw new Error('Spotify access token expired or invalid');
+      } else if (response.status === 404) {
+        throw new Error(`Track not found: ${spotifyId}`);
+      }
+      throw new Error(`Spotify API error: ${response.status} ${response.statusText}`);
     }
 
     const track = await response.json();
+    
+    // Validate response structure
+    if (!track || !track.name) {
+      console.error(`[SPOTIFY] Invalid track response:`, track);
+      throw new Error('Invalid track data from Spotify API');
+    }
+    
+    console.log(`[SPOTIFY] Spotify API returned track: "${track.name}" by ${track.artists?.[0]?.name || 'Unknown Artist'}`);
+
+    // Extract artist names safely
+    const artistNames = track.artists && Array.isArray(track.artists) 
+      ? track.artists.map(artist => artist.name).filter(Boolean).join(', ')
+      : 'Unknown Artist';
+
+    // Extract thumbnail (prefer largest image)
+    const thumbnail = track.album?.images?.[0]?.url || null;
 
     return {
       title: track.name,
-      artist: track.artists.map(artist => artist.name).join(', '),
-      fullTitle: `${track.artists.map(artist => artist.name).join(', ')} - ${track.name}`,
+      artist: artistNames || 'Unknown Artist',
+      fullTitle: artistNames ? `${artistNames} - ${track.name}` : track.name,
       url: track.external_urls?.spotify || trackUrl,
-      thumbnail: track.album?.images?.[0]?.url || null,
+      thumbnail: thumbnail,
       duration: track.duration_ms ? Math.floor(track.duration_ms / 1000) : null,
     };
   } catch (error) {
-    console.error('Error fetching Spotify metadata:', error);
+    console.error('[SPOTIFY] Error fetching Spotify metadata:', error.message);
     return null;
   }
 }
@@ -2616,7 +2862,11 @@ const handleSpotifyTrackMetadata = async (req, res) => {
     console.error('Error fetching Spotify track metadata:', error);
     res.status(500).json({ error: 'Failed to fetch Spotify track data', details: error.message });
   }
-});
+};
+
+// Register the endpoint with both paths for backwards compatibility
+app.post('/api/spotify/tracks/metadata', handleSpotifyTrackMetadata);
+app.post('/api/spotify/playlists/tracks/metadata', handleSpotifyTrackMetadata);
 
 // Get user's Spotify access token from Supabase session
 // This endpoint extracts the Spotify token from the user's Supabase session

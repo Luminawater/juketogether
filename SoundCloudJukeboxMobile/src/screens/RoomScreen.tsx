@@ -56,7 +56,6 @@ import {
   fetchUserPlaylists,
   fetchPlaylistTracks,
   spotifyTrackToQueueTrack,
-  fetchSpotifyTrackMetadata,
   SpotifyPlaylist,
   SpotifyTrack,
 } from '../services/spotifyService';
@@ -240,10 +239,11 @@ const RoomScreen: React.FC = () => {
 
     const userId = user?.id || `anonymous_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     const authToken = session?.access_token;
+    const providerToken = session?.provider_token || undefined; // Spotify OAuth token
 
     // Only connect if not already connected to this room
     if (!socketService.isConnected() || socketService.socket === null) {
-      socketService.connect(roomId, userId, authToken);
+      socketService.connect(roomId, userId, authToken, providerToken);
     }
 
     const handleConnect = () => {
@@ -806,6 +806,61 @@ const RoomScreen: React.FC = () => {
     }
   }, [currentTrack?.id, roomId, user?.id]);
 
+  // Refresh metadata for current track if it's "Unknown Track"
+  useEffect(() => {
+    if (currentTrack && 
+        currentTrack.url?.includes('spotify.com') &&
+        (currentTrack.info?.title === 'Unknown Track' || !currentTrack.info?.title) &&
+        user && 
+        connected &&
+        socketService.socket) {
+      console.log('[SPOTIFY] Current track has unknown metadata, refreshing...');
+      console.log('[SPOTIFY] User is Spotify user:', isSpotifyUser(user));
+      console.log('[SPOTIFY] Has provider token:', !!session?.provider_token);
+      const timeoutId = setTimeout(() => {
+        socketService.socket?.emit('refresh-track-metadata', { roomId });
+      }, 2000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [currentTrack?.id, currentTrack?.info?.title, user, connected, roomId, session]);
+
+  // Refresh metadata for tracks with unknown information in queue
+  useEffect(() => {
+    const refreshUnknownTracks = async () => {
+      const tracksToRefresh = queue.filter(track =>
+        track.info?.title === 'Unknown Track' &&
+        track.url?.includes('spotify.com')
+      );
+
+      if (tracksToRefresh.length > 0 && user && isSpotifyUser(user)) {
+        console.log(`Found ${tracksToRefresh.length} tracks with unknown metadata, refreshing...`);
+        for (const track of tracksToRefresh) {
+          try {
+            // Extract URLs and re-queue them to trigger metadata fetching
+            await handleQueueTracks([track.url]);
+            // Remove the old track from queue after a delay
+            setTimeout(() => {
+              if (connected && socketService.socket) {
+                socketService.socket.emit('remove-track', {
+                  roomId,
+                  trackId: track.id
+                });
+              }
+            }, 1000);
+          } catch (error) {
+            console.warn(`Failed to refresh metadata for track ${track.id}:`, error);
+          }
+        }
+      }
+    };
+
+    if (queue.length > 0 && user && connected) {
+      // Small delay to avoid overwhelming on initial load
+      const timeoutId = setTimeout(refreshUnknownTracks, 3000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [queue, user, connected]);
+
   // Navigation blocking when session is enabled
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
@@ -1269,14 +1324,8 @@ const RoomScreen: React.FC = () => {
               // Continue with null trackInfo - server will use fallback
             }
           } else if (isSpotify) {
-            try {
-              trackInfo = await fetchSpotifyTrackMetadata(url, session);
-              platform = 'spotify';
-            } catch (error) {
-              console.error('Error fetching Spotify metadata:', error);
-              platform = 'spotify';
-              // Continue with null trackInfo - server will use fallback
-            }
+            platform = 'spotify';
+            // Server will handle Spotify metadata fetching automatically
           } else if (isYouTube) {
             try {
               trackInfo = await fetchYouTubeTrackMetadata(url);

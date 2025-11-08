@@ -7,6 +7,7 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
+  StyleSheet,
 } from 'react-native';
 import { TextInput, Button, Text, Card, Title, Paragraph, Divider, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
@@ -100,111 +101,123 @@ const AuthScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-background">
-        <Text className="text-on-surface text-lg">Loading...</Text>
+      <View style={styles.loadingContainer}>
+        <Text style={[styles.loadingText, { color: theme.colors.onSurface }]}>Loading...</Text>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-background"
-      style={{ backgroundColor: theme.colors.background }}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView 
-        className="flex-1"
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View className="flex-1 justify-center max-w-[420px] w-full self-center">
+        <View style={styles.cardWrapper}>
           <Card 
-            className="rounded-[20px] overflow-hidden"
-            style={{ 
-              backgroundColor: theme.colors.surface,
-              ...(Platform.OS === 'web' ? {
-                boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.2)',
-              } : {
-                elevation: 4,
-              }),
-            }}
+            style={[
+              styles.card,
+              { 
+                backgroundColor: theme.colors.surface,
+                ...(Platform.OS === 'web' ? {
+                  boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.2)',
+                } : {
+                  elevation: 4,
+                }),
+              }
+            ]}
           >
-            <Card.Content className="p-8">
+            <Card.Content style={styles.cardContent}>
               {/* Logo and Title */}
-              <View className="items-center mb-10">
+              <View style={styles.header}>
                 <Image
                   source={SpotifyLogo}
-                  className="w-14 h-14 mb-5"
+                  style={styles.logo}
                   resizeMode="contain"
                 />
                 <Title 
-                  className="text-center text-[32px] font-bold -tracking-[0.5px] mb-2"
-                  style={{ color: theme.colors.onSurface }}
+                  style={[styles.title, { color: theme.colors.onSurface }]}
                 >
                   Music Jukebox
                 </Title>
                 <Paragraph 
-                  className="text-center text-[15px] mt-1"
-                  style={{ color: theme.colors.onSurfaceVariant }}
+                  style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
                 >
                   {isLogin ? 'Welcome back' : 'Create your account'}
                 </Paragraph>
               </View>
 
               {/* OAuth Buttons */}
-              <View className="mb-7">
+              <View style={styles.oauthContainer}>
+                {/* Google Sign-In Button - Official Design */}
                 <TouchableOpacity
                   onPress={() => handleOAuthSignIn('google')}
                   disabled={!!loadingOAuth}
-                  className={`rounded-xl py-4 px-5 items-center justify-center min-h-[56px] ${
-                    loadingOAuth === 'google' ? 'opacity-70' : ''
-                  } ${!!loadingOAuth ? 'opacity-50' : ''}`}
-                  style={{ backgroundColor: '#4285F4' }}
+                  style={[
+                    styles.oauthButton,
+                    styles.googleButton,
+                    loadingOAuth === 'google' && styles.oauthButtonLoading,
+                    !!loadingOAuth && styles.oauthButtonDisabled,
+                  ]}
                   activeOpacity={0.8}
                 >
                   {loadingOAuth === 'google' ? (
-                    <Text className="text-white text-base font-semibold">Loading...</Text>
+                    <Text style={styles.googleButtonText}>Loading...</Text>
                   ) : (
-                    <View className="flex-row items-center justify-center">
-                      <MaterialCommunityIcons name="google" size={24} color="#FFFFFF" />
-                      <Text className="text-white text-base font-semibold ml-2.5">Continue with Google</Text>
+                    <View style={styles.oauthButtonContent}>
+                      {/* Google Logo SVG */}
+                      <View style={styles.googleLogoContainer}>
+                        <View style={styles.googleLogo}>
+                          <View style={[styles.googleLogoPart, { backgroundColor: '#4285F4', top: 0, left: 0 }]} />
+                          <View style={[styles.googleLogoPart, { backgroundColor: '#EA4335', top: 0, right: 0 }]} />
+                          <View style={[styles.googleLogoPart, { backgroundColor: '#FBBC05', bottom: 0, left: 0 }]} />
+                          <View style={[styles.googleLogoPart, { backgroundColor: '#34A853', bottom: 0, right: 0 }]} />
+                        </View>
+                      </View>
+                      <Text style={[styles.googleButtonText, { marginLeft: 12 }]}>Sign in with Google</Text>
                     </View>
                   )}
                 </TouchableOpacity>
                 
+                {/* Spotify Button - Official Design */}
                 <TouchableOpacity
                   onPress={() => handleOAuthSignIn('spotify')}
                   disabled={!!loadingOAuth}
-                  className={`rounded-xl py-4 px-5 items-center justify-center min-h-[56px] mt-3 ${
-                    loadingOAuth === 'spotify' ? 'opacity-70' : ''
-                  } ${!!loadingOAuth ? 'opacity-50' : ''}`}
-                  style={{ backgroundColor: '#1DB954' }}
+                  style={[
+                    styles.oauthButton,
+                    styles.spotifyButton,
+                    loadingOAuth === 'spotify' && styles.oauthButtonLoading,
+                    !!loadingOAuth && styles.oauthButtonDisabled,
+                  ]}
                   activeOpacity={0.8}
                 >
                   {loadingOAuth === 'spotify' ? (
-                    <Text className="text-white text-base font-semibold">Loading...</Text>
+                    <Text style={styles.spotifyButtonText}>Loading...</Text>
                   ) : (
-                    <View className="flex-row items-center justify-center">
+                    <View style={styles.oauthButtonContent}>
                       <Image
                         source={SpotifyLogo}
-                        className="w-6 h-6"
+                        style={styles.spotifyIcon}
                         resizeMode="contain"
                       />
-                      <Text className="text-white text-base font-semibold ml-2.5">Continue with Spotify</Text>
+                      <Text style={[styles.spotifyButtonText, { marginLeft: 12 }]}>Continue with Spotify</Text>
                     </View>
                   )}
                 </TouchableOpacity>
               </View>
 
-              <View className="flex-row items-center my-7">
-                <Divider className="flex-1 h-[1px]" />
+              <View style={styles.dividerContainer}>
+                <Divider style={styles.divider} />
                 <Text 
-                  className="mx-3 text-[13px] font-medium lowercase"
-                  style={{ color: theme.colors.onSurfaceVariant }}
+                  style={[styles.dividerText, { color: theme.colors.onSurfaceVariant }]}
                 >
                   or
                 </Text>
-                <Divider className="flex-1 h-[1px]" />
+                <Divider style={styles.divider} />
               </View>
 
               {/* Email/Password Form */}
@@ -214,14 +227,14 @@ const AuthScreen: React.FC = () => {
                     e.preventDefault();
                     handleAuth();
                   }}
-                  className="mt-1"
+                  style={styles.form}
                   noValidate
                 >
-                  <View className="flex-row mb-7 gap-3 bg-transparent">
+                  <View style={styles.toggleContainer}>
                     <Button
                       mode={isLogin ? 'contained' : 'text'}
                       onPress={() => setIsLogin(true)}
-                      className={`flex-1 ${isLogin ? 'rounded-lg' : ''}`}
+                      style={[styles.toggleButton, isLogin && styles.toggleButtonActive]}
                       labelStyle={isLogin ? { fontWeight: '600' } : { fontWeight: '400' }}
                     >
                       Sign In
@@ -229,7 +242,7 @@ const AuthScreen: React.FC = () => {
                     <Button
                       mode={!isLogin ? 'contained' : 'text'}
                       onPress={() => setIsLogin(false)}
-                      className={`flex-1 ${!isLogin ? 'rounded-lg' : ''}`}
+                      style={[styles.toggleButton, !isLogin && styles.toggleButtonActive]}
                       labelStyle={!isLogin ? { fontWeight: '600' } : { fontWeight: '400' }}
                     >
                       Sign Up
@@ -243,7 +256,7 @@ const AuthScreen: React.FC = () => {
                     mode="outlined"
                     keyboardType="email-address"
                     autoCapitalize="none"
-                    className="mb-5"
+                    style={styles.input}
                     disabled={!!loadingOAuth}
                     autoComplete="email"
                   />
@@ -254,7 +267,7 @@ const AuthScreen: React.FC = () => {
                     onChangeText={setPassword}
                     mode="outlined"
                     secureTextEntry
-                    className="mb-5"
+                    style={styles.input}
                     disabled={!!loadingOAuth}
                     autoComplete={isLogin ? 'current-password' : 'new-password'}
                   />
@@ -266,7 +279,7 @@ const AuthScreen: React.FC = () => {
                       onChangeText={setConfirmPassword}
                       mode="outlined"
                       secureTextEntry
-                      className="mb-5"
+                      style={styles.input}
                       disabled={!!loadingOAuth}
                       autoComplete="new-password"
                     />
@@ -277,20 +290,20 @@ const AuthScreen: React.FC = () => {
                     onPress={handleAuth}
                     loading={loadingAuth}
                     disabled={loadingAuth || !!loadingOAuth}
-                    className="mt-3 rounded-xl"
-                    contentStyle={{ paddingVertical: 10 }}
+                    style={styles.submitButton}
+                    contentStyle={styles.submitButtonContent}
                     type="submit"
                   >
                     {isLogin ? 'Sign In' : 'Create Account'}
                   </Button>
                 </form>
               ) : (
-                <View className="mt-1">
-                  <View className="flex-row mb-7 gap-3 bg-transparent">
+                <View style={styles.form}>
+                  <View style={styles.toggleContainer}>
                     <Button
                       mode={isLogin ? 'contained' : 'text'}
                       onPress={() => setIsLogin(true)}
-                      className={`flex-1 ${isLogin ? 'rounded-lg' : ''}`}
+                      style={[styles.toggleButton, isLogin && styles.toggleButtonActive]}
                       labelStyle={isLogin ? { fontWeight: '600' } : { fontWeight: '400' }}
                     >
                       Sign In
@@ -298,7 +311,7 @@ const AuthScreen: React.FC = () => {
                     <Button
                       mode={!isLogin ? 'contained' : 'text'}
                       onPress={() => setIsLogin(false)}
-                      className={`flex-1 ${!isLogin ? 'rounded-lg' : ''}`}
+                      style={[styles.toggleButton, !isLogin && styles.toggleButtonActive]}
                       labelStyle={!isLogin ? { fontWeight: '600' } : { fontWeight: '400' }}
                     >
                       Sign Up
@@ -312,7 +325,7 @@ const AuthScreen: React.FC = () => {
                     mode="outlined"
                     keyboardType="email-address"
                     autoCapitalize="none"
-                    className="mb-5"
+                    style={styles.input}
                     disabled={!!loadingOAuth}
                   />
 
@@ -322,7 +335,7 @@ const AuthScreen: React.FC = () => {
                     onChangeText={setPassword}
                     mode="outlined"
                     secureTextEntry
-                    className="mb-5"
+                    style={styles.input}
                     disabled={!!loadingOAuth}
                   />
 
@@ -333,7 +346,7 @@ const AuthScreen: React.FC = () => {
                       onChangeText={setConfirmPassword}
                       mode="outlined"
                       secureTextEntry
-                      className="mb-5"
+                      style={styles.input}
                       disabled={!!loadingOAuth}
                     />
                   )}
@@ -343,8 +356,8 @@ const AuthScreen: React.FC = () => {
                     onPress={handleAuth}
                     loading={loadingAuth}
                     disabled={loadingAuth || !!loadingOAuth}
-                    className="mt-3 rounded-xl"
-                    contentStyle={{ paddingVertical: 10 }}
+                    style={styles.submitButton}
+                    contentStyle={styles.submitButtonContent}
                   >
                     {isLogin ? 'Sign In' : 'Create Account'}
                   </Button>
@@ -357,5 +370,198 @@ const AuthScreen: React.FC = () => {
     </KeyboardAvoidingView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#121212',
+  },
+  loadingText: {
+    fontSize: 18,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  cardWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+    maxWidth: 420,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  card: {
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  cardContent: {
+    padding: 32,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logo: {
+    width: 56,
+    height: 56,
+    marginBottom: 20,
+  },
+  title: {
+    textAlign: 'center',
+    fontSize: 32,
+    fontWeight: 'bold',
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  subtitle: {
+    textAlign: 'center',
+    fontSize: 15,
+    marginTop: 4,
+  },
+  oauthContainer: {
+    marginBottom: 28,
+  },
+  oauthButton: {
+    borderRadius: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
+    ...(Platform.OS === 'web' ? {
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.12,
+      shadowRadius: 2,
+      elevation: 2,
+    }),
+  },
+  // Google Button - Official Design (White with border)
+  googleButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    marginBottom: 12,
+    ...(Platform.OS === 'web' ? {
+      ':hover': {
+        boxShadow: '0 2px 6px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.3)',
+      },
+    } : {}),
+  },
+  // Spotify Button - Official Design (Green)
+  spotifyButton: {
+    backgroundColor: '#1DB954',
+    borderWidth: 0,
+    ...(Platform.OS === 'web' ? {
+      ':hover': {
+        backgroundColor: '#1ed760',
+        boxShadow: '0 2px 6px rgba(29, 185, 84, 0.3), 0 1px 3px rgba(29, 185, 84, 0.2)',
+      },
+    } : {}),
+  },
+  oauthButtonLoading: {
+    opacity: 0.7,
+  },
+  oauthButtonDisabled: {
+    opacity: 0.5,
+  },
+  oauthButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Google Button Text
+  googleButtonText: {
+    color: '#3c4043',
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: Platform.OS === 'web' ? 'Roboto, sans-serif' : undefined,
+    letterSpacing: 0.25,
+  },
+  // Spotify Button Text
+  spotifyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  // Google Logo (4-color square)
+  googleLogoContainer: {
+    width: 20,
+    height: 20,
+    marginRight: 0,
+  },
+  googleLogo: {
+    width: 20,
+    height: 20,
+    position: 'relative',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  googleLogoPart: {
+    position: 'absolute',
+    width: '50%',
+    height: '50%',
+  },
+  spotifyIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 0,
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 28,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    fontSize: 13,
+    fontWeight: '500',
+    textTransform: 'lowercase',
+  },
+  form: {
+    marginTop: 4,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    marginBottom: 28,
+    backgroundColor: 'transparent',
+  },
+  toggleButton: {
+    flex: 1,
+    marginHorizontal: 6,
+  },
+  toggleButtonActive: {
+    borderRadius: 8,
+  },
+  input: {
+    marginBottom: 20,
+  },
+  submitButton: {
+    marginTop: 12,
+    borderRadius: 12,
+  },
+  submitButtonContent: {
+    paddingVertical: 10,
+  },
+});
 
 export default AuthScreen;

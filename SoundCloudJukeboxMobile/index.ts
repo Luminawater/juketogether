@@ -17,12 +17,14 @@ if (Platform.OS === 'web') {
     
     if (typeof message === 'string') {
       // Handle pointerEvents deprecation
-      if (message.includes('props.pointerEvents is deprecated')) {
+      // NOTE: This warning comes from React Native Paper's Chip component (third-party)
+      // We cannot fix it directly - it needs to be fixed in react-native-paper
+      if (message.includes('props.pointerEvents is deprecated') || message.includes('Use style.pointerEvents')) {
         const count = (warningSources.get('pointerEvents') || 0) + 1;
         warningSources.set('pointerEvents', count);
         
-        // Only log detailed info for first few occurrences
-        if (count <= MAX_DETAILED_LOGS) {
+        // Only log detailed info for first occurrence
+        if (count === 1) {
           const stack = new Error().stack;
           const stackLines = stack?.split('\n') || [];
           const source = stackLines.slice(2, 10).join('\n') || 'unknown';
@@ -32,23 +34,26 @@ if (Platform.OS === 'web') {
           
           detailedLogs.set('pointerEvents', { stack: source, component: componentMatch, args });
           
-          console.group(`🔍 [TRACE ${count}] pointerEvents deprecation warning`);
+          console.group(`🔍 [TRACE 1] pointerEvents deprecation warning`);
           originalWarn(...args);
           console.log('📍 Component/File:', componentMatch);
           console.log('📍 Stack trace:', source);
-          console.log('💡 Tip: Look for View components with pointerEvents prop');
+          console.log('💡 Tip: This warning comes from React Native Paper\'s Chip component');
+          console.log('💡 Note: This is a known third-party issue and cannot be fixed in our codebase');
           console.groupEnd();
         }
-        // Suppress the warning after first few detailed logs
+        // Suppress the warning after first log (known third-party issue)
         return;
       }
       
       // Handle shadow props deprecation
-      if (message.includes('shadow*') && message.includes('deprecated')) {
+      // NOTE: Our code already uses Platform.OS checks correctly, but React Native Web
+      // still processes all StyleSheet properties, causing this informational warning
+      if ((message.includes('shadow*') && message.includes('deprecated')) || message.includes('Use "boxShadow"')) {
         const count = (warningSources.get('shadow') || 0) + 1;
         warningSources.set('shadow', count);
         
-        if (count <= MAX_DETAILED_LOGS) {
+        if (count === 1) {
           const stack = new Error().stack;
           const stackLines = stack?.split('\n') || [];
           const source = stackLines.slice(2, 10).join('\n') || 'unknown';
@@ -58,13 +63,15 @@ if (Platform.OS === 'web') {
           
           detailedLogs.set('shadow', { stack: source, component: componentMatch, args });
           
-          console.group(`🔍 [TRACE ${count}] shadow* props deprecation warning`);
+          console.group(`🔍 [TRACE 1] shadow* props deprecation warning`);
           originalWarn(...args);
           console.log('📍 Component/File:', componentMatch);
           console.log('📍 Stack trace:', source);
           console.log('💡 Tip: Use boxShadow for web, shadow* props for native');
+          console.log('💡 Note: Our code already uses Platform.OS checks - this is an informational warning');
           console.groupEnd();
         }
+        // Suppress after first log (informational only, code is correct)
         return;
       }
       

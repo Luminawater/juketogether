@@ -16,6 +16,7 @@ import { UpgradePrompt } from './UpgradePrompt';
 import { DJModeInterface } from './DJModeInterface';
 import { YouTubePlayer } from './YouTubePlayer';
 import { SoundCloudPlayer } from './SoundCloudPlayer';
+import { SpotifyPlayer } from './SpotifyPlayer';
 import AdsBanner from './AdsBanner';
 import { AnimatedQueueItem } from './RoomAnimatedQueueItem';
 import { Track, SubscriptionTier } from '../types';
@@ -394,6 +395,49 @@ export const RoomMainTab: React.FC<RoomMainTabProps> = ({
                 // Server will handle permission checks, so we don't need canControl here
                 if (roomSettings.autoplay && queue.length > 0 && socketService.socket) {
                   console.log('[RoomScreen] SoundCloud track ended, autoplay enabled, triggering next track');
+                  socketService.socket.emit('next-track', { roomId });
+                }
+              }
+            }}
+          />
+        </View>
+      )}
+
+      {/* Spotify Player - Always render but hide when showMediaPlayer is false */}
+      {currentTrack && (currentTrack.url?.includes('spotify.com') || currentTrack.platform === 'spotify') && (
+        <View style={[
+          styles.youtubePlayerContainer,
+          !showMediaPlayer && styles.hiddenPlayer
+        ]}>
+          <SpotifyPlayer
+            track={currentTrack}
+            isPlaying={isPlaying}
+            position={position}
+            onPositionUpdate={(newPosition) => {
+              // Send position update to server (which saves to Supabase)
+              console.log('[RoomScreen] Spotify position update', { newPosition });
+              if (socketService.socket && !playbackBlocked) {
+                socketService.socket.emit('sync-position', {
+                  roomId,
+                  position: newPosition,
+                });
+              }
+            }}
+            onReady={() => {
+              console.log('[RoomScreen] Spotify player ready');
+            }}
+            onError={(error) => {
+              console.error('[RoomScreen] Spotify player error:', error);
+              Alert.alert('Spotify Error', error);
+            }}
+            onStateChange={(state) => {
+              console.log('[RoomScreen] Spotify state changed', { state, isPlaying });
+              // Spotify embed doesn't provide programmatic control
+              // State changes are handled by user interaction
+              if (state === 'ended') {
+                // Track ended - trigger next track if autoplay is enabled
+                if (roomSettings.autoplay && queue.length > 0 && socketService.socket) {
+                  console.log('[RoomScreen] Spotify track ended, autoplay enabled, triggering next track');
                   socketService.socket.emit('next-track', { roomId });
                 }
               }

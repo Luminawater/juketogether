@@ -629,7 +629,8 @@ app.get('/api/spotify/user-token', async (req, res) => {
 });
 
 // Fetch individual Spotify track metadata
-app.post('/api/spotify/playlists/tracks/metadata', async (req, res) => {
+// Support both paths for backwards compatibility
+const handleSpotifyTrackMetadata = async (req, res) => {
   if (!fetch) {
     return res.status(500).json({ error: 'Fetch not available' });
   }
@@ -690,7 +691,11 @@ app.post('/api/spotify/playlists/tracks/metadata', async (req, res) => {
     console.error('Error fetching Spotify track metadata:', error);
     res.status(500).json({ error: 'Failed to fetch Spotify track data', details: error.message });
   }
-});
+};
+
+// Register the endpoint with both paths for backwards compatibility
+app.post('/api/spotify/tracks/metadata', handleSpotifyTrackMetadata);
+app.post('/api/spotify/playlists/tracks/metadata', handleSpotifyTrackMetadata);
 
 // Root route is now handled by Vercel static build (Expo web app)
 // app.get('/', ...) removed - Vercel serves index.html from web-build

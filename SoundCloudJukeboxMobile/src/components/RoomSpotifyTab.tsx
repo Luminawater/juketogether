@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, View, TouchableOpacity, Image, StyleSheet, Platform } from 'react-native';
 import {
   Card,
   Title,
@@ -14,6 +14,9 @@ import { SpotifyPlaylist, SpotifyTrack } from '../services/spotifyService';
 import { isSpotifyUser } from '../services/spotifyService';
 import { getThumbnailUrl } from '../utils/imageUtils';
 import { roomScreenStyles } from '../screens/RoomScreen.styles';
+
+// Import Spotify logo
+const SpotifyLogo = require('../../assets/Spotify-logo.png');
 
 interface RoomSpotifyTabProps {
   user: any;
@@ -57,14 +60,34 @@ export const RoomSpotifyTab: React.FC<RoomSpotifyTabProps> = ({
             <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>
               Sign in with Spotify to browse and queue songs from your playlists.
             </Text>
-            <Button
-              mode="contained"
+            <TouchableOpacity
               onPress={() => navigation.navigate('Auth')}
-              icon="spotify"
-              style={styles.addButton}
+              style={[
+                spotifyButtonStyles.spotifyButton,
+                { backgroundColor: '#1DB954' },
+                Platform.OS === 'web' ? {
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
+                } : {
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.12,
+                  shadowRadius: 2,
+                  elevation: 2,
+                },
+              ]}
+              activeOpacity={0.8}
             >
-              Sign In with Spotify
-            </Button>
+              <View style={spotifyButtonStyles.oauthButtonContent}>
+                <Image
+                  source={SpotifyLogo}
+                  style={spotifyButtonStyles.spotifyIcon}
+                  resizeMode="contain"
+                />
+                <Text style={spotifyButtonStyles.spotifyButtonText}>Continue with Spotify</Text>
+              </View>
+            </TouchableOpacity>
           </Card.Content>
         </Card>
       </ScrollView>
@@ -254,4 +277,34 @@ export const RoomSpotifyTab: React.FC<RoomSpotifyTabProps> = ({
     </ScrollView>
   );
 };
+
+// Spotify Button Styles (Official Design)
+const spotifyButtonStyles = StyleSheet.create({
+  spotifyButton: {
+    borderRadius: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
+    marginTop: 16,
+  },
+  oauthButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spotifyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginLeft: 12,
+  },
+  spotifyIcon: {
+    width: 20,
+    height: 20,
+  },
+});
 

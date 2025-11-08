@@ -10,12 +10,17 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Authentication middleware for Socket.io
 function authenticateSocket(socket, next) {
   const token = socket.handshake.auth?.token;
+  const providerToken = socket.handshake.auth?.providerToken;
+  
+  console.log(`[AUTH] Socket connection - has token: ${!!token}, has providerToken: ${!!providerToken}`);
 
   if (!token) {
     // Allow anonymous users for backward compatibility
     socket.isAuthenticated = false;
-    socket.userId = socket.id; // Use socket ID as user ID for anonymous users
+    socket.userId = socket.id; // Use socket ID as user ID as user ID for anonymous users
     socket.userProfile = null;
+    socket.supabaseToken = null;
+    socket.providerToken = null;
     return next();
   }
 
@@ -25,11 +30,15 @@ function authenticateSocket(socket, next) {
       socket.isAuthenticated = false;
       socket.userId = socket.id;
       socket.userProfile = null;
+      socket.supabaseToken = null;
+      socket.providerToken = null;
       return next();
     }
 
     socket.isAuthenticated = true;
     socket.userId = user.id;
+    socket.supabaseToken = token; // Store the token for later use
+    socket.providerToken = providerToken; // Store the OAuth provider token
     socket.userProfile = {
       id: user.id,
       username: user.user_metadata?.username,
@@ -42,6 +51,8 @@ function authenticateSocket(socket, next) {
     socket.isAuthenticated = false;
     socket.userId = socket.id;
     socket.userProfile = null;
+    socket.supabaseToken = null;
+    socket.providerToken = null;
     next();
   });
 }

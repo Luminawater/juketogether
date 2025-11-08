@@ -7,6 +7,7 @@ import {
   Platform,
   Dimensions,
   TouchableOpacity,
+  Animated,
 } from 'react-native';
 import {
   Text,
@@ -78,6 +79,12 @@ const DJModeScreen: React.FC = () => {
   const [djPlayerPositions, setDjPlayerPositions] = useState<number[]>([0, 0, 0, 0]);
   const [djPlayerDurations, setDjPlayerDurations] = useState<number[]>([0, 0, 0, 0]);
 
+  // Animation state for glowing background effects
+  const glowAnimation1 = useRef(new Animated.Value(0)).current;
+  const glowAnimation2 = useRef(new Animated.Value(0)).current;
+  const glowAnimation3 = useRef(new Animated.Value(0)).current;
+  const pulseAnimation = useRef(new Animated.Value(0)).current;
+
   // Initialize DJ Audio Service
   useEffect(() => {
     if (roomSettings.djMode) {
@@ -105,6 +112,115 @@ const DJModeScreen: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [roomSettings.djMode]);
+
+  // Automatically enable DJ mode if user is Pro and room creator has Pro tier
+  useEffect(() => {
+    const isPro = profile && hasTier(profile.subscription_tier, 'pro');
+    if (isPro && tierSettings.djMode && !roomSettings.djMode && (isOwner || isAdmin) && socketService.socket && connected) {
+      socketService.socket.emit('update-room-settings', {
+        roomId,
+        settings: {
+          djMode: true,
+          djPlayers: roomSettings.djPlayers || 1,
+        },
+      });
+    }
+  }, [profile, tierSettings.djMode, roomSettings.djMode, isOwner, isAdmin, roomId, connected]);
+
+  // Control glowing background animations based on music playing state
+  useEffect(() => {
+    const isAnyPlayerPlaying = djPlayerPlayingStates.some(playing => playing);
+
+    if (isAnyPlayerPlaying) {
+      // Start glowing animations
+      const startGlowAnimation = () => {
+        Animated.parallel([
+          // Glow animation 1 - slow pulsing
+          Animated.loop(
+            Animated.sequence([
+              Animated.timing(glowAnimation1, {
+                toValue: 1,
+                duration: 2000,
+                useNativeDriver: false,
+              }),
+              Animated.timing(glowAnimation1, {
+                toValue: 0.3,
+                duration: 2000,
+                useNativeDriver: false,
+              }),
+            ])
+          ),
+          // Glow animation 2 - medium pulsing
+          Animated.loop(
+            Animated.sequence([
+              Animated.timing(glowAnimation2, {
+                toValue: 0.8,
+                duration: 1500,
+                useNativeDriver: false,
+              }),
+              Animated.timing(glowAnimation2, {
+                toValue: 0.2,
+                duration: 1500,
+                useNativeDriver: false,
+              }),
+            ])
+          ),
+          // Glow animation 3 - fast pulsing
+          Animated.loop(
+            Animated.sequence([
+              Animated.timing(glowAnimation3, {
+                toValue: 0.6,
+                duration: 1000,
+                useNativeDriver: false,
+              }),
+              Animated.timing(glowAnimation3, {
+                toValue: 0.1,
+                duration: 1000,
+                useNativeDriver: false,
+              }),
+            ])
+          ),
+          // Pulse animation for overall effect
+          Animated.loop(
+            Animated.sequence([
+              Animated.timing(pulseAnimation, {
+                toValue: 1,
+                duration: 800,
+                useNativeDriver: false,
+              }),
+              Animated.timing(pulseAnimation, {
+                toValue: 0.4,
+                duration: 800,
+                useNativeDriver: false,
+              }),
+            ])
+          ),
+        ]).start();
+      };
+
+      startGlowAnimation();
+    } else {
+      // Stop all animations
+      glowAnimation1.stopAnimation();
+      glowAnimation2.stopAnimation();
+      glowAnimation3.stopAnimation();
+      pulseAnimation.stopAnimation();
+
+      // Reset to base values
+      glowAnimation1.setValue(0);
+      glowAnimation2.setValue(0);
+      glowAnimation3.setValue(0);
+      pulseAnimation.setValue(0);
+    }
+
+    return () => {
+      // Cleanup animations on unmount
+      glowAnimation1.stopAnimation();
+      glowAnimation2.stopAnimation();
+      glowAnimation3.stopAnimation();
+      pulseAnimation.stopAnimation();
+    };
+  }, [djPlayerPlayingStates, glowAnimation1, glowAnimation2, glowAnimation3, pulseAnimation]);
 
   // Load room settings and connect to socket
   useFocusEffect(
@@ -447,20 +563,6 @@ const DJModeScreen: React.FC = () => {
     );
   }
 
-  // Automatically enable DJ mode if user is Pro and room creator has Pro tier
-  useEffect(() => {
-    const isPro = profile && hasTier(profile.subscription_tier, 'pro');
-    if (isPro && tierSettings.djMode && !roomSettings.djMode && (isOwner || isAdmin) && socketService.socket && connected) {
-      socketService.socket.emit('update-room-settings', {
-        roomId,
-        settings: {
-          djMode: true,
-          djPlayers: roomSettings.djPlayers || 1,
-        },
-      });
-    }
-  }, [profile, tierSettings.djMode, roomSettings.djMode, isOwner, isAdmin, roomId, connected]);
-
   // Show error if DJ mode is not available
   if (!tierSettings.djMode) {
     return (
@@ -543,6 +645,82 @@ const DJModeScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: DJ_THEME_COLORS.background }]}>
+      {/* Animated Glowing Background Lights */}
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: glowAnimation1.interpolate({
+              inputRange: [0, 1],
+              outputRange: ['transparent', 'rgba(255, 107, 107, 0.15)'], // DJ_THEME_COLORS.primary with opacity
+            }),
+            borderRadius: 50,
+            transform: [
+              {
+                scale: glowAnimation1.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.8, 1.2],
+                }),
+              },
+            ],
+          },
+          styles.glowLight1,
+        ]}
+      />
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: glowAnimation2.interpolate({
+              inputRange: [0, 1],
+              outputRange: ['transparent', 'rgba(76, 205, 196, 0.12)'], // DJ_THEME_COLORS.secondary with opacity
+            }),
+            borderRadius: 70,
+            transform: [
+              {
+                scale: glowAnimation2.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.9, 1.1],
+                }),
+              },
+            ],
+          },
+          styles.glowLight2,
+        ]}
+      />
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: glowAnimation3.interpolate({
+              inputRange: [0, 1],
+              outputRange: ['transparent', 'rgba(255, 230, 109, 0.1)'], // DJ_THEME_COLORS.accent with opacity
+            }),
+            borderRadius: 40,
+            transform: [
+              {
+                scale: glowAnimation3.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.7, 1.3],
+                }),
+              },
+            ],
+          },
+          styles.glowLight3,
+        ]}
+      />
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: pulseAnimation.interpolate({
+              inputRange: [0, 1],
+              outputRange: ['transparent', 'rgba(255, 255, 255, 0.05)'], // Subtle white pulse
+            }),
+          },
+        ]}
+      />
+
       {/* Header */}
       <View style={[styles.header, { backgroundColor: DJ_THEME_COLORS.surface }]}>
         <View style={styles.headerLeft}>
@@ -833,6 +1011,31 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 8,
+  },
+  // Glowing light effect styles
+  glowLight1: {
+    position: 'absolute',
+    top: '20%',
+    left: '10%',
+    width: '60%',
+    height: '40%',
+    opacity: 0.3,
+  },
+  glowLight2: {
+    position: 'absolute',
+    top: '40%',
+    right: '15%',
+    width: '50%',
+    height: '35%',
+    opacity: 0.25,
+  },
+  glowLight3: {
+    position: 'absolute',
+    bottom: '25%',
+    left: '20%',
+    width: '55%',
+    height: '30%',
+    opacity: 0.2,
   },
 });
 

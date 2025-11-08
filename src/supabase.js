@@ -225,7 +225,7 @@ async function loadRoomState(roomId) {
         console.warn(`Invalid track at index ${index} in room ${roomId}, skipping`);
         return null;
       }
-      
+
       // Ensure all required fields exist
       return {
         id: track.id || `track-${Date.now()}-${index}`,
