@@ -38,6 +38,7 @@ import {
 } from '../utils/permissions';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getRoomUrl, getRoomShareMessage } from '../utils/roomUtils';
+import { ShareRoomDialog } from '../components/ShareRoomDialog';
 
 type DashboardScreenNavigationProp = NavigationProp<RootStackParamList, 'Dashboard'>;
 
@@ -558,24 +559,86 @@ const DashboardScreen: React.FC = () => {
       {/* Header with user info */}
       <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
         <View style={styles.userInfo}>
-          <Avatar.Image
-            size={50}
-            source={{
-              uri: user?.user_metadata?.avatar_url ||
-                   `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.email || '')}&background=667eea&color=fff`
-            }}
-          />
+          <View style={[styles.avatarContainer, { backgroundColor: '#667eea' }]}>
+            {profile?.avatar_url || user?.user_metadata?.avatar_url ? (
+              <Avatar.Image
+                size={56}
+                source={{
+                  uri: profile?.avatar_url || user?.user_metadata?.avatar_url || ''
+                }}
+                style={styles.avatar}
+              />
+            ) : (
+              <View style={styles.avatarInitials}>
+                <Text style={styles.avatarInitialsText}>
+                  {profile?.display_name
+                    ? profile.display_name
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                        .toUpperCase()
+                        .substring(0, 2)
+                    : profile?.username
+                    ? profile.username.substring(0, 2).toUpperCase()
+                    : user?.email
+                    ? user.email.substring(0, 2).toUpperCase()
+                    : 'U'}
+                </Text>
+              </View>
+            )}
+          </View>
           <View style={styles.userDetails}>
-            <Text style={[styles.userEmail, { color: theme.colors.onSurface }]}>{user?.email}</Text>
-            <Text style={[styles.userGreeting, { color: theme.colors.onSurfaceVariant }]}>Welcome back!</Text>
+            <Text style={[styles.userEmail, { color: theme.colors.onSurface }]}>
+              {user?.email}
+            </Text>
+            <Text style={[styles.userGreeting, { color: theme.colors.onSurfaceVariant }]}>
+              Welcome back!
+            </Text>
             {profile && permissions && (
-              <View style={styles.userBadges}>
-                <UserBadge
-                  role={profile.role}
-                  tier={profile.subscription_tier}
-                  showLabel={false}
-                  size="small"
-                />
+              <View style={styles.userBadgesContainer}>
+                <View style={styles.userBadges}>
+                  <View
+                    style={[
+                      styles.badgePill,
+                      {
+                        backgroundColor: profile.role === 'admin' 
+                          ? '#f44336' 
+                          : profile.role === 'moderator'
+                          ? '#ff9800'
+                          : '#2196f3',
+                      },
+                    ]}
+                  >
+                    <Text style={styles.badgeText}>
+                      {profile.role === 'admin'
+                        ? 'Admin'
+                        : profile.role === 'moderator'
+                        ? 'Moderator'
+                        : 'User'}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.badgePill,
+                      {
+                        backgroundColor:
+                          profile.subscription_tier === 'pro'
+                            ? '#667eea'
+                            : profile.subscription_tier === 'standard'
+                            ? '#4caf50'
+                            : '#9e9e9e',
+                      },
+                    ]}
+                  >
+                    <Text style={styles.badgeText}>
+                      {profile.subscription_tier === 'pro'
+                        ? 'Pro'
+                        : profile.subscription_tier === 'standard'
+                        ? 'Standard'
+                        : 'Free'}
+                    </Text>
+                  </View>
+                </View>
                 {permissions.max_songs !== Infinity && (
                   <Text style={[styles.songCount, { color: theme.colors.onSurfaceVariant }]}>
                     {permissions.songs_played}/{permissions.max_songs} songs played
@@ -891,6 +954,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
+  avatarContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatar: {
+    backgroundColor: 'transparent',
+  },
+  avatarInitials: {
+    width: 56,
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitialsText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
   userDetails: {
     marginLeft: 16,
     flex: 1,
@@ -904,13 +990,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 8,
   },
+  userBadgesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   userBadges: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
+  badgePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 16,
+    minHeight: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
   songCount: {
     fontSize: 12,
+    marginLeft: 4,
   },
   content: {
     flex: 1,

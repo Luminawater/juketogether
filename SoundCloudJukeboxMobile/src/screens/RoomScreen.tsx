@@ -56,6 +56,7 @@ import { getRoomUrl, getRoomShareMessage, extractMusicUrls, isValidMusicUrl } fr
 import RoomChat from '../components/RoomChat';
 import AdsBanner from '../components/AdsBanner';
 import { hasTier } from '../utils/permissions';
+import { ShareRoomDialog } from '../components/ShareRoomDialog';
 
 type RoomScreenRouteProp = RouteProp<RootStackParamList, 'Room'>;
 type RoomScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Room'>;
@@ -134,6 +135,8 @@ const RoomScreen: React.FC = () => {
   const [canControl, setCanControl] = useState(true);
   const [addAdminInput, setAddAdminInput] = useState('');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shortCode, setShortCode] = useState<string | undefined>(undefined);
 
   // Spotify state
   const [spotifyPlaylists, setSpotifyPlaylists] = useState<SpotifyPlaylist[]>([]);
@@ -644,83 +647,24 @@ const RoomScreen: React.FC = () => {
 
   const shareRoom = async () => {
     try {
-      // Fetch room data including short_code
-      let shortCode: string | undefined;
-      if (supabase) {
+      // Fetch room data including short_code if not already loaded
+      if (!shortCode && supabase) {
         const { data: roomData, error: roomError } = await supabase
           .from('rooms')
           .select('short_code')
           .eq('id', roomId)
           .single();
 
-        if (!roomError && roomData) {
-          shortCode = roomData.short_code;
+        if (!roomError && roomData?.short_code) {
+          setShortCode(roomData.short_code);
         }
       }
-
-      // Generate shareable link
-      const roomUrl = getRoomUrl(roomId, shortCode);
-      const shareMessage = getRoomShareMessage(roomName, roomId, shortCode);
-
-      // For web platform, use clipboard API
-      if (Platform.OS === 'web') {
-        try {
-          await navigator.clipboard.writeText(roomUrl);
-          Alert.alert(
-            'Link Copied!',
-            `Room link copied to clipboard!\n\n${roomUrl}${shortCode ? `\n\nOr share code: ${shortCode}` : ''}`,
-            [
-              {
-                text: 'Share via...',
-                onPress: async () => {
-                  // Try to use Web Share API if available
-                  if (navigator.share) {
-                    try {
-                      await navigator.share({
-                        title: `Join ${roomName}`,
-                        text: shareMessage,
-                        url: roomUrl,
-                      });
-                    } catch (shareError: any) {
-                      // User cancelled or share failed
-                      if (shareError.name !== 'AbortError') {
-                        console.error('Share error:', shareError);
-                      }
-                    }
-                  } else {
-                    // Fallback: show the message again
-                    Alert.alert('Share Room', shareMessage);
-                  }
-                },
-              },
-              { text: 'OK' },
-            ]
-          );
-        } catch (clipboardError) {
-          // Fallback if clipboard API fails
-          Alert.alert('Room Link', shareMessage);
-        }
-      } else {
-        // For mobile platforms, use React Native Share API
-        const result = await Share.share({
-          message: shareMessage,
-          title: `Join ${roomName}`,
-          url: roomUrl, // iOS will use this for better sharing
-        });
-
-        if (result.action === Share.sharedAction) {
-          if (result.activityType) {
-            console.log('Shared via:', result.activityType);
-          } else {
-            console.log('Room shared successfully');
-          }
-        } else if (result.action === Share.dismissedAction) {
-          console.log('Share dismissed');
-        }
-      }
+      
+      // Show share dialog
+      setShowShareDialog(true);
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to share room link');
-      console.error('Error sharing room:', error);
+      Alert.alert('Error', 'Failed to load room information');
+      console.error('Error loading room data:', error);
     }
   };
 
@@ -2010,6 +1954,20 @@ const RoomScreen: React.FC = () => {
           onToggleMinimize={() => setPlayerMinimized(!playerMinimized)}
         />
       )}
+
+      <ShareRoomDialog
+        visible={showShareDialog}
+        onDismiss={() => setShowShareDialog(false)}
+        roomName={roomName}
+        roomId={roomId}
+        shortCode={shortCode}
+        onCopyUrl={() => {
+          Alert.alert('Success', 'Room URL copied to clipboard!');
+        }}
+        onCopyCode={() => {
+          Alert.alert('Success', 'Join code copied to clipboard!');
+        }}
+      />
     </View>
   );
 };
