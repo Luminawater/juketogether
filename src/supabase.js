@@ -716,6 +716,59 @@ async function trackTrackPlay(roomId, hostUserId, userId, track) {
       console.warn('Failed to update analytics on track play:', await response.text());
     }
     
+    // Increment songs_played_count for the user who added the track
+    if (userId) {
+      try {
+        const incrementResponse = await fetch(`${supabaseConfig.restUrl}/user_profiles?id=eq.${userId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseConfig.key,
+            'Authorization': `Bearer ${supabaseConfig.key}`,
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            songs_played_count: supabaseConfig.key ? 'songs_played_count + 1' : null
+          })
+        });
+        
+        // Use RPC function for incrementing (more reliable)
+        if (supabaseConfig.key) {
+          const incrementRpcResponse = await fetch(`${supabaseConfig.restUrl}/rpc/increment_songs_played`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': supabaseConfig.key,
+              'Authorization': `Bearer ${supabaseConfig.key}`
+            },
+            body: JSON.stringify({
+              user_id: userId
+            })
+          });
+          
+          if (!incrementRpcResponse.ok) {
+            console.warn('Failed to increment songs_played_count:', await incrementRpcResponse.text());
+          }
+        } else {
+          // Fallback: direct update if RPC not available
+          const directUpdateResponse = await fetch(`${supabaseConfig.restUrl}/user_profiles?id=eq.${userId}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': supabaseConfig.key,
+              'Authorization': `Bearer ${supabaseConfig.key}`,
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
+              songs_played_count: 'songs_played_count + 1'
+            })
+          });
+        }
+      } catch (error) {
+        console.error('Error incrementing songs_played_count:', error);
+      }
+    }
+    
     return true;
   } catch (error) {
     console.error('Error tracking track play:', error);

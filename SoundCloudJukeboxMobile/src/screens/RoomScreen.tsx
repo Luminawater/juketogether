@@ -37,6 +37,8 @@ import { Track } from '../types';
 import { socketService, RoomState } from '../services/socketService';
 import { FloatingPlayer } from '../components/FloatingPlayer';
 import { NowPlayingCard } from '../components/NowPlayingCard';
+import { UpgradePrompt } from '../components/UpgradePrompt';
+import { AdDialog } from '../components/AdDialog';
 import { DJModeInterface } from '../components/DJModeInterface';
 import {
   isSpotifyUser,
@@ -170,6 +172,28 @@ const RoomScreen: React.FC = () => {
   const [djPlayerTracks, setDjPlayerTracks] = useState<(Track | null)[]>([null, null, null]);
   const [djPlayerPlayingStates, setDjPlayerPlayingStates] = useState<boolean[]>([false, false, false]);
 
+  // Playback blocking state
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
+  const [blockedInfo, setBlockedInfo] = useState<{
+    reason: string;
+    blockedAt: number;
+    songsPlayed: number;
+    userId: string;
+    isOwner: boolean;
+  } | null>(null);
+  const [activeBoost, setActiveBoost] = useState<{
+    id: string;
+    expiresAt: string;
+    minutesRemaining: number;
+    purchasedBy: string;
+  } | null>(null);
+
+  // Ad state
+  const [adVisible, setAdVisible] = useState(false);
+  const [currentAd, setCurrentAd] = useState<any>(null);
+  const [adCountdown, setAdCountdown] = useState(5);
+  const [songsSinceLastAd, setSongsSinceLastAd] = useState(0);
+
   // Connect to Socket.io when component mounts
   useEffect(() => {
     const userId = user?.id || `anonymous_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -236,6 +260,11 @@ const RoomScreen: React.FC = () => {
       // Update active boost
       if (state.activeBoost) {
         setActiveBoost(state.activeBoost);
+        // Clear blocking if boost is active
+        if (playbackBlocked) {
+          setPlaybackBlocked(false);
+          setBlockedInfo(null);
+        }
       } else {
         setActiveBoost(null);
       }
@@ -327,10 +356,70 @@ const RoomScreen: React.FC = () => {
       setIsPlaying(false);
     };
 
-    const handleNextTrack = (track: Track) => {
+    // Load interstitial ad
+    const loadInterstitialAd = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('ads')
+          .select('*')
+          .eq('display_location', 'room_interstitial')
+          .eq('enabled', true)
+          .order('priority', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (!error && data) {
+          return data;
+        }
+      } catch (error) {
+        console.error('Error loading ad:', error);
+      }
+      return null;
+    };
+
+    // Check if ad should be shown based on tier
+    const shouldShowAd = (userTier: string, songsSinceLastAd: number) => {
+      if (activeBoost) return false; // No ads if boost is active
+      
+      if (userTier === 'free') {
+        return songsSinceLastAd >= 1; // Every 1 song for free tier
+      } else if (userTier === 'standard' || userTier === 'rookie') {
+        return songsSinceLastAd >= 2; // Every 2 songs for standard/rookie tier
+      }
+      return false; // No ads for pro tier
+    };
+
+    // Show ad and pause playback
+    const showAd = async () => {
+      const ad = await loadInterstitialAd();
+      if (ad) {
+        setCurrentAd(ad);
+        setAdVisible(true);
+        setAdCountdown(5);
+        
+        // Pause playback
+        if (isPlaying && socketService.socket) {
+          socketService.socket.emit('pause', { roomId });
+        }
+      }
+    };
+
+    const handleNextTrack = async (track: Track) => {
       setCurrentTrack(track);
       setQueue(prev => prev.filter(t => t.id !== track.id));
-      setIsPlaying(true);
+      
+      // Check if ad should be shown before playing
+      const userTier = profile?.subscription_tier || 'free';
+      const newSongsSinceLastAd = songsSinceLastAd + 1;
+      
+      if (shouldShowAd(userTier, newSongsSinceLastAd)) {
+        await showAd();
+        setSongsSinceLastAd(0); // Reset counter after showing ad
+        // Don't start playing yet - wait for ad to finish
+      } else {
+        setIsPlaying(true);
+        setSongsSinceLastAd(newSongsSinceLastAd);
+      }
     };
 
     const handleUserJoined = (data: { userId: string; userProfile?: any }) => {
@@ -423,7 +512,46 @@ const RoomScreen: React.FC = () => {
     socketService.on('roomAdminsUpdated', handleRoomAdminsUpdated);
     socketService.on('boost-activated', handleBoostActivated);
     socketService.on('boost-expired', handleBoostExpired);
-    socketService.on('error', handleError);
+    
+    // Handle playback blocking
+    const handlePlaybackBlocked = (data: {
+      reason: string;
+      blockedAt: number;
+      songsPlayed: number;
+      userId: string;
+      isOwner: boolean;
+    }) => {
+      setPlaybackBlocked(true);
+      setBlockedInfo(data);
+      setIsPlaying(false); // Stop playback
+      Alert.alert(
+        'Playback Blocked',
+        data.isOwner 
+          ? 'You\'ve reached your tier limit. Upgrade your subscription to continue.'
+          : 'The room owner has reached their tier limit. Purchase a booster pack to continue.',
+        [{ text: 'OK' }]
+      );
+    };
+    
+    // Listen for playback-blocked events from socket
+    if (socketService.socket) {
+      socketService.socket.on('playback-blocked', handlePlaybackBlocked);
+    }
+    
+    socketService.on('error', (error: any) => {
+      if (error.blocked) {
+        // Handle blocked error
+        handlePlaybackBlocked({
+          reason: error.reason || 'tier_limit',
+          blockedAt: error.blockedAt || 2,
+          songsPlayed: error.songsPlayed || 0,
+          userId: error.userId || user?.id || '',
+          isOwner: error.isOwner || false,
+        });
+      } else {
+        handleError(error);
+      }
+    });
     socketService.on('connectionError', handleConnectionError);
 
     // Request friends list
@@ -835,20 +963,37 @@ const RoomScreen: React.FC = () => {
 
   const renderMainTab = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      {/* Current Track - Using NowPlayingCard component */}
-      <NowPlayingCard
-        currentTrack={currentTrack}
-        isPlaying={isPlaying}
-        trackReactions={trackReactions}
-        canControl={canControl}
-        onPlayPause={playPause}
-        onNext={nextTrack}
-        onSync={syncToSession}
-        onReaction={handleReaction}
-        loadingReaction={loadingReaction}
-        hasUser={!!user}
-        queueLength={queue.length}
-      />
+      {/* Show UpgradePrompt if playback is blocked, otherwise show NowPlayingCard */}
+      {playbackBlocked && blockedInfo ? (
+        <UpgradePrompt
+          isOwner={blockedInfo.isOwner}
+          blockedAt={blockedInfo.blockedAt}
+          songsPlayed={blockedInfo.songsPlayed}
+          roomId={roomId}
+          onBoosterPurchased={() => {
+            // Refresh room state after booster purchase
+            setPlaybackBlocked(false);
+            setBlockedInfo(null);
+            if (socketService.socket) {
+              socketService.socket.emit('join-room', roomId);
+            }
+          }}
+        />
+      ) : (
+        <NowPlayingCard
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          trackReactions={trackReactions}
+          canControl={canControl}
+          onPlayPause={playPause}
+          onNext={nextTrack}
+          onSync={syncToSession}
+          onReaction={handleReaction}
+          loadingReaction={loadingReaction}
+          hasUser={!!user}
+          queueLength={queue.length}
+        />
+      )}
 
       {/* DJ Mode Interface */}
       {roomSettings.djMode && (
@@ -2211,6 +2356,29 @@ const RoomScreen: React.FC = () => {
         }}
         onCopyCode={() => {
           Alert.alert('Success', 'Join code copied to clipboard!');
+        }}
+      />
+
+      {/* Ad Dialog */}
+      <AdDialog
+        visible={adVisible}
+        ad={currentAd}
+        countdown={adCountdown}
+        onDismiss={() => {
+          setAdVisible(false);
+          setCurrentAd(null);
+          // Resume playback if there's a current track
+          if (currentTrack && socketService.socket) {
+            socketService.socket.emit('play', { roomId });
+          }
+        }}
+        onUpgrade={() => {
+          navigation.navigate('Subscription');
+        }}
+        onBooster={() => {
+          // Show booster pack options - this will be handled by UpgradePrompt if needed
+          // For now, just navigate to subscription screen
+          navigation.navigate('Subscription');
         }}
       />
     </View>

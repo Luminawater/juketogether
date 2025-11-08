@@ -68,7 +68,7 @@ const AdminScreen: React.FC = () => {
   const { supabase, profile, refreshProfile } = useAuth();
   const theme = useTheme();
 
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState<0 | 1 | 2>(0);
   const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'subscription'>('general');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
@@ -106,6 +106,27 @@ const AdminScreen: React.FC = () => {
     tracksPlayed: 0,
     roomsJoined: 0,
   });
+
+  // Booster pack settings
+  const [boosterPacks, setBoosterPacks] = useState<{
+    '10min'?: {
+      booster_type: '10min';
+      price: number;
+      duration_minutes: number;
+      display_name: string;
+      description: string;
+      enabled: boolean;
+    };
+    hour?: {
+      booster_type: 'hour';
+      price: number;
+      duration_minutes: number;
+      display_name: string;
+      description: string;
+      enabled: boolean;
+    };
+  }>({});
+  const [savingBoosterPacks, setSavingBoosterPacks] = useState(false);
 
   // Subscription tier settings
   const [subscriptionTiers, setSubscriptionTiers] = useState({
@@ -153,6 +174,8 @@ const AdminScreen: React.FC = () => {
     }
     if (activeTab === 0) {
       loadUsers();
+    } else if (activeTab === 2) {
+      loadAds();
     }
   }, [profile, activeTab]);
 
@@ -524,6 +547,73 @@ const AdminScreen: React.FC = () => {
   const onRefresh = () => {
     setRefreshing(true);
     loadUsers();
+  };
+
+  const loadBoosterPacks = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('booster_pack_settings')
+        .select('*')
+        .order('price');
+
+      if (!error && data && data.length > 0) {
+        const packs: any = {};
+        data.forEach((item: any) => {
+          packs[item.booster_type] = item;
+        });
+        setBoosterPacks(packs);
+      }
+    } catch (error) {
+      console.log('Error loading booster packs:', error);
+    }
+  };
+
+  const updateBoosterPack = (type: '10min' | 'hour', field: string, value: any) => {
+    setBoosterPacks((prev) => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        booster_type: type,
+        [field]: value,
+      } as any,
+    }));
+  };
+
+  const saveBoosterPacks = async () => {
+    try {
+      setSavingBoosterPacks(true);
+      
+      for (const [type, config] of Object.entries(boosterPacks)) {
+        if (!config) continue;
+        
+        const { error } = await supabase
+          .from('booster_pack_settings')
+          .upsert({
+            booster_type: type,
+            price: config.price,
+            duration_minutes: config.duration_minutes,
+            display_name: config.display_name,
+            description: config.description,
+            enabled: config.enabled !== false,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'booster_type',
+          });
+
+        if (error) {
+          console.error(`Error saving booster pack ${type}:`, error);
+          Alert.alert('Error', `Failed to save booster pack ${type}`);
+          return;
+        }
+      }
+
+      Alert.alert('Success', 'Booster pack settings saved successfully');
+    } catch (error: any) {
+      console.error('Error saving booster packs:', error);
+      Alert.alert('Error', error.message || 'Failed to save booster pack settings');
+    } finally {
+      setSavingBoosterPacks(false);
+    }
   };
 
   const loadSubscriptionTiers = async () => {
@@ -910,6 +1000,141 @@ const AdminScreen: React.FC = () => {
             </Button>
           </Card.Content>
         </Card>
+
+        {/* Booster Pack Configuration */}
+        <Card style={[styles.settingsCard, { backgroundColor: theme.colors.surface }]}>
+          <Card.Content>
+            <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+              Booster Pack Configuration
+            </Title>
+            <Text style={[styles.sectionDescription, { color: theme.colors.onSurfaceVariant }]}>
+              Configure booster packs that users can purchase to extend music playback time
+            </Text>
+
+            <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+
+            {/* 10 Minute Booster */}
+            <View style={[styles.tierCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <Title style={[styles.tierTitle, { color: theme.colors.onSurface }]}>10 Minute Boost</Title>
+              
+              <TextInput
+                label="Display Name"
+                value={boosterPacks['10min']?.display_name || '10 Minute Boost'}
+                onChangeText={(text) => updateBoosterPack('10min', 'display_name', text)}
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Price (USD)"
+                value={(boosterPacks['10min']?.price || 0.50).toString()}
+                onChangeText={(text) => {
+                  const num = parseFloat(text) || 0.50;
+                  updateBoosterPack('10min', 'price', num);
+                }}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Duration (minutes)"
+                value={(boosterPacks['10min']?.duration_minutes || 10).toString()}
+                onChangeText={(text) => {
+                  const num = parseInt(text) || 10;
+                  updateBoosterPack('10min', 'duration_minutes', num);
+                }}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Description"
+                value={boosterPacks['10min']?.description || ''}
+                onChangeText={(text) => updateBoosterPack('10min', 'description', text)}
+                mode="outlined"
+                multiline
+                numberOfLines={2}
+                style={styles.tierInput}
+              />
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={boosterPacks['10min']?.enabled !== false ? 'checked' : 'unchecked'}
+                  onPress={() => updateBoosterPack('10min', 'enabled', !boosterPacks['10min']?.enabled)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Enabled</Text>
+              </View>
+            </View>
+
+            {/* 1 Hour Booster */}
+            <View style={[styles.tierCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <Title style={[styles.tierTitle, { color: theme.colors.onSurface }]}>1 Hour Boost</Title>
+              
+              <TextInput
+                label="Display Name"
+                value={boosterPacks.hour?.display_name || '1 Hour Boost'}
+                onChangeText={(text) => updateBoosterPack('hour', 'display_name', text)}
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Price (USD)"
+                value={(boosterPacks.hour?.price || 1.00).toString()}
+                onChangeText={(text) => {
+                  const num = parseFloat(text) || 1.00;
+                  updateBoosterPack('hour', 'price', num);
+                }}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Duration (minutes)"
+                value={(boosterPacks.hour?.duration_minutes || 60).toString()}
+                onChangeText={(text) => {
+                  const num = parseInt(text) || 60;
+                  updateBoosterPack('hour', 'duration_minutes', num);
+                }}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Description"
+                value={boosterPacks.hour?.description || ''}
+                onChangeText={(text) => updateBoosterPack('hour', 'description', text)}
+                mode="outlined"
+                multiline
+                numberOfLines={2}
+                style={styles.tierInput}
+              />
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={boosterPacks.hour?.enabled !== false ? 'checked' : 'unchecked'}
+                  onPress={() => updateBoosterPack('hour', 'enabled', !boosterPacks.hour?.enabled)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Enabled</Text>
+              </View>
+            </View>
+
+            <Button
+              mode="contained"
+              onPress={saveBoosterPacks}
+              loading={savingBoosterPacks}
+              disabled={savingBoosterPacks}
+              style={styles.saveButton}
+              icon="content-save"
+            >
+              Save Booster Pack Settings
+            </Button>
+          </Card.Content>
+        </Card>
       </>
     );
   };
@@ -1024,10 +1249,19 @@ const AdminScreen: React.FC = () => {
         >
           Settings
         </Button>
+        <Button
+          mode={activeTab === 2 ? 'contained' : 'outlined'}
+          onPress={() => setActiveTab(2)}
+          style={styles.tabButton}
+          icon="advertisements"
+        >
+          Ads
+        </Button>
       </View>
 
       {activeTab === 0 && renderUsersTab()}
       {activeTab === 1 && renderSettingsTab()}
+      {activeTab === 2 && renderAdsTab()}
 
       {/* User Detail Dialog */}
       <Portal>
@@ -1761,6 +1995,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  adHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  adActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 12,
   },
   activityRow: {
     flexDirection: 'row',

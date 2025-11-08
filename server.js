@@ -295,6 +295,62 @@ async function getTierSettings(tier) {
   }
 }
 
+// Helper function to check if user can play (based on tier limits and booster)
+async function canUserPlay(roomId, userId) {
+  if (!supabase) return { canPlay: true, reason: null, blockedAt: null }; // Allow if Supabase not available
+  
+  try {
+    // Check for active booster pack
+    const activeBoost = await getActiveRoomBoost(roomId);
+    if (activeBoost) {
+      // Booster is active, allow playback
+      return { canPlay: true, reason: null, blockedAt: null, boosterActive: true };
+    }
+    
+    // Get user profile to check tier and songs played
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('subscription_tier, songs_played_count')
+      .eq('id', userId)
+      .single();
+    
+    if (!profile) {
+      // No profile, treat as free tier - block immediately
+      return { canPlay: false, reason: 'no_profile', blockedAt: 1, songsPlayed: 0 };
+    }
+    
+    const tier = profile.subscription_tier || 'free';
+    const songsPlayed = profile.songs_played_count || 0;
+    
+    // Check if user is room owner
+    const room = await getRoom(roomId);
+    const isOwner = room.hostUserId === userId;
+    
+    // Free tier: block at 2nd and 6th song
+    if (tier === 'free') {
+      // Block BEFORE 2nd song plays (after 1st song completes)
+      if (songsPlayed >= 1) {
+        return { canPlay: false, reason: 'tier_limit', blockedAt: 2, songsPlayed, isOwner };
+      }
+      // Block BEFORE 6th song plays (after 5th song completes)
+      if (songsPlayed >= 5) {
+        return { canPlay: false, reason: 'tier_limit', blockedAt: 6, songsPlayed, isOwner };
+      }
+    }
+    
+    // Rookie tier: no limits (or add limits here if needed)
+    // Standard tier: no limits
+    // Pro tier: no limits
+    
+    // Other tiers have no limits
+    return { canPlay: true, reason: null, blockedAt: null, isOwner };
+  } catch (error) {
+    console.error('Error checking if user can play:', error);
+    // On error, allow playback (fail open)
+    return { canPlay: true, reason: null, blockedAt: null };
+  }
+}
+
 // Helper function to check if user can control playback
 async function canUserControl(roomId, userId) {
   const room = await getRoom(roomId);
@@ -599,11 +655,27 @@ io.on('connection', (socket) => {
     console.log(`✅ Track added to room "${roomId}":`, trackUrl);
     
     // Auto-play first track if no track is currently playing
-    // But only if room has boost or owner has tier 2/3
-    const creatorTier = await getRoomCreatorTier(roomId);
-    const canPlay = creatorTier !== 'free'; // Free tier needs boost to play
-    
-    if (!room.currentTrack && room.queue.length > 0 && canPlay) {
+    // Check if the user who added the track can play
+    if (!room.currentTrack && room.queue.length > 0) {
+      const firstTrack = room.queue[0];
+      const trackOwnerId = firstTrack.addedBy || userId;
+      const playCheck = await canUserPlay(roomId, trackOwnerId);
+      
+      if (!playCheck.canPlay) {
+        // Block auto-play - emit blocked event
+        io.to(roomId).emit('playback-blocked', {
+          reason: playCheck.reason,
+          blockedAt: playCheck.blockedAt,
+          songsPlayed: playCheck.songsPlayed,
+          userId: trackOwnerId,
+          isOwner: room.hostUserId === trackOwnerId,
+          track: firstTrack
+        });
+        console.log(`Auto-play blocked for track in room ${roomId} - user ${trackOwnerId} reached tier limit`);
+        return;
+      }
+      
+      // User can play, proceed with auto-play
       room.currentTrack = room.queue.shift();
       room.isPlaying = true;
       room.position = 0;
@@ -612,12 +684,6 @@ io.on('connection', (socket) => {
       io.to(roomId).emit('track-changed', room.currentTrack);
       io.to(roomId).emit('play-track');
       console.log(`Auto-playing first track in room ${roomId}`);
-    } else if (!canPlay && room.isPlaying) {
-      // Stop music if boost expired or no boost for free tier
-      room.isPlaying = false;
-      scheduleSave(roomId);
-      io.to(roomId).emit('pause-track');
-      console.log(`Music stopped in room ${roomId} - free tier requires boost`);
     }
   });
 
@@ -699,6 +765,28 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // Check if user can play (tier limits)
+    const trackUserId = room.currentTrack?.addedBy || userId;
+    const playCheck = await canUserPlay(roomId, trackUserId);
+    
+    if (!playCheck.canPlay) {
+      // Block playback - emit blocked event
+      io.to(roomId).emit('playback-blocked', {
+        reason: playCheck.reason,
+        blockedAt: playCheck.blockedAt,
+        songsPlayed: playCheck.songsPlayed,
+        userId: trackUserId,
+        isOwner: room.hostUserId === trackUserId
+      });
+      socket.emit('error', { 
+        message: `Playback blocked: You've reached the limit for your tier. ${playCheck.isOwner ? 'Upgrade your subscription' : 'Purchase a booster pack'} to continue.`,
+        blocked: true,
+        blockedAt: playCheck.blockedAt
+      });
+      room.isTransitioning = false;
+      return;
+    }
+    
     room.isTransitioning = true;
     
     // Move current track to history if it exists
@@ -713,9 +801,8 @@ io.on('connection', (socket) => {
         room.history = room.history.slice(0, 100);
       }
       
-      // Track track play for analytics
+      // Track track play for analytics (this increments songs_played_count)
       if (trackTrackPlay) {
-        const trackUserId = room.currentTrack.addedBy || userId;
         trackTrackPlay(roomId, room.hostUserId, trackUserId, room.currentTrack).catch(err => {
           console.error('Error tracking track play:', err);
         });
@@ -725,6 +812,30 @@ io.on('connection', (socket) => {
     }
     
     if (room.queue.length > 0) {
+      // Check if next track can be played (check the user who added the next track)
+      const nextTrack = room.queue[0];
+      const nextTrackUserId = nextTrack.addedBy || userId;
+      const nextPlayCheck = await canUserPlay(roomId, nextTrackUserId);
+      
+      if (!nextPlayCheck.canPlay) {
+        // Block next track - emit blocked event
+        io.to(roomId).emit('playback-blocked', {
+          reason: nextPlayCheck.reason,
+          blockedAt: nextPlayCheck.blockedAt,
+          songsPlayed: nextPlayCheck.songsPlayed,
+          userId: nextTrackUserId,
+          isOwner: room.hostUserId === nextTrackUserId,
+          track: nextTrack
+        });
+        socket.emit('error', { 
+          message: `Next track blocked: User has reached tier limit. ${nextPlayCheck.isOwner ? 'Upgrade subscription' : 'Purchase booster pack'} to continue.`,
+          blocked: true,
+          blockedAt: nextPlayCheck.blockedAt
+        });
+        room.isTransitioning = false;
+        return;
+      }
+      
       room.currentTrack = room.queue.shift();
       room.isPlaying = true;
       room.position = 0; // Reset position for new track
@@ -2296,6 +2407,133 @@ app.put('/api/profile', async (req, res) => {
 });
 
 // Create Stripe Checkout Session for subscription upgrade
+// Get booster pack settings
+app.get('/api/booster-packs', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not available' });
+    }
+
+    const { data, error } = await supabase
+      .from('booster_pack_settings')
+      .select('*')
+      .eq('enabled', true)
+      .order('price', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching booster packs:', error);
+      return res.status(500).json({ error: 'Failed to fetch booster packs' });
+    }
+
+    res.json({ packs: data || [] });
+  } catch (error) {
+    console.error('Error in booster packs endpoint:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create Stripe checkout session for booster pack
+app.post('/api/stripe/create-booster-checkout', async (req, res) => {
+  try {
+    const { roomId, boosterType } = req.body;
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const token = authHeader.substring(7);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: 'Invalid authentication' });
+    }
+
+    if (!roomId || !boosterType) {
+      return res.status(400).json({ error: 'roomId and boosterType are required' });
+    }
+
+    // Get booster pack settings
+    const { data: boosterPack, error: packError } = await supabase
+      .from('booster_pack_settings')
+      .select('*')
+      .eq('booster_type', boosterType)
+      .eq('enabled', true)
+      .single();
+
+    if (packError || !boosterPack) {
+      return res.status(404).json({ error: 'Booster pack not found' });
+    }
+
+    // Calculate expiration time
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + boosterPack.duration_minutes);
+
+    // Create room boost record (pending payment)
+    const { data: boostRecord, error: boostError } = await supabase
+      .from('room_boosts')
+      .insert({
+        room_id: roomId,
+        purchased_by: user.id,
+        expires_at: expiresAt.toISOString(),
+        amount_paid: boosterPack.price,
+        payment_status: 'pending',
+        payment_provider: 'stripe',
+        booster_type: boosterType,
+      })
+      .select()
+      .single();
+
+    if (boostError) {
+      console.error('Error creating boost record:', boostError);
+      return res.status(500).json({ error: 'Failed to create boost record' });
+    }
+
+    // Create Stripe checkout session
+    const baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
+    const successUrl = `${baseUrl}/room/${roomId}?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl}/room/${roomId}?canceled=true`;
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: boosterPack.display_name,
+              description: boosterPack.description,
+            },
+            unit_amount: Math.round(boosterPack.price * 100), // Convert to cents
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: {
+        type: 'booster_pack',
+        room_id: roomId,
+        user_id: user.id,
+        boost_id: boostRecord.id,
+        booster_type: boosterType,
+      },
+    });
+
+    // Update boost record with payment intent ID
+    await supabase
+      .from('room_boosts')
+      .update({ payment_intent_id: session.id })
+      .eq('id', boostRecord.id);
+
+    res.json({ url: session.url });
+  } catch (error) {
+    console.error('Error creating booster checkout:', error);
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
 app.post('/api/stripe/create-checkout-session', async (req, res) => {
   try {
     const { tier } = req.body;
@@ -2558,9 +2796,56 @@ app.post('/api/stripe-webhook', async (req, res) => {
         const session = event.data.object;
         console.log('Checkout session completed:', session.id);
         
+        // Handle booster pack purchase
+        if (session.metadata?.type === 'booster_pack') {
+          const boostId = session.metadata.boost_id;
+          const roomId = session.metadata.room_id;
+          const boosterType = session.metadata.booster_type;
+          
+          if (boostId && supabase) {
+            // Get booster pack settings to calculate expiration
+            const { data: boosterPack } = await supabase
+              .from('booster_pack_settings')
+              .select('duration_minutes')
+              .eq('booster_type', boosterType)
+              .single();
+            
+            const durationMinutes = boosterPack?.duration_minutes || (boosterType === '10min' ? 10 : 60);
+            const expiresAt = new Date();
+            expiresAt.setMinutes(expiresAt.getMinutes() + durationMinutes);
+            
+            // Update boost record to completed
+            const { error: boostError } = await supabase
+              .from('room_boosts')
+              .update({
+                payment_status: 'completed',
+                payment_intent_id: session.id,
+                expires_at: expiresAt.toISOString(),
+              })
+              .eq('id', boostId);
+            
+            if (boostError) {
+              console.error('Error updating boost status:', boostError);
+            } else {
+              console.log(`Booster pack activated for room ${roomId}`);
+              
+              // Emit boost activated event to room
+              if (io) {
+                io.to(roomId).emit('boost-activated', {
+                  boost: {
+                    id: boostId,
+                    room_id: roomId,
+                    expires_at: expiresAt.toISOString(),
+                    minutes_remaining: durationMinutes,
+                  }
+                });
+              }
+            }
+          }
+        }
         // If it's a subscription, the subscription.created event will handle the tier update
         // But we can also track the checkout session here if needed
-        if (session.mode === 'subscription' && session.metadata?.user_id) {
+        else if (session.mode === 'subscription' && session.metadata?.user_id) {
           console.log(`User ${session.metadata.user_id} completed checkout for tier ${session.metadata.tier}`);
         }
         break;

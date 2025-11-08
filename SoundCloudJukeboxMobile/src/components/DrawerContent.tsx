@@ -216,6 +216,37 @@ export const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props
         style={styles.drawerItem}
         inactiveBackgroundColor="transparent"
       />
+
+      {/* Footer with Contact Email */}
+      <View style={styles.footer}>
+        <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+        <TouchableOpacity
+          onPress={() => {
+            const email = 'mail@juketogether.com';
+            const subject = 'Contact from JukeTogether App';
+            const mailtoUrl = `mailto:${email}?subject=${encodeURIComponent(subject)}`;
+            Linking.openURL(mailtoUrl).catch(err => {
+              console.error('Error opening email:', err);
+              // Fallback: copy email to clipboard on web
+              if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+                navigator.clipboard.writeText(email);
+                alert(`Email copied to clipboard: ${email}`);
+              }
+            });
+          }}
+          style={styles.footerContact}
+        >
+          <MaterialCommunityIcons 
+            name="email-outline" 
+            size={16} 
+            color={theme.colors.onSurfaceVariant} 
+            style={styles.footerIcon}
+          />
+          <Text style={[styles.footerText, { color: theme.colors.onSurfaceVariant }]}>
+            mail@juketogether.com
+          </Text>
+        </TouchableOpacity>
+      </View>
     </DrawerContentScrollView>
   );
 };
@@ -275,6 +306,24 @@ const styles = StyleSheet.create({
     marginVertical: 12,
     marginHorizontal: 16,
     height: 1,
+  },
+  footer: {
+    marginTop: 'auto',
+    paddingBottom: Platform.OS === 'web' ? 20 : 16,
+  },
+  footerContact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  footerIcon: {
+    marginRight: 8,
+  },
+  footerText: {
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 
