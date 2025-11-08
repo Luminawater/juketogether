@@ -12,6 +12,7 @@ import {
 import { TextInput, Button, Text, Card, Title, Paragraph, Divider, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 
@@ -136,11 +137,32 @@ const AuthScreen: React.FC = () => {
               {/* OAuth Buttons */}
               <View style={styles.oauthSection}>
                 <TouchableOpacity
+                  onPress={() => handleOAuthSignIn('google')}
+                  disabled={!!loadingOAuth}
+                  style={[
+                    styles.oauthButton,
+                    { backgroundColor: '#4285F4' },
+                    loadingOAuth === 'google' && styles.oauthButtonLoading,
+                    !!loadingOAuth && styles.oauthButtonDisabled,
+                  ]}
+                  activeOpacity={0.8}
+                >
+                  {loadingOAuth === 'google' ? (
+                    <Text style={styles.oauthButtonText}>Loading...</Text>
+                  ) : (
+                    <View style={styles.oauthButtonInner}>
+                      <MaterialCommunityIcons name="google" size={24} color="#FFFFFF" />
+                      <Text style={styles.oauthButtonText}>Continue with Google</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                
+                <TouchableOpacity
                   onPress={() => handleOAuthSignIn('spotify')}
                   disabled={!!loadingOAuth}
                   style={[
                     styles.oauthButton,
-                    { backgroundColor: '#1DB954' },
+                    { backgroundColor: '#1DB954', marginTop: 12 },
                     loadingOAuth === 'spotify' && styles.oauthButtonLoading,
                     !!loadingOAuth && styles.oauthButtonDisabled,
                   ]}

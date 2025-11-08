@@ -500,6 +500,7 @@ io.on('connection', (socket) => {
       allowQueue: roomSettings.allow_queue !== false,
       djMode: roomSettings.dj_mode || false,
       djPlayers: roomSettings.dj_players || 0,
+      allowPlaylistAdditions: roomSettings.allow_playlist_additions || false,
       admins: roomAdmins,
     } : {
       isPrivate: false,
@@ -507,6 +508,7 @@ io.on('connection', (socket) => {
       allowQueue: true,
       djMode: false,
       djPlayers: 0,
+      allowPlaylistAdditions: false,
       admins: roomAdmins,
     };
 
@@ -1225,6 +1227,7 @@ io.on('connection', (socket) => {
       allow_queue: settings.allowQueue,
       dj_mode: settings.djMode,
       dj_players: settings.djPlayers,
+      allow_playlist_additions: settings.allowPlaylistAdditions,
     };
 
     const updatedSettings = await chatModule.updateRoomSettings(roomId, dbSettings);
@@ -1237,6 +1240,7 @@ io.on('connection', (socket) => {
         allowQueue: updatedSettings.allow_queue !== false,
         djMode: updatedSettings.dj_mode || false,
         djPlayers: updatedSettings.dj_players || 0,
+        allowPlaylistAdditions: updatedSettings.allow_playlist_additions || false,
         admins: roomAdmins,
       };
       // Broadcast updated settings to all users in room
@@ -2619,6 +2623,82 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
   } catch (error) {
     console.error('Create checkout session error:', error);
     res.status(500).json({ error: error.message || 'Failed to create checkout session' });
+  }
+});
+
+// Get Stripe checkout session details for receipt
+app.post('/api/stripe/get-session-details', async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID is required' });
+    }
+
+    if (!stripe) {
+      return res.status(500).json({ error: 'Stripe not configured' });
+    }
+
+    const token = authHeader.substring(7);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
+
+    // Retrieve the checkout session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['payment_intent', 'customer'],
+    });
+
+    // Verify the session belongs to this user
+    if (session.metadata?.user_id !== user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get payment details
+    const amountTotal = session.amount_total || 0;
+    const currency = session.currency || 'usd';
+    const tier = session.metadata?.tier || 'unknown';
+    const tierDisplayName = session.metadata?.display_name || tier;
+    const customerEmail = session.customer_details?.email || session.customer_email;
+    
+    // Get payment method details if available
+    let paymentMethod = 'Card';
+    if (session.payment_intent) {
+      const paymentIntent = typeof session.payment_intent === 'string' 
+        ? await stripe.paymentIntents.retrieve(session.payment_intent)
+        : session.payment_intent;
+      
+      if (paymentIntent.payment_method) {
+        const pm = typeof paymentIntent.payment_method === 'string'
+          ? await stripe.paymentMethods.retrieve(paymentIntent.payment_method)
+          : paymentIntent.payment_method;
+        
+        if (pm.card) {
+          paymentMethod = `${pm.card.brand?.toUpperCase() || 'Card'} •••• ${pm.card.last4 || ''}`;
+        }
+      }
+    }
+
+    res.json({
+      sessionId: session.id,
+      amount: amountTotal,
+      currency: currency,
+      tier: tier,
+      tierDisplayName: tierDisplayName,
+      paymentDate: new Date(session.created * 1000).toISOString(),
+      customerEmail: customerEmail,
+      paymentMethod: paymentMethod,
+    });
+  } catch (error) {
+    console.error('Get session details error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch session details' });
   }
 });
 

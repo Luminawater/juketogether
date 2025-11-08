@@ -40,6 +40,9 @@ import { NowPlayingCard } from '../components/NowPlayingCard';
 import { UpgradePrompt } from '../components/UpgradePrompt';
 import { AdDialog } from '../components/AdDialog';
 import { DJModeInterface } from '../components/DJModeInterface';
+import { DJModeToggle } from '../components/DJModeToggle';
+import { djAudioService } from '../services/djAudioService';
+import { bpmDetectionService } from '../services/bpmDetectionService';
 import {
   isSpotifyUser,
   fetchUserPlaylists,
@@ -91,6 +94,7 @@ interface RoomSettings {
   djMode: boolean;
   djPlayers: number;
   admins: string[];
+  allowPlaylistAdditions: boolean;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -132,6 +136,7 @@ const RoomScreen: React.FC = () => {
     djMode: false,
     djPlayers: 0,
     admins: [],
+    allowPlaylistAdditions: false,
   });
   const [isOwner, setIsOwner] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -169,8 +174,13 @@ const RoomScreen: React.FC = () => {
   const [loadingReaction, setLoadingReaction] = useState(false);
 
   // DJ Mode state
-  const [djPlayerTracks, setDjPlayerTracks] = useState<(Track | null)[]>([null, null, null]);
-  const [djPlayerPlayingStates, setDjPlayerPlayingStates] = useState<boolean[]>([false, false, false]);
+  const [isDJModeActive, setIsDJModeActive] = useState(false);
+  const [djPlayerTracks, setDjPlayerTracks] = useState<(Track | null)[]>([null, null, null, null]);
+  const [djPlayerPlayingStates, setDjPlayerPlayingStates] = useState<boolean[]>([false, false, false, false]);
+  const [djPlayerVolumes, setDjPlayerVolumes] = useState<number[]>([0.5, 0.5, 0.5, 0.5]);
+  const [djPlayerBPMs, setDjPlayerBPMs] = useState<(number | null)[]>([null, null, null, null]);
+  const [djPlayerPositions, setDjPlayerPositions] = useState<number[]>([0, 0, 0, 0]);
+  const [djPlayerDurations, setDjPlayerDurations] = useState<number[]>([0, 0, 0, 0]);
 
   // Playback blocking state
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
@@ -193,6 +203,7 @@ const RoomScreen: React.FC = () => {
   const [currentAd, setCurrentAd] = useState<any>(null);
   const [adCountdown, setAdCountdown] = useState(5);
   const [songsSinceLastAd, setSongsSinceLastAd] = useState(0);
+  const [purchasingBoost, setPurchasingBoost] = useState(false);
 
   // Connect to Socket.io when component mounts
   useEffect(() => {
@@ -456,6 +467,7 @@ const RoomScreen: React.FC = () => {
         djMode: updatedSettings.djMode || false,
         djPlayers: updatedSettings.djPlayers || 0,
         admins: updatedSettings.admins || roomSettings.admins || [],
+        allowPlaylistAdditions: updatedSettings.allowPlaylistAdditions || false,
       });
       setCanControl(updatedSettings.allowControls !== false || isOwner || isAdmin);
     };
@@ -667,6 +679,138 @@ const RoomScreen: React.FC = () => {
     }
   };
 
+  // Initialize DJ Audio Service
+  useEffect(() => {
+    if (isDJModeActive && roomSettings.djMode) {
+      djAudioService.initialize();
+    }
+    
+    return () => {
+      if (isDJModeActive) {
+        djAudioService.cleanup();
+      }
+    };
+  }, [isDJModeActive, roomSettings.djMode]);
+
+  // Update DJ player positions periodically
+  useEffect(() => {
+    if (!isDJModeActive || !roomSettings.djMode) return;
+
+    const interval = setInterval(() => {
+      const states = djAudioService.getAllPlayerStates();
+      const newPositions: number[] = [];
+      const newDurations: number[] = [];
+      
+      states.forEach((state) => {
+        newPositions.push(state.position);
+        newDurations.push(state.duration);
+      });
+      
+      setDjPlayerPositions(newPositions);
+      setDjPlayerDurations(newDurations);
+    }, 100); // Update every 100ms
+
+    return () => clearInterval(interval);
+  }, [isDJModeActive, roomSettings.djMode]);
+
+  // DJ Mode Handlers
+  const handleDJPlayerLoadTrack = async (playerIndex: number) => {
+    if (!queue || queue.length === 0) {
+      Alert.alert('No Tracks', 'Add tracks to the queue first');
+      return;
+    }
+
+    // Use the first track in queue for now (could be enhanced to show a track picker)
+    const track = queue[0];
+    const success = await djAudioService.loadTrack(playerIndex, track);
+    
+    if (success) {
+      const newTracks = [...djPlayerTracks];
+      newTracks[playerIndex] = track;
+      setDjPlayerTracks(newTracks);
+
+      // Detect BPM
+      const bpmResult = await bpmDetectionService.detectBPM(track);
+      const newBPMs = [...djPlayerBPMs];
+      newBPMs[playerIndex] = bpmResult.bpm;
+      setDjPlayerBPMs(newBPMs);
+
+      // Update duration
+      const playerState = djAudioService.getPlayerState(playerIndex);
+      if (playerState) {
+        const newDurations = [...djPlayerDurations];
+        newDurations[playerIndex] = playerState.duration;
+        setDjPlayerDurations(newDurations);
+      }
+    } else {
+      Alert.alert('Error', 'Failed to load track');
+    }
+  };
+
+  const handleDJPlayerPlayPause = async (playerIndex: number) => {
+    const playerState = djAudioService.getPlayerState(playerIndex);
+    if (!playerState || !playerState.sound) {
+      Alert.alert('No Track', 'Load a track first');
+      return;
+    }
+
+    if (playerState.isPlaying) {
+      await djAudioService.pause(playerIndex);
+    } else {
+      await djAudioService.play(playerIndex);
+    }
+
+    const newStates = [...djPlayerPlayingStates];
+    newStates[playerIndex] = !playerState.isPlaying;
+    setDjPlayerPlayingStates(newStates);
+  };
+
+  const handleDJPlayerVolumeChange = async (playerIndex: number, volume: number) => {
+    await djAudioService.setVolume(playerIndex, volume);
+    const newVolumes = [...djPlayerVolumes];
+    newVolumes[playerIndex] = volume;
+    setDjPlayerVolumes(newVolumes);
+  };
+
+  const handleDJPlayerSeek = async (playerIndex: number, position: number) => {
+    await djAudioService.seekTo(playerIndex, position);
+    const newPositions = [...djPlayerPositions];
+    newPositions[playerIndex] = position;
+    setDjPlayerPositions(newPositions);
+  };
+
+  const handleDJPlayerSync = async (playerIndex1: number, playerIndex2: number) => {
+    const state1 = djAudioService.getPlayerState(playerIndex1);
+    const state2 = djAudioService.getPlayerState(playerIndex2);
+    
+    if (!state1 || !state1.sound || !state2 || !state2.sound) {
+      Alert.alert('Error', 'Both players need tracks loaded');
+      return;
+    }
+
+    const bpm1 = djPlayerBPMs[playerIndex1];
+    const bpm2 = djPlayerBPMs[playerIndex2];
+
+    if (bpm1 && bpm2) {
+      // Calculate beat offset and sync
+      const offset = bpmDetectionService.calculateBeatOffset(
+        bpm1,
+        bpm2,
+        djPlayerPositions[playerIndex1]
+      );
+      
+      // Seek player 2 to match player 1's beat
+      const newPosition = Math.max(0, djPlayerPositions[playerIndex2] + offset);
+      await handleDJPlayerSeek(playerIndex2, newPosition);
+      
+      Alert.alert('Synced', `Players synced at ${Math.round(bpm1)} BPM`);
+    } else {
+      // Simple position sync if no BPM data
+      await handleDJPlayerSeek(playerIndex2, djPlayerPositions[playerIndex1]);
+      Alert.alert('Synced', 'Players synced by position');
+    }
+  };
+
   const loadSpotifyPlaylists = async () => {
     if (!user || !session) return;
 
@@ -736,6 +880,104 @@ const RoomScreen: React.FC = () => {
     });
 
     Alert.alert('Success', `Queued ${queuedCount} track${queuedCount === 1 ? '' : 's'}`);
+  };
+
+  const [createPlaylistDialogVisible, setCreatePlaylistDialogVisible] = useState(false);
+  const [playlistNameInput, setPlaylistNameInput] = useState('');
+  const [creatingPlaylist, setCreatingPlaylist] = useState(false);
+
+  const handleCreatePlaylistFromRoom = async () => {
+    if (!user || !profile || profile.subscription_tier !== 'pro') {
+      Alert.alert('Error', 'Only PRO tier users can create playlists');
+      return;
+    }
+
+    // Combine history and queue tracks
+    const allTracks = [...history, ...queue];
+    
+    if (allTracks.length === 0) {
+      Alert.alert('Error', 'No tracks in history or queue to create a playlist');
+      return;
+    }
+
+    setPlaylistNameInput('');
+    setCreatePlaylistDialogVisible(true);
+  };
+
+  const confirmCreatePlaylist = async () => {
+    if (!user || !profile || profile.subscription_tier !== 'pro') {
+      return;
+    }
+
+    const playlistName = playlistNameInput.trim();
+    if (!playlistName) {
+      Alert.alert('Error', 'Playlist name cannot be empty');
+      return;
+    }
+
+    // Combine history and queue tracks
+    const allTracks = [...history, ...queue];
+    
+    if (allTracks.length === 0) {
+      Alert.alert('Error', 'No tracks in history or queue to create a playlist');
+      return;
+    }
+
+    setCreatingPlaylist(true);
+    try {
+      // Create playlist
+      const { data: playlist, error: playlistError } = await supabase
+        .from('playlists')
+        .insert({
+          user_id: user.id,
+          name: playlistName,
+          description: `Created from room ${roomName || roomId}`,
+          created_from_room_id: roomId,
+        })
+        .select()
+        .single();
+
+      if (playlistError) throw playlistError;
+
+      // Add tracks to playlist
+      const tracksToInsert = allTracks.map((track, index) => ({
+        playlist_id: playlist.id,
+        track_id: track.id || `track_${index}`,
+        track_url: track.url || '',
+        track_title: track.info?.fullTitle || track.info?.title || 'Unknown Track',
+        track_artist: track.info?.artist || track.info?.author || '',
+        track_thumbnail: track.info?.thumbnail || '',
+        platform: track.platform || (track.url?.includes('spotify') ? 'spotify' : track.url?.includes('youtube') ? 'youtube' : 'soundcloud'),
+        position: index,
+        added_by: user.id,
+      }));
+
+      const { error: tracksError } = await supabase
+        .from('playlist_tracks')
+        .insert(tracksToInsert);
+
+      if (tracksError) throw tracksError;
+
+      setCreatePlaylistDialogVisible(false);
+      setPlaylistNameInput('');
+
+      Alert.alert(
+        'Success',
+        `Playlist "${playlistName}" created with ${allTracks.length} tracks!`,
+        [
+          {
+            text: 'View Playlist',
+            onPress: () => navigation.navigate('Playlist', { playlistId: playlist.id }),
+          },
+          { text: 'OK' },
+        ]
+      );
+    } catch (error: any) {
+      console.error('Error creating playlist:', error);
+      Alert.alert('Error', error.message || 'Failed to create playlist');
+    } finally {
+      setCreatingPlaylist(false);
+    }
   };
 
   const addTrack = async () => {
@@ -933,6 +1175,7 @@ const RoomScreen: React.FC = () => {
         allowQueue: roomSettings.allowQueue,
         djMode: roomSettings.djMode,
         djPlayers: roomSettings.djPlayers,
+        allowPlaylistAdditions: roomSettings.allowPlaylistAdditions,
       },
     });
     Alert.alert('Success', 'Settings saved!');
@@ -961,10 +1204,87 @@ const RoomScreen: React.FC = () => {
     }
   };
 
-  const renderMainTab = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      {/* Show UpgradePrompt if playback is blocked, otherwise show NowPlayingCard */}
-      {playbackBlocked && blockedInfo ? (
+  const renderMainTab = () => {
+    // Show DJ Mode interface if active and user has PRO tier
+    if (isDJModeActive && roomSettings.djMode && profile && hasTier(profile.subscription_tier, 'pro')) {
+      return (
+        <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+          <DJModeInterface
+            djMode={roomSettings.djMode}
+            djPlayers={roomSettings.djPlayers}
+            playerTracks={djPlayerTracks}
+            playerPlayingStates={djPlayerPlayingStates}
+            playerVolumes={djPlayerVolumes}
+            playerBPMs={djPlayerBPMs}
+            playerPositions={djPlayerPositions}
+            playerDurations={djPlayerDurations}
+            onPlayerPlayPause={handleDJPlayerPlayPause}
+            onPlayerLoadTrack={handleDJPlayerLoadTrack}
+            onPlayerVolumeChange={handleDJPlayerVolumeChange}
+            onPlayerSeek={handleDJPlayerSeek}
+            onSyncTracks={handleDJPlayerSync}
+          />
+          
+          {/* Queue for loading tracks into DJ players */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <View style={styles.sectionHeader}>
+                <MaterialCommunityIcons name="playlist-music" size={22} color={theme.colors.primary} />
+                <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+                  Queue (Load to Players)
+                </Title>
+              </View>
+              {queue.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <MaterialCommunityIcons name="music-off" size={48} color={theme.colors.onSurfaceVariant} />
+                  <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>
+                    Queue is empty. Add tracks to load into DJ players.
+                  </Text>
+                </View>
+              ) : (
+                <ScrollView style={styles.queueList} showsVerticalScrollIndicator={false}>
+                  {queue.map((track, index) => (
+                    <List.Item
+                      key={track.id}
+                      title={track.info?.fullTitle || 'Unknown Track'}
+                      description={`${track.platform} • Click to load into a player`}
+                      left={() => (
+                        <Avatar.Image
+                          size={40}
+                          source={{ uri: track.info?.thumbnail || 'https://via.placeholder.com/40' }}
+                        />
+                      )}
+                      onPress={() => {
+                        // Show player selection dialog
+                        Alert.alert(
+                          'Load Track',
+                          'Select a player to load this track into:',
+                          [
+                            ...Array.from({ length: roomSettings.djPlayers }, (_, i) => ({
+                              text: `Player ${i + 1}`,
+                              onPress: () => {
+                                handleDJPlayerLoadTrack(i);
+                              },
+                            })),
+                            { text: 'Cancel', style: 'cancel' },
+                          ]
+                        );
+                      }}
+                    />
+                  ))}
+                </ScrollView>
+              )}
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      );
+    }
+
+    // Standard mode interface
+    return (
+      <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+        {/* Show UpgradePrompt if playback is blocked, otherwise show NowPlayingCard */}
+        {playbackBlocked && blockedInfo ? (
         <UpgradePrompt
           isOwner={blockedInfo.isOwner}
           blockedAt={blockedInfo.blockedAt}
@@ -1514,6 +1834,27 @@ const RoomScreen: React.FC = () => {
           )}
         </Card.Content>
       </Card>
+
+      {/* Create Playlist Button - Only show for PRO tier users */}
+      {profile && profile.subscription_tier === 'pro' && (
+        <Card style={styles.card}>
+          <Card.Content>
+            <Button
+              mode="contained"
+              onPress={handleCreatePlaylistFromRoom}
+              icon="playlist-plus"
+              style={styles.addButton}
+              buttonColor={theme.colors.primary}
+              textColor={theme.colors.onPrimary}
+            >
+              Create Playlist from Room
+            </Button>
+            <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant, marginTop: 8 }]}>
+              Create a playlist with all tracks from history and queue
+            </Text>
+          </Card.Content>
+        </Card>
+      )}
     </ScrollView>
   );
 
@@ -1985,6 +2326,22 @@ const RoomScreen: React.FC = () => {
 
             <View style={styles.settingItem}>
               <View style={styles.settingRow}>
+                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Can other people add to playlist?</Text>
+                <Switch
+                  value={roomSettings.allowPlaylistAdditions}
+                  onValueChange={(value) => setRoomSettings(prev => ({ ...prev, allowPlaylistAdditions: value }))}
+                  disabled={!isOwner && !isAdmin}
+                />
+              </View>
+              <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
+                If enabled, other users can add tracks to playlists created from this room
+              </Text>
+            </View>
+
+            <Divider style={styles.divider} />
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingRow}>
                 <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>DJ Mode</Text>
                 <Switch
                   value={roomSettings.djMode}
@@ -2001,21 +2358,21 @@ const RoomScreen: React.FC = () => {
               <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
                 {!tierSettings.djMode 
                   ? `DJ Mode requires Pro tier. Current creator tier: ${creatorTier}. Upgrade to Pro to enable DJ mode.`
-                  : 'Enable DJ mode to add up to 3 additional players for mixing tracks'}
+                  : 'Enable DJ mode to add up to 4 players for mixing tracks with waveforms and BPM sync'}
               </Text>
               
               {roomSettings.djMode && (
                 <View style={[styles.djModeControls, { backgroundColor: theme.colors.surfaceVariant }]}>
-                  <Text style={[styles.djModeLabel, { color: theme.colors.onSurface }]}>Active Players: {roomSettings.djPlayers} / 3</Text>
+                  <Text style={[styles.djModeLabel, { color: theme.colors.onSurface }]}>Active Players: {roomSettings.djPlayers} / 4</Text>
                   <View style={styles.djPlayerButtons}>
                     <Button
                       mode="outlined"
                       onPress={() => {
-                        if (roomSettings.djPlayers < 3) {
+                        if (roomSettings.djPlayers < 4) {
                           setRoomSettings(prev => ({ ...prev, djPlayers: prev.djPlayers + 1 }));
                         }
                       }}
-                      disabled={roomSettings.djPlayers >= 3 || !isOwner}
+                      disabled={roomSettings.djPlayers >= 4 || !isOwner}
                       icon="plus"
                       compact
                     >
@@ -2157,6 +2514,14 @@ const RoomScreen: React.FC = () => {
             <Text style={[styles.roomTitle, { color: theme.colors.onSurface }]}>{roomName}</Text>
           </View>
           <View style={styles.headerRight}>
+            {/* DJ Mode Toggle - Only for PRO users */}
+            {profile && hasTier(profile.subscription_tier, 'pro') && roomSettings.djMode && (
+              <DJModeToggle
+                isDJMode={isDJModeActive}
+                onToggle={() => setIsDJModeActive(!isDJModeActive)}
+                disabled={!roomSettings.djMode}
+              />
+            )}
             {(isOwner || isAdmin) && (
               <IconButton
                 icon="cog"
@@ -2358,6 +2723,48 @@ const RoomScreen: React.FC = () => {
           Alert.alert('Success', 'Join code copied to clipboard!');
         }}
       />
+
+      {/* Create Playlist Dialog */}
+      <Portal>
+        <Dialog
+          visible={createPlaylistDialogVisible}
+          onDismiss={() => {
+            setCreatePlaylistDialogVisible(false);
+            setPlaylistNameInput('');
+          }}
+        >
+          <Dialog.Title>Create Playlist from Room</Dialog.Title>
+          <Dialog.Content>
+            <TextInput
+              label="Playlist Name"
+              value={playlistNameInput}
+              onChangeText={setPlaylistNameInput}
+              mode="outlined"
+              autoFocus
+              placeholder="Enter playlist name"
+            />
+            <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant, marginTop: 8 }]}>
+              This will create a playlist with {history.length + queue.length} tracks from this room's history and queue.
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => {
+              setCreatePlaylistDialogVisible(false);
+              setPlaylistNameInput('');
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onPress={confirmCreatePlaylist}
+              mode="contained"
+              loading={creatingPlaylist}
+              disabled={creatingPlaylist || !playlistNameInput.trim()}
+            >
+              Create
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       {/* Ad Dialog */}
       <AdDialog

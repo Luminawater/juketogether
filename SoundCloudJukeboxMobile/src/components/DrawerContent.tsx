@@ -166,6 +166,24 @@ export const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props
         inactiveBackgroundColor="transparent"
       />
       <DrawerItem
+        label="Playlists"
+        icon={({ color, size }) => (
+          <MaterialCommunityIcons name="playlist-music" size={size} color={color} />
+        )}
+        active={currentRoute === 'Playlist'}
+        onPress={() => handleNavigate('Playlist')}
+        labelStyle={[
+          styles.drawerItemLabel,
+          currentRoute === 'Playlist' && { color: theme.colors.primary, fontWeight: '600' },
+        ]}
+        style={[
+          styles.drawerItem,
+          currentRoute === 'Playlist' && { backgroundColor: theme.colors.primaryContainer },
+        ]}
+        activeBackgroundColor={theme.colors.primaryContainer}
+        inactiveBackgroundColor="transparent"
+      />
+      <DrawerItem
         label="Edit Profile"
         icon={({ color, size }) => (
           <MaterialCommunityIcons name="account-edit" size={size} color={color} />

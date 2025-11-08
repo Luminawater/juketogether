@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, StyleSheet, Platform, Dimensions } from 'react-native';
-import { Card, Text, Button, Avatar, useTheme } from 'react-native-paper';
+import React, { useState } from 'react';
+import { View, StyleSheet, Platform, Dimensions, TouchableOpacity } from 'react-native';
+import { Card, Text, Button, Avatar, useTheme, Slider, Menu, IconButton } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Track } from '../types';
+import { WaveformView } from './WaveformView';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const IS_MOBILE = SCREEN_WIDTH < 768;
@@ -12,8 +13,15 @@ interface DJModePlayerProps {
   track: Track | null;
   isPlaying: boolean;
   isActive: boolean;
+  volume?: number;
+  bpm?: number | null;
+  position?: number;
+  duration?: number;
   onPlayPause?: () => void;
   onLoadTrack?: () => void;
+  onVolumeChange?: (volume: number) => void;
+  onSeek?: (position: number) => void;
+  onSync?: (targetPlayerIndex: number) => void;
 }
 
 export const DJModePlayer: React.FC<DJModePlayerProps> = ({
@@ -21,10 +29,18 @@ export const DJModePlayer: React.FC<DJModePlayerProps> = ({
   track,
   isPlaying,
   isActive,
+  volume = 0.5,
+  bpm = null,
+  position = 0,
+  duration = 0,
   onPlayPause,
   onLoadTrack,
+  onVolumeChange,
+  onSeek,
+  onSync,
 }) => {
   const theme = useTheme();
+  const [syncMenuVisible, setSyncMenuVisible] = useState(false);
 
   if (!isActive) {
     return (
@@ -74,7 +90,7 @@ export const DJModePlayer: React.FC<DJModePlayerProps> = ({
           )}
         </View>
 
-        {/* Track Display */}
+            {/* Track Display */}
         {track ? (
           <>
             <View style={styles.trackDisplay}>
@@ -90,24 +106,79 @@ export const DJModePlayer: React.FC<DJModePlayerProps> = ({
                 >
                   {track.info?.fullTitle || 'Unknown Track'}
                 </Text>
-                <View style={[styles.platformBadge, { backgroundColor: `${theme.colors.primary}15` }]}>
-                  <MaterialCommunityIcons 
-                    name={
-                      track.url?.includes('spotify') ? 'spotify' : 
-                      track.url?.includes('youtube') ? 'youtube' : 
-                      'music-note'
-                    }
-                    size={12}
-                    color={theme.colors.primary}
-                  />
-                  <Text style={[styles.platformText, { color: theme.colors.primary }]}>
-                    {track.url?.includes('spotify') ? 'Spotify' : 
-                     track.url?.includes('youtube') ? 'YouTube' : 
-                     'SoundCloud'}
-                  </Text>
+                <View style={styles.trackMeta}>
+                  <View style={[styles.platformBadge, { backgroundColor: `${theme.colors.primary}15` }]}>
+                    <MaterialCommunityIcons 
+                      name={
+                        track.url?.includes('spotify') ? 'spotify' : 
+                        track.url?.includes('youtube') ? 'youtube' : 
+                        'music-note'
+                      }
+                      size={12}
+                      color={theme.colors.primary}
+                    />
+                    <Text style={[styles.platformText, { color: theme.colors.primary }]}>
+                      {track.url?.includes('spotify') ? 'Spotify' : 
+                       track.url?.includes('youtube') ? 'YouTube' : 
+                       'SoundCloud'}
+                    </Text>
+                  </View>
+                  {bpm !== null && (
+                    <View style={[styles.bpmBadge, { backgroundColor: `${theme.colors.secondary}20` }]}>
+                      <MaterialCommunityIcons 
+                        name="metronome"
+                        size={12}
+                        color={theme.colors.secondary}
+                      />
+                      <Text style={[styles.bpmText, { color: theme.colors.secondary }]}>
+                        {Math.round(bpm)} BPM
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
             </View>
+
+            {/* Waveform */}
+            {duration > 0 && (
+              <View style={styles.waveformContainer}>
+                <WaveformView
+                  position={position}
+                  duration={duration}
+                  isPlaying={isPlaying}
+                  onSeek={onSeek}
+                />
+              </View>
+            )}
+
+            {/* Volume Control */}
+            {onVolumeChange && (
+              <View style={styles.volumeContainer}>
+                <MaterialCommunityIcons 
+                  name="volume-low" 
+                  size={16} 
+                  color={theme.colors.onSurfaceVariant} 
+                />
+                <Slider
+                  style={styles.volumeSlider}
+                  value={volume}
+                  onValueChange={onVolumeChange}
+                  minimumValue={0}
+                  maximumValue={1}
+                  thumbTintColor={theme.colors.primary}
+                  minimumTrackTintColor={theme.colors.primary}
+                  maximumTrackTintColor={theme.colors.surfaceVariant}
+                />
+                <MaterialCommunityIcons 
+                  name="volume-high" 
+                  size={16} 
+                  color={theme.colors.onSurfaceVariant} 
+                />
+                <Text style={[styles.volumeText, { color: theme.colors.onSurfaceVariant }]}>
+                  {Math.round(volume * 100)}%
+                </Text>
+              </View>
+            )}
 
             {/* Controls */}
             <View style={styles.controls}>
@@ -123,6 +194,34 @@ export const DJModePlayer: React.FC<DJModePlayerProps> = ({
                 >
                   {isPlaying ? 'Pause' : 'Play'}
                 </Button>
+              )}
+              {onSync && (
+                <Menu
+                  visible={syncMenuVisible}
+                  onDismiss={() => setSyncMenuVisible(false)}
+                  anchor={
+                    <IconButton
+                      icon="sync"
+                      iconColor={theme.colors.primary}
+                      size={20}
+                      onPress={() => setSyncMenuVisible(true)}
+                    />
+                  }
+                >
+                  {[1, 2, 3, 4].map((num) => {
+                    if (num === playerNumber) return null;
+                    return (
+                      <Menu.Item
+                        key={num}
+                        onPress={() => {
+                          onSync(num - 1);
+                          setSyncMenuVisible(false);
+                        }}
+                        title={`Sync with Player ${num}`}
+                      />
+                    );
+                  })}
+                </Menu>
               )}
             </View>
           </>
@@ -274,9 +373,48 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
   },
+  trackMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
+  bpmBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  bpmText: {
+    fontSize: IS_MOBILE ? 9 : 10,
+    fontWeight: '600',
+  },
+  waveformContainer: {
+    marginVertical: IS_MOBILE ? 12 : 16,
+  },
+  volumeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: IS_MOBILE ? 12 : 16,
+  },
+  volumeSlider: {
+    flex: 1,
+  },
+  volumeText: {
+    fontSize: IS_MOBILE ? 10 : 12,
+    fontWeight: '600',
+    minWidth: 35,
+    textAlign: 'right',
+  },
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
   },
   controlButton: {
     flex: 1,

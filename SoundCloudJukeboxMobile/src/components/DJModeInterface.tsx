@@ -13,8 +13,15 @@ interface DJModeInterfaceProps {
   djPlayers: number;
   playerTracks: (Track | null)[];
   playerPlayingStates: boolean[];
+  playerVolumes?: number[];
+  playerBPMs?: (number | null)[];
+  playerPositions?: number[];
+  playerDurations?: number[];
   onPlayerPlayPause?: (playerIndex: number) => void;
   onPlayerLoadTrack?: (playerIndex: number) => void;
+  onPlayerVolumeChange?: (playerIndex: number, volume: number) => void;
+  onPlayerSeek?: (playerIndex: number, position: number) => void;
+  onSyncTracks?: (playerIndex1: number, playerIndex2: number) => void;
 }
 
 export const DJModeInterface: React.FC<DJModeInterfaceProps> = ({
@@ -22,8 +29,15 @@ export const DJModeInterface: React.FC<DJModeInterfaceProps> = ({
   djPlayers,
   playerTracks,
   playerPlayingStates,
+  playerVolumes = [],
+  playerBPMs = [],
+  playerPositions = [],
+  playerDurations = [],
   onPlayerPlayPause,
   onPlayerLoadTrack,
+  onPlayerVolumeChange,
+  onPlayerSeek,
+  onSyncTracks,
 }) => {
   const theme = useTheme();
 
@@ -49,13 +63,13 @@ export const DJModeInterface: React.FC<DJModeInterfaceProps> = ({
           </View>
           <View style={[styles.statusBadge, { backgroundColor: `${theme.colors.primary}20` }]}>
             <Text style={[styles.statusText, { color: theme.colors.primary }]}>
-              {djPlayers} / 3 Active
+              {djPlayers} / 4 Active
             </Text>
           </View>
         </View>
 
         <Text style={[styles.description, { color: theme.colors.onSurfaceVariant }]}>
-          Mix tracks across multiple players for seamless transitions
+          Mix tracks across multiple players for seamless transitions. Use waveforms and BPM to sync tracks.
         </Text>
 
         <ScrollView 
@@ -64,11 +78,15 @@ export const DJModeInterface: React.FC<DJModeInterfaceProps> = ({
           style={styles.playersContainer}
           contentContainerStyle={styles.playersContent}
         >
-          {[1, 2, 3].map((playerNum) => {
+          {[1, 2, 3, 4].map((playerNum) => {
             const isActive = playerNum <= djPlayers;
             const playerIndex = playerNum - 1;
             const track = isActive ? (playerTracks[playerIndex] || null) : null;
             const isPlaying = isActive ? (playerPlayingStates[playerIndex] || false) : false;
+            const volume = isActive ? (playerVolumes[playerIndex] ?? 0.5) : 0;
+            const bpm = isActive ? (playerBPMs[playerIndex] ?? null) : null;
+            const position = isActive ? (playerPositions[playerIndex] ?? 0) : 0;
+            const duration = isActive ? (playerDurations[playerIndex] ?? 0) : 0;
 
             return (
               <DJModePlayer
@@ -77,8 +95,15 @@ export const DJModeInterface: React.FC<DJModeInterfaceProps> = ({
                 track={track}
                 isPlaying={isPlaying}
                 isActive={isActive}
+                volume={volume}
+                bpm={bpm}
+                position={position}
+                duration={duration}
                 onPlayPause={isActive && onPlayerPlayPause ? () => onPlayerPlayPause(playerIndex) : undefined}
                 onLoadTrack={isActive && onPlayerLoadTrack ? () => onPlayerLoadTrack(playerIndex) : undefined}
+                onVolumeChange={isActive && onPlayerVolumeChange ? (vol) => onPlayerVolumeChange(playerIndex, vol) : undefined}
+                onSeek={isActive && onPlayerSeek ? (pos) => onPlayerSeek(playerIndex, pos) : undefined}
+                onSync={isActive && onSyncTracks ? (targetIndex) => onSyncTracks(playerIndex, targetIndex) : undefined}
               />
             );
           })}

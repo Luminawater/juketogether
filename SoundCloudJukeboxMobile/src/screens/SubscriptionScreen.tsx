@@ -36,6 +36,7 @@ interface TierConfig {
   listed_on_discovery: boolean;
   listed_on_leaderboard: boolean;
   ads: boolean;
+  playlist: boolean;
   description: string;
 }
 
@@ -113,6 +114,7 @@ const SubscriptionScreen: React.FC = () => {
           listed_on_discovery: item.listed_on_discovery || false,
           listed_on_leaderboard: item.listed_on_leaderboard || false,
           ads: item.ads !== undefined ? item.ads : true,
+          playlist: item.playlist !== undefined ? item.playlist : false,
           description: item.description || '',
         }));
         setTiers(tierConfigs);
@@ -310,6 +312,12 @@ const SubscriptionScreen: React.FC = () => {
               <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Ads:</Text>
               <Text style={[styles.featureValue, { color: !tierConfig.ads ? theme.colors.primary : theme.colors.error }]}>
                 {tierConfig.ads ? 'Yes' : 'No'}
+              </Text>
+            </View>
+            <View style={styles.featureRow}>
+              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Playlist:</Text>
+              <Text style={[styles.featureValue, { color: tierConfig.playlist ? theme.colors.primary : theme.colors.onSurface }]}>
+                {tierConfig.playlist ? 'Yes' : 'No'}
               </Text>
             </View>
           </View>

@@ -20,6 +20,8 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import PublicProfileScreen from './src/screens/PublicProfileScreen';
 import SubscriptionScreen from './src/screens/SubscriptionScreen';
+import PaymentSuccessScreen from './src/screens/PaymentSuccessScreen';
+import PlaylistScreen from './src/screens/PlaylistScreen';
 
 // Import context
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -42,7 +44,9 @@ export type RootStackParamList = {
   Profile: undefined;
   Leaderboard: undefined;
   Subscription: undefined;
+  PaymentSuccess: { sessionId?: string };
   PublicProfile: { id: string };
+  Playlist: { playlistId?: string } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -66,7 +70,9 @@ const linking = {
       Profile: 'profile',
       Leaderboard: 'leaderboard',
       Subscription: 'subscription',
+      PaymentSuccess: 'subscription/success',
       PublicProfile: 'profile/:id',
+      Playlist: 'playlist/:playlistId?',
     },
   },
 };
@@ -191,6 +197,13 @@ const AuthenticatedStack = () => {
           title: 'Admin Panel',
         }}
       />
+      <Drawer.Screen
+        name="Playlist"
+        component={PlaylistScreen}
+        options={{
+          title: 'Playlists',
+        }}
+      />
     </Drawer.Navigator>
   );
 };
@@ -247,6 +260,14 @@ export default function App() {
               component={PublicProfileScreen}
               options={{
                 title: 'Profile',
+              }}
+            />
+            <Stack.Screen
+              name="PaymentSuccess"
+              component={PaymentSuccessScreen}
+              options={{
+                title: 'Payment Success',
+                headerShown: false,
               }}
             />
           </Stack.Navigator>
