@@ -30,6 +30,9 @@ class SocketService {
   private _socket: Socket | null = null;
   private roomId: string | null = null;
   private listeners: Map<string, Function[]> = new Map();
+  private reconnectAttempts: number = 0;
+  private maxReconnectAttempts: number = 5;
+  private shouldReconnect: boolean = true;
 
   get socket(): Socket | null {
     return this._socket;
@@ -42,12 +45,18 @@ class SocketService {
 
     this.disconnect();
     this.roomId = roomId;
+    this.reconnectAttempts = 0;
+    this.shouldReconnect = true;
+
+    console.log(`[SocketService] Connecting to ${SOCKET_URL} for room ${roomId}`);
 
     this._socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: this.maxReconnectAttempts,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      randomizationFactor: 0.5, // Add jitter to prevent thundering herd
       timeout: 20000, // 20 second timeout
       query: {
         room: roomId,
@@ -57,7 +66,6 @@ class SocketService {
         token: authToken,
         providerToken: providerToken,
       },
-      // Add error handling for connection failures
       autoConnect: true,
     });
 
@@ -73,23 +81,58 @@ class SocketService {
     }
 
     this._socket.on('connect', () => {
-      console.log('Socket connected');
+      console.log('[SocketService] Socket connected successfully');
+      this.reconnectAttempts = 0; // Reset on successful connection
+      this.shouldReconnect = true;
       this.emit('connect');
     });
 
     this._socket.on('disconnect', (reason) => {
-      console.log('Socket disconnected:', reason);
+      console.log('[SocketService] Socket disconnected:', reason);
       this.emit('disconnect', reason);
+      
+      // If disconnected due to server shutdown or transport close, don't reconnect
+      if (reason === 'io server disconnect' || reason === 'transport close') {
+        this.shouldReconnect = false;
+        console.log('[SocketService] Disabling reconnection due to:', reason);
+      }
+    });
+
+    this._socket.on('reconnect_attempt', (attemptNumber) => {
+      this.reconnectAttempts = attemptNumber;
+      console.log(`[SocketService] Reconnection attempt ${attemptNumber}/${this.maxReconnectAttempts}`);
+      
+      if (attemptNumber >= this.maxReconnectAttempts) {
+        console.error('[SocketService] Max reconnection attempts reached. Stopping reconnection.');
+        this.shouldReconnect = false;
+        if (this._socket) {
+          this._socket.io.reconnect(false); // Disable reconnection
+        }
+        this.emit('connectionError', new Error('Max reconnection attempts reached'));
+      }
+    });
+
+    this._socket.on('reconnect_failed', () => {
+      console.error('[SocketService] Reconnection failed after all attempts');
+      this.shouldReconnect = false;
+      this.emit('connectionError', new Error('Reconnection failed after all attempts'));
     });
 
     this._socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
+      const errorMessage = error?.message || String(error);
+      console.error('[SocketService] Socket connection error:', errorMessage);
+      
+      // Check if it's a timeout error
+      if (errorMessage.includes('timeout') || errorMessage.includes('xhr poll error')) {
+        console.warn('[SocketService] Connection timeout - server may not be available');
+      }
+      
       // Emit a more specific error for connection failures
       this.emit('connectionError', error);
     });
 
     this._socket.on('error', (error) => {
-      console.error('Socket error:', error);
+      console.error('[SocketService] Socket error:', error);
       this.emit('error', error);
     });
 

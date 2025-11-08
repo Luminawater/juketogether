@@ -280,12 +280,14 @@ export async function getUnreadMessageCount(
     // Get last read timestamp
     const lastRead = await getLastReadTimestamp(supabase, roomId, userId);
 
-    // Build query
+    // Build query - use GET request instead of HEAD to avoid CORS/RLS issues
+    // Using count: 'exact' without head: true makes a GET request
     let query = supabase
       .from('chat_messages')
-      .select('id', { count: 'exact', head: true })
+      .select('id', { count: 'exact' })
       .eq('room_id', roomId)
-      .neq('user_id', userId); // Don't count user's own messages
+      .neq('user_id', userId) // Don't count user's own messages
+      .limit(1); // Minimize data transfer, we only need the count
 
     // If user has a last read timestamp, only count messages after that
     if (lastRead) {

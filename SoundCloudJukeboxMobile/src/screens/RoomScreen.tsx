@@ -81,6 +81,7 @@ import {
 import { ShareRoomDialog } from '../components/ShareRoomDialog';
 import { QueueDialog } from '../components/QueueDialog';
 import { CreatePlaylistDialog } from '../components/CreatePlaylistDialog';
+import { MarkNoteDialog } from '../components/MarkNoteDialog';
 import { API_URL } from '../config/constants';
 import { getThumbnailUrl } from '../utils/imageUtils';
 import { AnimatedFAB } from '../components/RoomAnimatedFAB';
@@ -152,6 +153,7 @@ const RoomScreen: React.FC = () => {
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showQueueDialog, setShowQueueDialog] = useState(false);
+  const [showMarkDialog, setShowMarkDialog] = useState(false);
   const [showDJModeConfirmDialog, setShowDJModeConfirmDialog] = useState(false);
   const [showSessionExitDialog, setShowSessionExitDialog] = useState(false);
   const [miniPlayerVisible, setMiniPlayerVisible] = useState(false);
@@ -514,22 +516,50 @@ const RoomScreen: React.FC = () => {
       }
     };
 
+    let connectionErrorShown = false;
     const handleConnectionError = (error: any) => {
-      console.error('Socket connection error:', error);
-      // Check if it's a connection refused error (server not running)
       const errorMessage = error?.message || String(error);
-      if (errorMessage.includes('ECONNREFUSED') || errorMessage.includes('failed')) {
+      console.error('[RoomScreen] Socket connection error:', errorMessage);
+      
+      // Only show alert for final failures (after all retries exhausted)
+      // or for specific errors that indicate the server is unavailable
+      const isFinalFailure = errorMessage.includes('Max reconnection attempts') || 
+                            errorMessage.includes('Reconnection failed after all attempts');
+      const isServerUnavailable = errorMessage.includes('ECONNREFUSED') || 
+                                  errorMessage.includes('timeout') ||
+                                  errorMessage.includes('xhr poll error');
+      
+      // Don't spam alerts during retry attempts
+      if (!isFinalFailure && !isServerUnavailable) {
+        // Just log intermediate errors, don't show alerts
+        return;
+      }
+      
+      // Only show one alert per connection attempt
+      if (connectionErrorShown && !isFinalFailure) {
+        return;
+      }
+      
+      connectionErrorShown = true;
+      
+      if (isServerUnavailable || isFinalFailure) {
+        const message = isFinalFailure 
+          ? 'Unable to connect to the server after multiple attempts. The server may be unavailable or your connection may be unstable.'
+          : 'Unable to connect to the server. The server may not be available.';
+        
         Alert.alert(
-          'Server Not Available',
-          'Unable to connect to the server. Please make sure the server is running on port 8080.',
+          'Connection Failed',
+          message,
           [
             { text: 'OK', style: 'default' },
             { 
               text: 'Retry', 
               onPress: () => {
-                // Retry connection
+                connectionErrorShown = false; // Reset flag for retry
                 const userId = user?.id || `anonymous_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-                socketService.connect(roomId, userId);
+                const authToken = session?.access_token;
+                const providerToken = session?.provider_token || undefined;
+                socketService.connect(roomId, userId, authToken, providerToken);
               }
             }
           ]
@@ -1835,6 +1865,8 @@ const RoomScreen: React.FC = () => {
           setCreatePlaylistDialogVisible={setCreatePlaylistDialogVisible}
           setPlaybackBlocked={setPlaybackBlocked}
           setBlockedInfo={setBlockedInfo}
+          supabase={supabase}
+          onMark={() => setShowMarkDialog(true)}
         />
       )}
       {activeTab === 'users' && (
@@ -2013,6 +2045,16 @@ const RoomScreen: React.FC = () => {
         onCreate={handleCreatePlaylist}
         queue={queue}
         history={history}
+        userId={user?.id}
+        supabase={supabase}
+      />
+
+      <MarkNoteDialog
+        visible={showMarkDialog}
+        onDismiss={() => setShowMarkDialog(false)}
+        track={currentTrack}
+        currentPosition={position}
+        roomId={roomId}
         userId={user?.id}
         supabase={supabase}
       />

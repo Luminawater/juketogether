@@ -58,13 +58,13 @@ export const AnimatedFAB: React.FC<AnimatedFABProps> = ({
             toValue: 1.03,
             duration: 1200,
             easing: easing,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== 'web',
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
             duration: 1200,
             easing: easing,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== 'web',
           }),
         ])
       ).start();

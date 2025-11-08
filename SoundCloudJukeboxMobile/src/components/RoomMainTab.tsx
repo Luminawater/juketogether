@@ -25,6 +25,7 @@ import { RoomSettings, ActiveBoost, TierSettings, BlockedInfo } from '../screens
 import { roomScreenStyles } from '../screens/RoomScreen.styles';
 import { socketService } from '../services/socketService';
 import { getThumbnailUrl } from '../utils/imageUtils';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const IS_MOBILE = SCREEN_WIDTH < 768;
@@ -87,6 +88,8 @@ interface RoomMainTabProps {
   setCreatePlaylistDialogVisible: (show: boolean) => void;
   setPlaybackBlocked: (blocked: boolean) => void;
   setBlockedInfo: (info: BlockedInfo | null) => void;
+  supabase: SupabaseClient;
+  onMark?: () => void;
 }
 
 export const RoomMainTab: React.FC<RoomMainTabProps> = ({
@@ -98,6 +101,7 @@ export const RoomMainTab: React.FC<RoomMainTabProps> = ({
   playbackBlocked,
   blockedInfo,
   currentTrack,
+  supabase,
   isPlaying,
   trackReactions,
   canControl,
@@ -276,6 +280,7 @@ export const RoomMainTab: React.FC<RoomMainTabProps> = ({
           hasQueue={queue.length > 0}
           onCreatePlaylist={() => setCreatePlaylistDialogVisible(true)}
           canCreatePlaylist={!!(profile && hasTier(profile.subscription_tier, 'pro'))}
+          onMark={onMark}
         />
       )}
 

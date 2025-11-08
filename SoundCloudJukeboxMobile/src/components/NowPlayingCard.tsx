@@ -34,6 +34,7 @@ interface NowPlayingCardProps {
   hasQueue?: boolean;
   onCreatePlaylist?: () => void;
   canCreatePlaylist?: boolean;
+  onMark?: () => void;
 }
 
 export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
@@ -59,6 +60,7 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
   hasQueue = false,
   onCreatePlaylist,
   canCreatePlaylist = false,
+  onMark,
 }) => {
   const theme = useTheme();
 
@@ -264,6 +266,27 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
                     </TouchableOpacity>
                     <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>
                       Playlist
+                    </Text>
+                  </View>
+                )}
+
+                {onMark && (
+                  <View style={styles.reactionButtonGroup}>
+                    <TouchableOpacity
+                      onPress={onMark}
+                      style={[
+                        styles.reactionButtonTouchable,
+                        { backgroundColor: `${theme.colors.surfaceVariant}80` }
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name="pin"
+                        size={26}
+                        color={theme.colors.onSurfaceVariant}
+                      />
+                    </TouchableOpacity>
+                    <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>
+                      Mark
                     </Text>
                   </View>
                 )}

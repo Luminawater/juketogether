@@ -87,11 +87,14 @@ export async function getUnreadNotificationCount(
   userId: string
 ): Promise<number> {
   try {
+    // Use GET request instead of HEAD to avoid CORS/RLS issues
+    // Using count: 'exact' without head: true makes a GET request
     const { count, error } = await supabase
       .from('notifications')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact' })
       .eq('user_id', userId)
-      .eq('seen', false);
+      .eq('seen', false)
+      .limit(1); // Minimize data transfer, we only need the count
 
     if (error) {
       console.error('Error fetching unread count:', error);
