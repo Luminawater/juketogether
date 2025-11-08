@@ -12,17 +12,16 @@ const getApiUrl = () => {
   // On web, detect the current hostname and use it
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
     
     // If on localhost, use localhost:8080 for socket server
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:8080';
     }
     
-    // Otherwise, use the current hostname (production domain)
-    // For socket.io, we use the same origin (no port needed)
+    // Otherwise, use the current origin (production domain)
+    // This includes protocol, hostname, and port if present
     // Socket.io will automatically handle websocket upgrade
-    return `${protocol}//${hostname}`;
+    return window.location.origin;
   }
   
   // Check if we're in development mode

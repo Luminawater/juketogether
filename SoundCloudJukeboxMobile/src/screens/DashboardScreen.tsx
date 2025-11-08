@@ -736,13 +736,15 @@ const DashboardScreen: React.FC = () => {
                       mode="contained"
                       onPress={() => joinRoom(room.id, room.name)}
                       style={styles.joinButton}
-                      contentStyle={styles.roomButtonContent}
+                      contentStyle={styles.joinButtonContent}
                       icon="play"
+                      buttonColor="#10B981"
+                      textColor="#FFFFFF"
                     >
                       Join Room
                     </Button>
                     <Button
-                      mode="outlined"
+                      mode="text"
                       onPress={(e) => {
                         e.stopPropagation();
                         const roomUrl = getRoomUrl(room.id, room.short_code);
@@ -750,8 +752,9 @@ const DashboardScreen: React.FC = () => {
                         Share.share({ message: shareMessage, url: roomUrl });
                       }}
                       style={styles.shareButton}
-                      contentStyle={styles.roomButtonContent}
+                      contentStyle={styles.shareButtonContent}
                       icon="share-variant"
+                      textColor={theme.colors.secondary}
                     >
                       Share
                     </Button>
@@ -1065,16 +1068,25 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   joinButton: {
-    flex: 1,
+    flex: 2,
     borderRadius: 12,
-    elevation: 2,
+    elevation: 3,
     ...(Platform.OS === 'web' ? {
-      boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+      boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.15)',
     } : {}),
+  },
+  joinButtonContent: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
   shareButton: {
     flex: 1,
     borderRadius: 12,
+    minWidth: 80,
+  },
+  shareButtonContent: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
   roomButtonContent: {
     paddingVertical: 6,

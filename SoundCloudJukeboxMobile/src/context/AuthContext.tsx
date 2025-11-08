@@ -4,6 +4,7 @@ import { Platform, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/constants';
 import { UserProfile, UserPermissions } from '../types';
+import { localStorageHelpers } from '../utils/localStorageHelpers';
 
 // Initialize Supabase client following official React Native guide
 // https://supabase.com/docs/guides/auth/quickstarts/react-native
@@ -67,8 +68,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Try to load from localStorage cache first (web only) for instant display
       if (Platform.OS === 'web' && useCache) {
-        const cachedProfile = localStorageHelpers.get(`auth_profile_${userId}`);
-        const cachedPermissions = localStorageHelpers.get(`auth_permissions_${userId}`);
+        const cachedProfile = await localStorageHelpers.get(`auth_profile_${userId}`);
+        const cachedPermissions = await localStorageHelpers.get(`auth_permissions_${userId}`);
         
         if (cachedProfile) {
           try {
@@ -114,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setProfile(profile);
           // Cache profile in localStorage
           if (Platform.OS === 'web') {
-            localStorageHelpers.set(`auth_profile_${userId}`, JSON.stringify(profile));
+            await localStorageHelpers.set(`auth_profile_${userId}`, JSON.stringify(profile));
           }
         }
         return;
@@ -125,7 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Cache profile in localStorage
       if (Platform.OS === 'web') {
-        localStorageHelpers.set(`auth_profile_${userId}`, JSON.stringify(profile));
+        await localStorageHelpers.set(`auth_profile_${userId}`, JSON.stringify(profile));
       }
 
       // Fetch permissions using the database function
@@ -144,7 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // Cache permissions in localStorage
         if (Platform.OS === 'web') {
-          localStorageHelpers.set(`auth_permissions_${userId}`, JSON.stringify(permissions));
+          await localStorageHelpers.set(`auth_permissions_${userId}`, JSON.stringify(permissions));
         }
       }
     } catch (error) {
