@@ -18,3 +18,10 @@ SoundCloudJukeboxMobile/.cache/
 SoundCloudJukeboxMobile/*.tsbuildinfo
 SoundCloudJukeboxMobile/.npm/
 SoundCloudJukeboxMobile/.yarn/
+
+# OAuth credentials and secrets
+**/client_secret*.json
+**/*credentials*.json
+**/*secret*.json
+*.pem
+*.key

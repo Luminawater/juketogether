@@ -6,9 +6,9 @@ This guide will help you configure Google OAuth authentication for the Jukebox a
 
 You have already created a Google OAuth client with the following credentials:
 
-- **Client ID**: `YOUR_CLIENT_ID.apps.googleusercontent.com`
-- **Client Secret**: `YOUR_CLIENT_SECRET`
-- **API Key**: `AIzaSyAyysbBcvMszGAxnZump6m2iOykHbcJe8o`
+- **Client ID**: `YOUR_CLIENT_ID.apps.googleusercontent.com` (replace with your actual Client ID)
+- **Client Secret**: `YOUR_CLIENT_SECRET` (replace with your actual Client Secret)
+- **API Key**: `YOUR_API_KEY` (replace with your actual API Key)
 
 ## Step 1: Configure Google OAuth in Supabase
 
@@ -17,8 +17,8 @@ You have already created a Google OAuth client with the following credentials:
 3. Navigate to **Authentication** → **Providers**
 4. Find **Google** in the list and click to enable it
 5. Enter your Google OAuth credentials:
-   - **Client ID (for OAuth)**: `YOUR_CLIENT_ID.apps.googleusercontent.com`
-   - **Client Secret (for OAuth)**: `YOUR_CLIENT_SECRET`
+   - **Client ID (for OAuth)**: `YOUR_CLIENT_ID.apps.googleusercontent.com` (replace with your actual Client ID)
+   - **Client Secret (for OAuth)**: `YOUR_CLIENT_SECRET` (replace with your actual Client Secret)
 6. The **Redirect URL** should be automatically set to: `https://smryjxchwbfpjvpecffg.supabase.co/auth/v1/callback`
 7. Click **Save**
 
@@ -26,7 +26,7 @@ You have already created a Google OAuth client with the following credentials:
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Navigate to **APIs & Services** → **Credentials**
-3. Find your OAuth 2.0 Client ID: `YOUR_CLIENT_ID.apps.googleusercontent.com`
+3. Find your OAuth 2.0 Client ID: `YOUR_CLIENT_ID.apps.googleusercontent.com` (replace with your actual Client ID)
 4. Click on the client ID to edit it
 5. Under **Authorized redirect URIs**, add:
    - `https://smryjxchwbfpjvpecffg.supabase.co/auth/v1/callback`

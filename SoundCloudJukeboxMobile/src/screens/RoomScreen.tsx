@@ -41,6 +41,7 @@ import { UpgradePrompt } from '../components/UpgradePrompt';
 import { AdDialog } from '../components/AdDialog';
 import { DJModeInterface } from '../components/DJModeInterface';
 import { DJModeToggle } from '../components/DJModeToggle';
+import { YouTubePlayer } from '../components/YouTubePlayer';
 import { djAudioService } from '../services/djAudioService';
 import { bpmDetectionService } from '../services/bpmDetectionService';
 import {
@@ -525,6 +526,24 @@ const RoomScreen: React.FC = () => {
     socketService.on('boost-activated', handleBoostActivated);
     socketService.on('boost-expired', handleBoostExpired);
     
+    // Handle YouTube position sync from Supabase (source of truth)
+    const handleSeekTrack = (data: { position: number }) => {
+      // This is handled by YouTubePlayer component internally
+      // Position updates come from Supabase via room-state
+      setPosition(data.position);
+    };
+    
+    const handleSyncAllUsers = (data: { position: number }) => {
+      // Sync all users to this position (from Supabase)
+      setPosition(data.position);
+    };
+    
+    // Listen for seek and sync events from socket
+    if (socketService.socket) {
+      socketService.socket.on('seek-track', handleSeekTrack);
+      socketService.socket.on('sync-all-users', handleSyncAllUsers);
+    }
+    
     // Handle playback blocking
     const handlePlaybackBlocked = (data: {
       reason: string;
@@ -591,6 +610,10 @@ const RoomScreen: React.FC = () => {
       socketService.off('boost-expired', handleBoostExpired);
       socketService.off('error', handleError);
       socketService.off('connectionError', handleConnectionError);
+      if (socketService.socket) {
+        socketService.socket.off('seek-track', handleSeekTrack);
+        socketService.socket.off('sync-all-users', handleSyncAllUsers);
+      }
       socketService.disconnect();
     };
   }, [roomId, user?.id, navigation]);
@@ -1365,6 +1388,42 @@ const RoomScreen: React.FC = () => {
           </View>
           {currentTrack ? (
             <>
+              {/* YouTube Player - Show for YouTube tracks */}
+              {currentTrack.url?.includes('youtube') || currentTrack.url?.includes('youtu.be') ? (
+                <View style={styles.youtubePlayerContainer}>
+                  <YouTubePlayer
+                    track={currentTrack}
+                    isPlaying={isPlaying}
+                    position={position}
+                    onPositionUpdate={(newPosition) => {
+                      // Send position update to server (which saves to Supabase)
+                      if (socketService.socket && !playbackBlocked) {
+                        socketService.socket.emit('sync-position', {
+                          roomId,
+                          position: newPosition,
+                        });
+                      }
+                    }}
+                    onReady={() => {
+                      console.log('YouTube player ready');
+                    }}
+                    onError={(error) => {
+                      console.error('YouTube player error:', error);
+                      Alert.alert('YouTube Error', error);
+                    }}
+                    onStateChange={(state) => {
+                      // Update local state based on YouTube player state
+                      // But Supabase is source of truth, so we sync to it
+                      if (state === 'playing' && !isPlaying) {
+                        // YouTube started playing, but wait for Supabase confirmation
+                      } else if (state === 'paused' && isPlaying) {
+                        // YouTube paused, but wait for Supabase confirmation
+                      }
+                    }}
+                  />
+                </View>
+              ) : null}
+              
               <View style={styles.trackInfo}>
                 <View style={styles.thumbnailContainer}>
                   <View style={[styles.thumbnailWrapper, isPlaying && styles.thumbnailWrapperPlaying]}>
