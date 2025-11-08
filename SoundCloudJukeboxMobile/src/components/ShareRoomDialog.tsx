@@ -2,9 +2,6 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import {
   Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   Text,
   useTheme,
@@ -54,10 +51,10 @@ export const ShareRoomDialog: React.FC<ShareRoomDialogProps> = ({
 
   return (
     <Dialog visible={visible} onDismiss={onDismiss} style={styles.dialog}>
-      <DialogTitle style={{ color: theme.colors.onSurface }}>
+      <Dialog.Title style={{ color: theme.colors.onSurface }}>
         Share Room: {roomName}
-      </DialogTitle>
-      <DialogContent>
+      </Dialog.Title>
+      <Dialog.Content>
         <View style={styles.content}>
           {/* Room URL Section */}
           <View style={styles.section}>
@@ -125,10 +122,10 @@ export const ShareRoomDialog: React.FC<ShareRoomDialogProps> = ({
             </>
           )}
         </View>
-      </DialogContent>
-      <DialogActions>
+      </Dialog.Content>
+      <Dialog.Actions>
         <Button onPress={onDismiss}>Close</Button>
-      </DialogActions>
+      </Dialog.Actions>
     </Dialog>
   );
 };

@@ -919,6 +919,25 @@ const DashboardScreen: React.FC = () => {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      {sharingRoom && (
+        <ShareRoomDialog
+          visible={showShareDialog}
+          onDismiss={() => {
+            setShowShareDialog(false);
+            setSharingRoom(null);
+          }}
+          roomName={sharingRoom.name}
+          roomId={sharingRoom.id}
+          shortCode={sharingRoom.short_code}
+          onCopyUrl={() => {
+            Alert.alert('Success', 'Room URL copied to clipboard!');
+          }}
+          onCopyCode={() => {
+            Alert.alert('Success', 'Join code copied to clipboard!');
+          }}
+        />
+      )}
     </View>
   );
 };

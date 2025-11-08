@@ -104,6 +104,8 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({ visible, onDismiss, naviga
 
   const handleNavigate = (screen: keyof RootStackParamList) => {
     onDismiss();
+    // React Navigation will handle nested navigation automatically
+    // If the screen is in a nested drawer, it will navigate to Dashboard first
     navigation.navigate(screen);
   };
 
@@ -115,12 +117,21 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({ visible, onDismiss, naviga
 
   const isAdmin = user && profile && hasRole(profile.role, 'admin');
   
-  // Get current route name safely
+  // Get current route name safely - handle nested navigation
   let currentRoute: string | undefined;
   try {
     const state = navigation.getState();
     if (state && state.routes && state.index !== undefined) {
-      currentRoute = state.routes[state.index]?.name;
+      const currentRouteState = state.routes[state.index];
+      currentRoute = currentRouteState?.name;
+      
+      // If we're on the Dashboard screen, check the nested drawer state
+      if (currentRoute === 'Dashboard' && currentRouteState?.state) {
+        const drawerState = currentRouteState.state;
+        if (drawerState.routes && drawerState.index !== undefined) {
+          currentRoute = drawerState.routes[drawerState.index]?.name;
+        }
+      }
     }
   } catch (e) {
     // Navigation state not available yet

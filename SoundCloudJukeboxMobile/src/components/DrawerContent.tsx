@@ -8,7 +8,7 @@ import {
   Chip,
 } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { DrawerContentScrollView, DrawerItem } from '@react-navigation/drawer';
+import { DrawerContentScrollView, DrawerItem, DrawerContentComponentProps } from '@react-navigation/drawer';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../App';
@@ -17,17 +17,20 @@ import { hasRole, getTierDisplayName, getTierColor, getRoleDisplayName, getRoleC
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
-export const CustomDrawerContent: React.FC<any> = (props) => {
+export const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
   const navigation = useNavigation<NavigationProp>();
   const { user, profile, signOut } = useAuth();
   const theme = useTheme();
 
   const handleNavigate = (screen: keyof RootStackParamList) => {
-    navigation.navigate(screen);
+    props.navigation.navigate(screen);
+    // Close drawer after navigation
+    props.navigation.closeDrawer();
   };
 
   const handleSignOut = async () => {
     await signOut();
+    props.navigation.closeDrawer();
     navigation.navigate('Home');
   };
 
@@ -36,7 +39,9 @@ export const CustomDrawerContent: React.FC<any> = (props) => {
   }
 
   const isAdmin = hasRole(profile.role, 'admin');
-  const currentRoute = navigation.getState()?.routes[navigation.getState()?.index || 0]?.name;
+  
+  // Get current route from drawer navigation state
+  const currentRoute = props.state?.routes[props.state?.index || 0]?.name;
 
   return (
     <DrawerContentScrollView
