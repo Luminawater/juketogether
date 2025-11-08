@@ -20,6 +20,7 @@ export interface UserProfile {
   country?: string;
   show_in_leaderboard?: boolean;
   show_in_discovery?: boolean;
+  is_private_account?: boolean;
   created_at: string;
   updated_at: string;
 }

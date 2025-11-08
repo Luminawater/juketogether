@@ -85,6 +85,7 @@ const ProfileScreen: React.FC = () => {
   const [countryMenuVisible, setCountryMenuVisible] = useState(false);
   const [showInLeaderboard, setShowInLeaderboard] = useState(true);
   const [showInDiscovery, setShowInDiscovery] = useState(true);
+  const [isPrivateAccount, setIsPrivateAccount] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -95,6 +96,7 @@ const ProfileScreen: React.FC = () => {
       setCountry(profile.country || '');
       setShowInLeaderboard(profile.show_in_leaderboard !== false);
       setShowInDiscovery(profile.show_in_discovery !== false);
+      setIsPrivateAccount(profile.is_private_account === true);
     }
   }, [profile]);
 
@@ -151,6 +153,7 @@ const ProfileScreen: React.FC = () => {
         country: country.trim() || null,
         show_in_leaderboard: showInLeaderboard,
         show_in_discovery: showInDiscovery,
+        is_private_account: isPrivateAccount,
         updated_at: new Date().toISOString(),
       };
 
@@ -512,6 +515,24 @@ const ProfileScreen: React.FC = () => {
               <Switch
                 value={showInDiscovery}
                 onValueChange={setShowInDiscovery}
+                disabled={saving}
+              />
+            </View>
+
+            <Divider style={styles.divider} />
+
+            <View style={styles.privacyRow}>
+              <View style={styles.privacyInfo}>
+                <Text style={[styles.privacyLabel, { color: theme.colors.onSurface }]}>
+                  Private Account
+                </Text>
+                <Paragraph style={[styles.privacyDescription, { color: theme.colors.onSurfaceVariant }]}>
+                  Make your profile private. When private, only you can view your profile details
+                </Paragraph>
+              </View>
+              <Switch
+                value={isPrivateAccount}
+                onValueChange={setIsPrivateAccount}
                 disabled={saving}
               />
             </View>

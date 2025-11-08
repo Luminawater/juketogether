@@ -18,6 +18,7 @@ import DiscoveryScreen from './src/screens/DiscoveryScreen';
 import FriendsScreen from './src/screens/FriendsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
+import PublicProfileScreen from './src/screens/PublicProfileScreen';
 
 // Import context
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -39,6 +40,7 @@ export type RootStackParamList = {
   Friends: undefined;
   Profile: undefined;
   Leaderboard: undefined;
+  PublicProfile: { id: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -61,6 +63,7 @@ const linking = {
       Friends: 'friends',
       Profile: 'profile',
       Leaderboard: 'leaderboard',
+      PublicProfile: 'profile/:id',
     },
   },
 };
@@ -228,6 +231,13 @@ export default function App() {
               options={({ route }) => ({
                 title: route.params.roomName || 'Music Room',
               })}
+            />
+            <Stack.Screen
+              name="PublicProfile"
+              component={PublicProfileScreen}
+              options={{
+                title: 'Profile',
+              }}
             />
           </Stack.Navigator>
           <StatusBar style="light" />
