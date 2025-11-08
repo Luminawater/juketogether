@@ -81,6 +81,15 @@ try {
   console.warn('Stripe not configured:', error.message);
 }
 
+// Initialize Email Service
+let emailService = null;
+try {
+  emailService = require('./src/emailService');
+  emailService.initializeEmailService();
+} catch (error) {
+  console.warn('Email service not configured:', error.message);
+}
+
 // Use authentication middleware if available (after authModule is defined)
 if (authModule) {
   io.use(authModule.authenticateSocket);
@@ -2702,6 +2711,73 @@ app.post('/api/stripe/get-session-details', async (req, res) => {
   }
 });
 
+// Test payment endpoint (for development/testing only)
+// Creates a checkout session that can be used to test payments
+app.post('/api/stripe/test-payment', async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(500).json({ error: 'Stripe not configured' });
+    }
+
+    const { amount = 100 } = req.body; // Default to $1.00
+
+    console.log('🧪 Creating test checkout session...');
+
+    // Create a checkout session (safer than direct payment method creation)
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: 'Test Payment - JukeTogether',
+              description: 'Test payment to verify Stripe integration',
+            },
+            unit_amount: Math.round(amount), // Amount in cents
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment', // One-time payment
+      success_url: `${req.protocol}://${req.get('host')}/test-payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${req.protocol}://${req.get('host')}/test-payment-cancel`,
+      metadata: {
+        test: 'true',
+        purpose: 'verification'
+      }
+    });
+
+    console.log('✅ Test checkout session created:', session.id);
+
+    res.json({
+      success: true,
+      message: 'Test checkout session created successfully',
+      session: {
+        id: session.id,
+        url: session.url,
+        amount: session.amount_total,
+        currency: session.currency,
+      },
+      instructions: {
+        step1: 'Open the URL above in your browser',
+        step2: 'Use Stripe test card: 4242 4242 4242 4242',
+        step3: 'Use any future expiry date (e.g., 12/25)',
+        step4: 'Use any 3-digit CVC (e.g., 123)',
+        step5: 'Use any ZIP code (e.g., 12345)',
+      },
+      note: 'This is a TEST payment using Stripe test mode. No real money will be charged.',
+    });
+  } catch (error) {
+    console.error('Test payment error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create test checkout session',
+      type: error.type,
+    });
+  }
+});
+
 // Utility function to generate room IDs
 function generateRoomId() {
   return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
@@ -2827,6 +2903,8 @@ app.post('/api/stripe-webhook', async (req, res) => {
             const amount = subscription.items?.data[0]?.price?.unit_amount 
               ? subscription.items.data[0].price.unit_amount / 100 
               : 0;
+            const currency = subscription.items?.data[0]?.price?.currency?.toUpperCase() || 'USD';
+            const paymentDate = new Date().toISOString();
             
             const { error: paymentError } = await supabase
               .from('subscription_payments')
@@ -2836,13 +2914,71 @@ app.post('/api/stripe-webhook', async (req, res) => {
                 amount_paid: amount,
                 payment_provider: 'stripe',
                 payment_provider_id: subscription.id,
-                payment_date: new Date().toISOString(),
+                payment_date: paymentDate,
               });
             
             if (paymentError) {
               console.error('Error tracking payment:', paymentError);
             } else {
               console.log(`Tracked payment for user ${userId}, tier ${tier}, amount $${amount}`);
+            }
+
+            // Send receipt email to user and notification to admin
+            if (emailService) {
+              try {
+                // Get user email from Stripe subscription (most reliable)
+                let userEmail = subscription.customer_email || subscription.customer_details?.email;
+                
+                // Get user name from Supabase profile
+                let userName = 'User';
+                if (supabase) {
+                  const { data: userProfile } = await supabase
+                    .from('user_profiles')
+                    .select('username')
+                    .eq('id', userId)
+                    .single();
+                  
+                  if (userProfile?.username) {
+                    userName = userProfile.username;
+                  }
+                }
+
+                // If no email from Stripe, try to get from customer object
+                if (!userEmail && subscription.customer) {
+                  try {
+                    const customer = await stripe.customers.retrieve(subscription.customer);
+                    userEmail = customer.email || customer.metadata?.email;
+                  } catch (err) {
+                    console.warn('Could not retrieve customer from Stripe:', err.message);
+                  }
+                }
+                
+                if (userEmail) {
+                  // Send receipt to user
+                  await emailService.sendReceiptEmail(
+                    userEmail,
+                    userName,
+                    tier,
+                    amount,
+                    currency,
+                    paymentDate
+                  );
+
+                  // Send notification to admin
+                  await emailService.sendNewSubscriberNotification(
+                    userEmail,
+                    userName,
+                    tier,
+                    amount,
+                    currency
+                  );
+                } else {
+                  console.warn(`Could not find email for user ${userId}, skipping email notifications`);
+                }
+              } catch (emailError) {
+                console.error('Error sending subscription emails:', emailError);
+                // Don't fail the webhook if email fails
+              }
             }
           }
         }
