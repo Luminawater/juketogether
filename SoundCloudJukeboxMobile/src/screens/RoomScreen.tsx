@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -300,56 +300,6 @@ const RoomScreen: React.FC = () => {
           socketService.socket.emit('join-room', roomId);
         }
       }
-    };
-    
-    const purchaseBoost = async () => {
-      if (!user || !session) {
-        Alert.alert('Sign In Required', 'You need to sign in to purchase a boost.');
-        navigation.navigate('Auth');
-        return;
-      }
-      
-      // Confirm purchase
-      Alert.alert(
-        'Purchase Boost',
-        'Purchase a 1-hour boost for $1 USD? This will give the room Pro tier benefits (unlimited queue, DJ mode, no ads).',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Purchase',
-            onPress: async () => {
-              setPurchasingBoost(true);
-              try {
-                const response = await fetch(`${API_URL}/api/rooms/${roomId}/boost`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`,
-                  },
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                  throw new Error(data.error || 'Failed to purchase boost');
-                }
-                
-                Alert.alert('Success!', data.message || 'Boost activated successfully!');
-                
-                // Refresh room state
-                if (socketService.socket) {
-                  socketService.socket.emit('join-room', roomId);
-                }
-              } catch (error: any) {
-                console.error('Error purchasing boost:', error);
-                Alert.alert('Error', error.message || 'Failed to purchase boost. Please try again.');
-              } finally {
-                setPurchasingBoost(false);
-              }
-            },
-          },
-        ]
-      );
     };
 
     const handleTrackAdded = (track: Track) => {
@@ -1230,6 +1180,56 @@ const RoomScreen: React.FC = () => {
       Alert.alert('Error', 'Failed to load room information');
       console.error('Error loading room data:', error);
     }
+  };
+
+  const purchaseBoost = async () => {
+    if (!user || !session) {
+      Alert.alert('Sign In Required', 'You need to sign in to purchase a boost.');
+      navigation.navigate('Auth');
+      return;
+    }
+    
+    // Confirm purchase
+    Alert.alert(
+      'Purchase Boost',
+      'Purchase a 1-hour boost for $1 USD? This will give the room Pro tier benefits (unlimited queue, DJ mode, no ads).',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Purchase',
+          onPress: async () => {
+            setPurchasingBoost(true);
+            try {
+              const response = await fetch(`${API_URL}/api/rooms/${roomId}/boost`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${session.access_token}`,
+                },
+              });
+              
+              const data = await response.json();
+              
+              if (!response.ok) {
+                throw new Error(data.error || 'Failed to purchase boost');
+              }
+              
+              Alert.alert('Success!', data.message || 'Boost activated successfully!');
+              
+              // Refresh room state
+              if (socketService.socket) {
+                socketService.socket.emit('join-room', roomId);
+              }
+            } catch (error: any) {
+              console.error('Error purchasing boost:', error);
+              Alert.alert('Error', error.message || 'Failed to purchase boost. Please try again.');
+            } finally {
+              setPurchasingBoost(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderMainTab = () => {
