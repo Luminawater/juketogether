@@ -392,7 +392,69 @@ io.on('connection', (socket) => {
     authModule.ensureUserProfile(socket.userId, socket.handshake.auth?.user?.user_metadata);
   }
 
-  socket.on('join-room', async (roomId) => {
+  socket.on('join-room', async (roomId, options = {}) => {
+    // options can contain: { viaLink: false, viaCode: false }
+    // Link/code access always trumps visibility
+    const viaLink = options.viaLink || false;
+    const viaCode = options.viaCode || false;
+    const bypassVisibility = viaLink || viaCode;
+
+    // Check room visibility if not accessing via link/code
+    if (!bypassVisibility && supabase) {
+      const { data: roomSettings } = await supabase
+        .from('room_settings')
+        .select('visibility')
+        .eq('room_id', roomId)
+        .single();
+
+      if (roomSettings) {
+        const visibility = roomSettings.visibility || 'public';
+        const userId = socket.isAuthenticated ? socket.userId : null;
+
+        if (visibility === 'hidden') {
+          // Hidden rooms are not accessible unless via link/code
+          socket.emit('room-access-denied', { 
+            reason: 'hidden',
+            message: 'This room is hidden and can only be accessed via direct link or code'
+          });
+          return;
+        } else if (visibility === 'private' && userId) {
+          // Check if user has access (owner, admin, or accepted request)
+          const { data: room } = await supabase
+            .from('rooms')
+            .select('host_user_id')
+            .eq('id', roomId)
+            .single();
+
+          if (room) {
+            const isOwner = room.host_user_id === userId;
+            const isAdmin = (await loadRoomAdmins(roomId)).includes(userId);
+
+            if (!isOwner && !isAdmin) {
+              // Check if user has accepted access request
+              const { data: accessRequest } = await supabase
+                .from('room_access_requests')
+                .select('status')
+                .eq('room_id', roomId)
+                .eq('user_id', userId)
+                .eq('status', 'accepted')
+                .single();
+
+              if (!accessRequest) {
+                // User needs to request access
+                socket.emit('room-access-denied', {
+                  reason: 'private',
+                  message: 'This room is private. Please request access.',
+                  requiresRequest: true
+                });
+                return;
+              }
+            }
+          }
+        }
+      }
+    }
+
     socket.join(roomId);
 
     // Always load latest state from Supabase (source of truth)
@@ -508,7 +570,8 @@ io.on('connection', (socket) => {
 
     // Load room settings with defaults
     const settings = roomSettings ? {
-      isPrivate: roomSettings.is_private || false,
+      visibility: roomSettings.visibility || 'public',
+      isPrivate: roomSettings.is_private || false, // Keep for backward compatibility
       allowControls: roomSettings.allow_controls !== false,
       allowQueue: roomSettings.allow_queue !== false,
       djMode: roomSettings.dj_mode || false,
@@ -516,6 +579,7 @@ io.on('connection', (socket) => {
       allowPlaylistAdditions: roomSettings.allow_playlist_additions || false,
       admins: roomAdmins,
     } : {
+      visibility: 'public',
       isPrivate: false,
       allowControls: true,
       allowQueue: true,
@@ -645,12 +709,23 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // Ensure trackInfo has required fields with fallbacks
+    const normalizedTrackInfo = {
+      title: trackInfo?.title || 'Unknown Track',
+      artist: trackInfo?.artist || 'Unknown Artist',
+      fullTitle: trackInfo?.fullTitle || trackInfo?.title || 'Unknown Track',
+      url: trackInfo?.url || trackUrl,
+      thumbnail: trackInfo?.thumbnail || null,
+      duration: trackInfo?.duration || null
+    };
+    
     const track = {
       id: Date.now().toString(),
       url: trackUrl,
-      info: trackInfo,
+      info: normalizedTrackInfo,
       addedBy: userId,
-      addedAt: Date.now()
+      addedAt: Date.now(),
+      platform: platform || (trackUrl.includes('soundcloud.com') ? 'soundcloud' : 'spotify')
     };
     
     room.queue.push(track);
@@ -1235,12 +1310,14 @@ io.on('connection', (socket) => {
 
     // Convert camelCase to snake_case for database
     const dbSettings = {
-      is_private: settings.isPrivate,
+      visibility: settings.visibility || 'public',
+      is_private: settings.isPrivate || (settings.visibility === 'private'), // Keep for backward compatibility
       allow_controls: settings.allowControls,
       allow_queue: settings.allowQueue,
       dj_mode: settings.djMode,
       dj_players: settings.djPlayers,
       allow_playlist_additions: settings.allowPlaylistAdditions,
+      session_enabled: settings.sessionEnabled,
     };
 
     const updatedSettings = await chatModule.updateRoomSettings(roomId, dbSettings);
@@ -1248,12 +1325,14 @@ io.on('connection', (socket) => {
     if (updatedSettings) {
       // Convert snake_case back to camelCase for client
       const clientSettings = {
+        visibility: updatedSettings.visibility || 'public',
         isPrivate: updatedSettings.is_private || false,
         allowControls: updatedSettings.allow_controls !== false,
         allowQueue: updatedSettings.allow_queue !== false,
         djMode: updatedSettings.dj_mode || false,
         djPlayers: updatedSettings.dj_players || 0,
         allowPlaylistAdditions: updatedSettings.allow_playlist_additions || false,
+        sessionEnabled: updatedSettings.session_enabled || false,
         admins: roomAdmins,
       };
       // Broadcast updated settings to all users in room
@@ -1573,6 +1652,240 @@ io.on('connection', (socket) => {
     if (requesterSocket) {
       requesterSocket.emit('collaboration-request-accepted', { roomId, requesterId, collaboratorId });
     }
+  });
+
+  // Room access request handlers
+  socket.on('request-room-access', async (data) => {
+    const { roomId } = data;
+
+    if (!socket.isAuthenticated) {
+      socket.emit('error', { message: 'Authentication required' });
+      return;
+    }
+
+    const userId = socket.userId;
+
+    // Check if room exists and is private
+    const { data: roomSettings } = await supabase
+      .from('room_settings')
+      .select('visibility')
+      .eq('room_id', roomId)
+      .single();
+
+    if (!roomSettings || roomSettings.visibility !== 'private') {
+      socket.emit('error', { message: 'Room is not private' });
+      return;
+    }
+
+    // Check if request already exists
+    const { data: existing } = await supabase
+      .from('room_access_requests')
+      .select('*')
+      .eq('room_id', roomId)
+      .eq('user_id', userId)
+      .single();
+
+    if (existing) {
+      if (existing.status === 'pending') {
+        socket.emit('error', { message: 'Access request already pending' });
+        return;
+      } else if (existing.status === 'accepted') {
+        socket.emit('error', { message: 'You already have access to this room' });
+        return;
+      }
+    }
+
+    // Create access request
+    const { data: request, error } = await supabase
+      .from('room_access_requests')
+      .insert({
+        room_id: roomId,
+        user_id: userId,
+        status: 'pending'
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating access request:', error);
+      socket.emit('error', { message: 'Failed to create access request' });
+      return;
+    }
+
+    socket.emit('room-access-request-sent', { roomId });
+
+    // Notify room owner
+    const { data: room } = await supabase
+      .from('rooms')
+      .select('host_user_id')
+      .eq('id', roomId)
+      .single();
+
+    if (room && room.host_user_id) {
+      const ownerSocket = Array.from(io.sockets.sockets.values())
+        .find(s => s.isAuthenticated && s.userId === room.host_user_id);
+      if (ownerSocket) {
+        ownerSocket.emit('room-access-request-received', { roomId, userId, requestId: request.id });
+      }
+    }
+  });
+
+  socket.on('accept-room-access', async (data) => {
+    const { roomId, requestId, userId } = data;
+
+    if (!socket.isAuthenticated) {
+      socket.emit('error', { message: 'Authentication required' });
+      return;
+    }
+
+    const ownerId = socket.userId;
+
+    // Verify user is room owner
+    const { data: room } = await supabase
+      .from('rooms')
+      .select('host_user_id')
+      .eq('id', roomId)
+      .single();
+
+    if (!room || room.host_user_id !== ownerId) {
+      socket.emit('error', { message: 'Only room owner can accept access requests' });
+      return;
+    }
+
+    // Update access request
+    const { error } = await supabase
+      .from('room_access_requests')
+      .update({
+        status: 'accepted',
+        responded_at: new Date().toISOString(),
+        responded_by: ownerId
+      })
+      .eq('id', requestId)
+      .eq('room_id', roomId);
+
+    if (error) {
+      console.error('Error accepting access request:', error);
+      socket.emit('error', { message: 'Failed to accept access request' });
+      return;
+    }
+
+    socket.emit('room-access-accepted', { roomId, userId });
+
+    // Notify the user who requested access
+    const requesterSocket = Array.from(io.sockets.sockets.values())
+      .find(s => s.isAuthenticated && s.userId === userId);
+    if (requesterSocket) {
+      requesterSocket.emit('room-access-granted', { roomId });
+    }
+  });
+
+  socket.on('reject-room-access', async (data) => {
+    const { roomId, requestId, userId } = data;
+
+    if (!socket.isAuthenticated) {
+      socket.emit('error', { message: 'Authentication required' });
+      return;
+    }
+
+    const ownerId = socket.userId;
+
+    // Verify user is room owner
+    const { data: room } = await supabase
+      .from('rooms')
+      .select('host_user_id')
+      .eq('id', roomId)
+      .single();
+
+    if (!room || room.host_user_id !== ownerId) {
+      socket.emit('error', { message: 'Only room owner can reject access requests' });
+      return;
+    }
+
+    // Update access request
+    const { error } = await supabase
+      .from('room_access_requests')
+      .update({
+        status: 'rejected',
+        responded_at: new Date().toISOString(),
+        responded_by: ownerId
+      })
+      .eq('id', requestId)
+      .eq('room_id', roomId);
+
+    if (error) {
+      console.error('Error rejecting access request:', error);
+      socket.emit('error', { message: 'Failed to reject access request' });
+      return;
+    }
+
+    socket.emit('room-access-rejected', { roomId, userId });
+
+    // Notify the user who requested access
+    const requesterSocket = Array.from(io.sockets.sockets.values())
+      .find(s => s.isAuthenticated && s.userId === userId);
+    if (requesterSocket) {
+      requesterSocket.emit('room-access-denied', { 
+        reason: 'rejected',
+        message: 'Your access request was rejected',
+        roomId 
+      });
+    }
+  });
+
+  socket.on('get-room-access-requests', async (data) => {
+    const { roomId } = data;
+
+    if (!socket.isAuthenticated) {
+      socket.emit('error', { message: 'Authentication required' });
+      return;
+    }
+
+    const userId = socket.userId;
+
+    // Verify user is room owner
+    const { data: room } = await supabase
+      .from('rooms')
+      .select('host_user_id')
+      .eq('id', roomId)
+      .single();
+
+    if (!room || room.host_user_id !== userId) {
+      socket.emit('error', { message: 'Only room owner can view access requests' });
+      return;
+    }
+
+    // Get pending requests
+    const { data: requests, error } = await supabase
+      .from('room_access_requests')
+      .select('*')
+      .eq('room_id', roomId)
+      .eq('status', 'pending')
+      .order('requested_at', { ascending: false });
+
+    // Get user profiles for each request
+    const requestsWithProfiles = [];
+    if (requests) {
+      for (const request of requests) {
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('id, username, display_name, avatar_url')
+          .eq('id', request.user_id)
+          .single();
+        
+        requestsWithProfiles.push({
+          ...request,
+          user_profile: profile || null
+        });
+      }
+    }
+
+    if (error) {
+      console.error('Error fetching access requests:', error);
+      socket.emit('error', { message: 'Failed to fetch access requests' });
+      return;
+    }
+
+    socket.emit('room-access-requests', { roomId, requests: requestsWithProfiles });
   });
 
 });

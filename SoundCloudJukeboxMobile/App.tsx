@@ -23,6 +23,7 @@ import PublicProfileScreen from './src/screens/PublicProfileScreen';
 import SubscriptionScreen from './src/screens/SubscriptionScreen';
 import PaymentSuccessScreen from './src/screens/PaymentSuccessScreen';
 import PlaylistScreen from './src/screens/PlaylistScreen';
+import DJModeScreen from './src/screens/DJModeScreen';
 
 // Import context
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -49,6 +50,7 @@ export type RootStackParamList = {
   PaymentSuccess: { sessionId?: string };
   PublicProfile: { id: string };
   Playlist: { playlistId?: string } | undefined;
+  DJMode: { roomId: string; roomName?: string; isShortCode?: boolean };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -75,6 +77,7 @@ const linking = {
       PaymentSuccess: 'subscription/success',
       PublicProfile: 'profile/:id',
       Playlist: 'playlist/:playlistId?',
+      DJMode: 'room/:roomId/dj',
     },
   },
 };
@@ -281,6 +284,21 @@ export default function App() {
               options={{
                 title: 'Payment Success',
                 headerShown: false,
+              }}
+            />
+            <Stack.Screen
+              name="DJMode"
+              component={DJModeScreen}
+              options={({ route, navigation }) => ({
+                title: '',
+                headerShown: false,
+              })}
+            />
+            <Stack.Screen
+              name="Subscription"
+              component={SubscriptionScreen}
+              options={{
+                title: 'Subscription',
               }}
             />
           </Stack.Navigator>

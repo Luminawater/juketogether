@@ -74,7 +74,7 @@ export const FloatingPlayer: React.FC<FloatingPlayerProps> = ({
           <Card.Content style={styles.minimizedContent}>
             <View style={styles.minimizedTrackInfo}>
               <Text numberOfLines={1} style={[styles.minimizedTrackTitle, { color: theme.colors.onSurface }]}>
-                {currentTrack.info.fullTitle}
+                {currentTrack.info?.fullTitle || currentTrack.info?.title || 'Unknown Track'}
               </Text>
             </View>
             <View style={styles.minimizedControls}>
@@ -145,7 +145,7 @@ export const FloatingPlayer: React.FC<FloatingPlayerProps> = ({
 
           <View style={styles.trackInfo}>
             <Text style={[styles.trackTitle, { color: theme.colors.onSurface }]} numberOfLines={2}>
-              {currentTrack.info.fullTitle}
+              {currentTrack.info?.fullTitle || currentTrack.info?.title || 'Unknown Track'}
             </Text>
             <Text style={[styles.trackPlatform, { color: theme.colors.onSurfaceVariant }]}>
               {currentTrack.platform === 'spotify' ? '🎵 Spotify' : '🎵 SoundCloud'}

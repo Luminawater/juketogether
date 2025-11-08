@@ -112,11 +112,11 @@ const DiscoveryScreen: React.FC = () => {
   const loadPublicRooms = async () => {
     try {
       setLoading(true);
-      // Get public rooms from room_settings
+      // Get public rooms from room_settings (visibility = 'public')
       const { data: roomSettings, error: settingsError } = await supabase
         .from('room_settings')
         .select('*')
-        .eq('is_private', false)
+        .eq('visibility', 'public')
         .order('created_at', { ascending: false })
         .limit(100);
 

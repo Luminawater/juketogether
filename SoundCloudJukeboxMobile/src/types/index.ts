@@ -36,7 +36,8 @@ export interface Room {
   id: string;
   name: string;
   description?: string;
-  type: 'public' | 'private';
+  type: 'public' | 'private'; // Deprecated, use visibility instead
+  visibility?: 'hidden' | 'private' | 'public';
   created_by: string;
   created_at: string;
   short_code?: string;

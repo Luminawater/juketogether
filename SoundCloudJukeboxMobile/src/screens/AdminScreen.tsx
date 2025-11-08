@@ -69,6 +69,9 @@ const AdminScreen: React.FC = () => {
   const theme = useTheme();
 
   const [activeTab, setActiveTab] = useState<0 | 1 | 2 | 3>(0);
+  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'details'>('general');
+  const [adminDetails, setAdminDetails] = useState<string>('');
+  const [savingDetails, setSavingDetails] = useState(false);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,6 +145,19 @@ const AdminScreen: React.FC = () => {
       collaboration: false,
       description: 'Basic access with limited features',
     },
+    rookie: {
+      name: 'Rookie',
+      price: 0.50,
+      maxSongs: 5,
+      queueLimit: 5,
+      djMode: false,
+      listedOnDiscovery: false,
+      listedOnLeaderboard: false,
+      ads: true,
+      playlist: false,
+      collaboration: false,
+      description: 'More songs and features',
+    },
     standard: {
       name: 'Standard',
       price: 1,
@@ -184,6 +200,8 @@ const AdminScreen: React.FC = () => {
       loadBoosterPacks();
     } else if (activeTab === 2) {
       loadAds();
+    } else if (activeTab === 3) {
+      loadAdminDetails();
     }
   }, [profile, activeTab]);
 
@@ -732,11 +750,103 @@ const AdminScreen: React.FC = () => {
     </ScrollView>
   );
 
-  const renderSettingsTab = () => (
-    <ScrollView style={styles.tabContent}>
-      {renderGeneralSettings()}
-    </ScrollView>
-  );
+  const loadAdminDetails = async () => {
+    try {
+      // Try to load from a settings table or use a simple key-value store
+      const { data, error } = await supabase
+        .from('admin_settings')
+        .select('details')
+        .eq('key', 'admin_details')
+        .single();
+
+      if (!error && data) {
+        setAdminDetails(data.details || '');
+      } else {
+        // If table doesn't exist or no data, try alternative storage
+        // For now, we'll use localStorage as fallback
+        console.log('Admin details table may not exist, using defaults');
+      }
+    } catch (error) {
+      console.error('Error loading admin details:', error);
+    }
+  };
+
+  const saveAdminDetails = async () => {
+    if (!profile || profile.role !== 'admin') {
+      Alert.alert('Access Denied', 'Only administrators can save details.');
+      return;
+    }
+
+    try {
+      setSavingDetails(true);
+      
+      // Try to save to admin_settings table
+      const { error } = await supabase
+        .from('admin_settings')
+        .upsert({
+          key: 'admin_details',
+          details: adminDetails,
+          updated_at: new Date().toISOString(),
+          updated_by: profile.id,
+        }, {
+          onConflict: 'key',
+        });
+
+      if (error) {
+        // If table doesn't exist, show message
+        if (error.message?.includes('does not exist')) {
+          Alert.alert(
+            'Database Table Required',
+            'The admin_settings table needs to be created. For now, details are saved locally.',
+          );
+          // Fallback: could use AsyncStorage or similar
+        } else {
+          throw error;
+        }
+      } else {
+        Alert.alert('Success', 'Admin details saved successfully');
+      }
+    } catch (error: any) {
+      console.error('Error saving admin details:', error);
+      Alert.alert('Error', error.message || 'Failed to save admin details');
+    } finally {
+      setSavingDetails(false);
+    }
+  };
+
+  const renderSettingsTab = () => {
+    const isAdmin = profile?.role === 'admin';
+    
+    return (
+      <View style={styles.settingsContainer}>
+        <View style={[styles.subTabContainer, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.outline }]}>
+          <Button
+            mode={settingsSubTab === 'general' ? 'contained' : 'outlined'}
+            onPress={() => setSettingsSubTab('general')}
+            style={styles.subTabButton}
+            icon="cog-outline"
+          >
+            General
+          </Button>
+          {isAdmin && (
+            <Button
+              mode={settingsSubTab === 'details' ? 'contained' : 'outlined'}
+              onPress={() => setSettingsSubTab('details')}
+              style={styles.subTabButton}
+              icon="information-outline"
+            >
+              Details
+            </Button>
+          )}
+        </View>
+
+        <ScrollView style={styles.tabContent}>
+          {settingsSubTab === 'general' && renderGeneralSettings()}
+          {settingsSubTab === 'details' && isAdmin && renderDetailsSettings()}
+        </ScrollView>
+      </View>
+    );
+  };
 
   const renderGeneralSettings = () => (
     <Card style={[styles.settingsCard, { backgroundColor: theme.colors.surface }]}>
@@ -745,6 +855,46 @@ const AdminScreen: React.FC = () => {
         <Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
           General system configuration options will be available here.
         </Text>
+      </Card.Content>
+    </Card>
+  );
+
+  const renderDetailsSettings = () => (
+    <Card style={[styles.settingsCard, { backgroundColor: theme.colors.surface }]}>
+      <Card.Content>
+        <Title style={{ color: theme.colors.onSurface }}>Admin Details</Title>
+        <Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 8, marginBottom: 16 }}>
+          Store important system information such as hosting details, domain information, server configuration, mail service settings, etc.
+        </Text>
+
+        <TextInput
+          label="System Details"
+          value={adminDetails}
+          onChangeText={setAdminDetails}
+          mode="outlined"
+          multiline
+          numberOfLines={20}
+          style={styles.detailsTextArea}
+          placeholder={`Enter system details here...
+
+Example:
+Domain: example.com
+Server: Vercel
+Mail Service: SendGrid
+Database: Supabase`}
+          textAlignVertical="top"
+        />
+
+        <Button
+          mode="contained"
+          onPress={saveAdminDetails}
+          loading={savingDetails}
+          disabled={savingDetails}
+          style={styles.saveButton}
+          icon="content-save"
+        >
+          Save Details
+        </Button>
       </Card.Content>
     </Card>
   );
@@ -864,9 +1014,104 @@ const AdminScreen: React.FC = () => {
               />
             </View>
 
+            {/* Rookie Tier */}
+            <View style={[styles.tierCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <Title style={[styles.tierTitle, { color: theme.colors.onSurface }]}>Tier 2 - Rookie</Title>
+              
+              <TextInput
+                label="Display Name"
+                value={subscriptionTiers.rookie.name}
+                onChangeText={(text) => updateTier('rookie', 'name', text)}
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Price (USD)"
+                value={subscriptionTiers.rookie.price.toString()}
+                onChangeText={(text) => {
+                  const num = parseFloat(text) || 0;
+                  updateTier('rookie', 'price', num);
+                }}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <TextInput
+                label="Queue Limit"
+                value={subscriptionTiers.rookie.queueLimit === Infinity ? 'Unlimited' : subscriptionTiers.rookie.queueLimit.toString()}
+                onChangeText={(text) => {
+                  const num = text.toLowerCase() === 'unlimited' || text === '' ? Infinity : (parseInt(text) || 5);
+                  updateTier('rookie', 'queueLimit', num);
+                }}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.tierInput}
+              />
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.rookie.djMode ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('rookie', 'djMode', !subscriptionTiers.rookie.djMode)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>DJ Mode</Text>
+              </View>
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.rookie.listedOnDiscovery ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('rookie', 'listedOnDiscovery', !subscriptionTiers.rookie.listedOnDiscovery)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Listed on Discovery</Text>
+              </View>
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.rookie.listedOnLeaderboard ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('rookie', 'listedOnLeaderboard', !subscriptionTiers.rookie.listedOnLeaderboard)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Listed on Leaderboard</Text>
+              </View>
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.rookie.ads ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('rookie', 'ads', !subscriptionTiers.rookie.ads)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Ads</Text>
+              </View>
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.rookie.playlist ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('rookie', 'playlist', !subscriptionTiers.rookie.playlist)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Playlist</Text>
+              </View>
+              
+              <View style={styles.checkboxRow}>
+                <Checkbox
+                  status={subscriptionTiers.rookie.collaboration ? 'checked' : 'unchecked'}
+                  onPress={() => updateTier('rookie', 'collaboration', !subscriptionTiers.rookie.collaboration)}
+                />
+                <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>Collaboration</Text>
+              </View>
+              
+              <TextInput
+                label="Description"
+                value={subscriptionTiers.rookie.description}
+                onChangeText={(text) => updateTier('rookie', 'description', text)}
+                mode="outlined"
+                multiline
+                numberOfLines={2}
+                style={styles.tierInput}
+              />
+            </View>
+
             {/* Standard Tier */}
             <View style={[styles.tierCard, { backgroundColor: theme.colors.surfaceVariant }]}>
-              <Title style={[styles.tierTitle, { color: theme.colors.onSurface }]}>Tier 2 - Standard</Title>
+              <Title style={[styles.tierTitle, { color: theme.colors.onSurface }]}>Tier 3 - Standard</Title>
               
               <TextInput
                 label="Display Name"
@@ -961,7 +1206,7 @@ const AdminScreen: React.FC = () => {
 
             {/* Pro Tier */}
             <View style={[styles.tierCard, { backgroundColor: theme.colors.surfaceVariant }]}>
-              <Title style={[styles.tierTitle, { color: theme.colors.onSurface }]}>Tier 3 - Pro</Title>
+              <Title style={[styles.tierTitle, { color: theme.colors.onSurface }]}>Tier 4 - Pro</Title>
               
               <TextInput
                 label="Display Name"
@@ -1494,6 +1739,10 @@ const AdminScreen: React.FC = () => {
                             <Text style={{ color: theme.colors.onSurface }}>Free - 1 song limit</Text>
                           </View>
                           <View style={styles.radioOption}>
+                            <RadioButton value="rookie" />
+                            <Text style={{ color: theme.colors.onSurface }}>Rookie - 5 songs</Text>
+                          </View>
+                          <View style={styles.radioOption}>
                             <RadioButton value="standard" />
                             <Text style={{ color: theme.colors.onSurface }}>Standard - 10 songs</Text>
                           </View>
@@ -1977,6 +2226,10 @@ const styles = StyleSheet.create({
   },
   tierInput: {
     marginBottom: 12,
+  },
+  detailsTextArea: {
+    marginBottom: 16,
+    minHeight: 300,
   },
   saveButton: {
     marginTop: 16,

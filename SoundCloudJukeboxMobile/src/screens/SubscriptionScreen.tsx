@@ -42,8 +42,9 @@ interface TierConfig {
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2; // 2 columns with padding
-const CARD_HEIGHT = CARD_WIDTH * 1.4; // Taller than wider (1.4:1 ratio)
+const IS_MOBILE = SCREEN_WIDTH < 768;
+const CARD_WIDTH = IS_MOBILE ? SCREEN_WIDTH - 32 : Math.min(300, Math.max(260, (SCREEN_WIDTH - 100) / 4)); // Slim pillar width
+const CARD_MIN_HEIGHT = 650; // Tall pillar height
 
 const SubscriptionScreen: React.FC = () => {
   const navigation = useNavigation<SubscriptionScreenNavigationProp>();
@@ -238,6 +239,34 @@ const SubscriptionScreen: React.FC = () => {
     return limit.toString();
   };
 
+  const isProTier = (tier: SubscriptionTier) => {
+    return tier === 'pro';
+  };
+
+  const getFeatureDisplayValue = (tierConfig: TierConfig, featureName: string, value: boolean | number | null) => {
+    // For PRO tier, show "All included" or "Unlimited" for enabled features
+    if (isProTier(tierConfig.tier)) {
+      if (featureName === 'queue_limit') {
+        return 'Unlimited';
+      }
+      if (typeof value === 'boolean' && value) {
+        return 'All included';
+      }
+      if (typeof value === 'boolean' && !value) {
+        return '✗';
+      }
+    }
+    
+    // For other tiers, show normal values
+    if (featureName === 'queue_limit') {
+      return getQueueLimitText(value as number | null);
+    }
+    if (typeof value === 'boolean') {
+      return value ? '✓' : '✗';
+    }
+    return value?.toString() || 'N/A';
+  };
+
   const renderTierCard = (tierConfig: TierConfig) => {
     const isCurrent = isCurrentTier(tierConfig.tier);
     const tierColor = getTierColor(tierConfig.tier);
@@ -250,12 +279,22 @@ const SubscriptionScreen: React.FC = () => {
           {
             backgroundColor: theme.colors.surface,
             borderColor: isCurrent ? tierColor : theme.colors.outline,
-            borderWidth: isCurrent ? 3 : 2,
-            width: CARD_WIDTH,
-            minHeight: CARD_HEIGHT,
+            borderWidth: isCurrent ? 3 : 1.5,
+            minHeight: CARD_MIN_HEIGHT,
+            ...(Platform.OS === 'web' ? {
+              boxShadow: isCurrent 
+                ? `0 8px 24px ${tierColor}40, 0 4px 12px rgba(0, 0, 0, 0.15)`
+                : '0 4px 12px rgba(0, 0, 0, 0.1)',
+              transition: 'all 0.3s ease',
+            } : {
+              shadowColor: isCurrent ? tierColor : '#000',
+              shadowOffset: { width: 0, height: isCurrent ? 8 : 4 },
+              shadowOpacity: isCurrent ? 0.3 : 0.1,
+              shadowRadius: isCurrent ? 12 : 6,
+              elevation: isCurrent ? 8 : 4,
+            }),
           },
         ]}
-        elevation={isCurrent ? 5 : 3}
       >
         <Card.Content style={styles.cardContent}>
           {isCurrent && (
@@ -263,8 +302,9 @@ const SubscriptionScreen: React.FC = () => {
               style={[styles.currentChip, { backgroundColor: tierColor }]}
               textStyle={styles.currentChipText}
               icon="check-circle"
+              compact
             >
-              Current Plan
+              Current
             </Chip>
           )}
           
@@ -279,7 +319,7 @@ const SubscriptionScreen: React.FC = () => {
               </Text>
               {tierConfig.price > 0 && (
                 <Text style={[styles.pricePeriod, { color: theme.colors.onSurfaceVariant }]}>
-                  /month
+                  /mo
                 </Text>
               )}
             </View>
@@ -287,45 +327,85 @@ const SubscriptionScreen: React.FC = () => {
 
           <View style={styles.featuresContainer}>
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Queue:</Text>
-              <Text style={[styles.featureValue, { color: theme.colors.onSurface }]}>
-                {getQueueLimitText(tierConfig.queue_limit)}
+              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Queue</Text>
+              <Text style={[styles.featureValue, { 
+                color: isProTier(tierConfig.tier) || tierConfig.queue_limit === null || tierConfig.queue_limit === Infinity
+                  ? theme.colors.primary 
+                  : theme.colors.onSurface 
+              }]}>
+                {getFeatureDisplayValue(tierConfig, 'queue_limit', tierConfig.queue_limit)}
               </Text>
             </View>
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>DJ Mode:</Text>
-              <Text style={[styles.featureValue, { color: tierConfig.dj_mode ? theme.colors.primary : theme.colors.onSurface }]}>
-                {tierConfig.dj_mode ? 'Yes' : 'No'}
+              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>DJ Mode</Text>
+              <Text style={[styles.featureValue, { 
+                color: isProTier(tierConfig.tier) && tierConfig.dj_mode
+                  ? theme.colors.primary 
+                  : tierConfig.dj_mode 
+                    ? theme.colors.primary 
+                    : theme.colors.onSurface 
+              }]}>
+                {getFeatureDisplayValue(tierConfig, 'dj_mode', tierConfig.dj_mode)}
               </Text>
             </View>
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Discovery:</Text>
-              <Text style={[styles.featureValue, { color: tierConfig.listed_on_discovery ? theme.colors.primary : theme.colors.onSurface }]}>
-                {tierConfig.listed_on_discovery ? 'Yes' : 'No'}
+              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Discovery</Text>
+              <Text style={[styles.featureValue, { 
+                color: isProTier(tierConfig.tier) && tierConfig.listed_on_discovery
+                  ? theme.colors.primary 
+                  : tierConfig.listed_on_discovery 
+                    ? theme.colors.primary 
+                    : theme.colors.onSurface 
+              }]}>
+                {getFeatureDisplayValue(tierConfig, 'listed_on_discovery', tierConfig.listed_on_discovery)}
               </Text>
             </View>
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Leaderboard:</Text>
-              <Text style={[styles.featureValue, { color: tierConfig.listed_on_leaderboard ? theme.colors.primary : theme.colors.onSurface }]}>
-                {tierConfig.listed_on_leaderboard ? 'Yes' : 'No'}
+              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Leaderboard</Text>
+              <Text style={[styles.featureValue, { 
+                color: isProTier(tierConfig.tier) && tierConfig.listed_on_leaderboard
+                  ? theme.colors.primary 
+                  : tierConfig.listed_on_leaderboard 
+                    ? theme.colors.primary 
+                    : theme.colors.onSurface 
+              }]}>
+                {getFeatureDisplayValue(tierConfig, 'listed_on_leaderboard', tierConfig.listed_on_leaderboard)}
               </Text>
             </View>
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Ads:</Text>
-              <Text style={[styles.featureValue, { color: !tierConfig.ads ? theme.colors.primary : theme.colors.error }]}>
-                {tierConfig.ads ? 'Yes' : 'No'}
+              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Ads</Text>
+              <Text style={[styles.featureValue, { 
+                color: isProTier(tierConfig.tier) && !tierConfig.ads
+                  ? theme.colors.primary 
+                  : !tierConfig.ads 
+                    ? theme.colors.primary 
+                    : theme.colors.error 
+              }]}>
+                {getFeatureDisplayValue(tierConfig, 'ads', !tierConfig.ads)}
               </Text>
             </View>
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Playlist:</Text>
-              <Text style={[styles.featureValue, { color: tierConfig.playlist ? theme.colors.primary : theme.colors.onSurface }]}>
-                {tierConfig.playlist ? 'Yes' : 'No'}
+              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Playlist</Text>
+              <Text style={[styles.featureValue, { 
+                color: isProTier(tierConfig.tier) && tierConfig.playlist
+                  ? theme.colors.primary 
+                  : tierConfig.playlist 
+                    ? theme.colors.primary 
+                    : theme.colors.onSurface 
+              }]}>
+                {getFeatureDisplayValue(tierConfig, 'playlist', tierConfig.playlist)}
               </Text>
             </View>
             <View style={styles.featureRow}>
-              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Collaboration:</Text>
-              <Text style={[styles.featureValue, { color: tierConfig.collaboration ? theme.colors.primary : theme.colors.onSurface }]}>
-                {tierConfig.collaboration ? 'Yes' : 'No'}
+              <Text style={[styles.featureLabel, { color: theme.colors.onSurfaceVariant }]}>Collaboration</Text>
+              <Text style={[styles.featureValue, { 
+                color: isProTier(tierConfig.tier) && tierConfig.collaboration
+                  ? theme.colors.primary 
+                  : tierConfig.collaboration 
+                    ? theme.colors.primary 
+                    : theme.colors.onSurface 
+              }]}>
+                {getFeatureDisplayValue(tierConfig, 'collaboration', tierConfig.collaboration)}
               </Text>
             </View>
           </View>
@@ -333,24 +413,27 @@ const SubscriptionScreen: React.FC = () => {
           {tierConfig.description && (
             <Text
               style={[styles.description, { color: theme.colors.onSurfaceVariant }]}
-              numberOfLines={2}
+              numberOfLines={3}
             >
               {tierConfig.description}
             </Text>
           )}
 
-          <Button
-            mode={isCurrent ? 'outlined' : 'contained'}
-            onPress={() => handleUpgrade(tierConfig.tier)}
-            disabled={isCurrent || upgrading === tierConfig.tier || processingPayment}
-            loading={upgrading === tierConfig.tier || processingPayment}
-            style={[styles.upgradeButton, isCurrent && { borderColor: tierColor }]}
-            buttonColor={isCurrent ? undefined : tierColor}
-            textColor={isCurrent ? tierColor : undefined}
-            icon={isCurrent ? 'check-circle' : processingPayment ? 'loading' : 'arrow-up'}
-          >
-            {isCurrent ? 'Current Plan' : processingPayment ? 'Processing...' : 'Upgrade'}
-          </Button>
+          <View style={styles.buttonContainer}>
+            <Button
+              mode={isCurrent ? 'outlined' : 'contained'}
+              onPress={() => handleUpgrade(tierConfig.tier)}
+              disabled={isCurrent || upgrading === tierConfig.tier || processingPayment}
+              loading={upgrading === tierConfig.tier || processingPayment}
+              style={[styles.upgradeButton, isCurrent && { borderColor: tierColor }]}
+              buttonColor={isCurrent ? undefined : tierColor}
+              textColor={isCurrent ? tierColor : undefined}
+              icon={isCurrent ? 'check-circle' : processingPayment ? 'loading' : 'arrow-up'}
+              compact
+            >
+              {isCurrent ? 'Current Plan' : processingPayment ? 'Processing...' : 'Upgrade'}
+            </Button>
+          </View>
         </Card.Content>
       </Card>
     );
@@ -371,22 +454,22 @@ const SubscriptionScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <Title style={[styles.headerTitle, { color: theme.colors.onSurface }]}>
-            Subscription Plans
-          </Title>
-          <Text style={[styles.headerSubtitle, { color: theme.colors.onSurfaceVariant }]}>
-            Choose the plan that's right for you
-          </Text>
-        </View>
+      <View style={styles.header}>
+        <Title style={[styles.headerTitle, { color: theme.colors.onSurface }]}>
+          Subscription Plans
+        </Title>
+        <Text style={[styles.headerSubtitle, { color: theme.colors.onSurfaceVariant }]}>
+          Choose the plan that's right for you
+        </Text>
+      </View>
 
-        <View style={styles.gridContainer}>
-          {tiers.map((tier) => renderTierCard(tier))}
-        </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.horizontalScrollContent}
+        style={styles.horizontalScroll}
+      >
+        {tiers.map((tier) => renderTierCard(tier))}
       </ScrollView>
     </View>
   );
@@ -405,101 +488,129 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
-  },
   header: {
-    marginBottom: 24,
+    padding: 16,
+    paddingTop: 24,
+    paddingBottom: 24,
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 16,
     textAlign: 'center',
+    opacity: 0.8,
   },
-  gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+  horizontalScroll: {
+    flex: 1,
+  },
+  horizontalScrollContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingBottom: 32,
     gap: 16,
+    alignItems: 'flex-start',
   },
   tierCard: {
-    borderRadius: 16,
-    marginBottom: 16,
+    borderRadius: 20,
+    flex: 0,
+    width: CARD_WIDTH,
+    maxWidth: CARD_WIDTH,
+    ...(Platform.OS === 'web' ? {
+      cursor: 'pointer',
+    } : {}),
   },
   cardContent: {
-    flex: 1,
-    justifyContent: 'space-between',
-    padding: 16,
+    justifyContent: 'flex-start',
+    padding: 20,
+    paddingTop: 16,
+    minHeight: CARD_MIN_HEIGHT,
+    width: '100%',
   },
   currentChip: {
-    alignSelf: 'flex-start',
-    marginBottom: 8,
+    alignSelf: 'center',
+    marginBottom: 12,
   },
   currentChipText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 12,
+    fontSize: 11,
   },
   tierHeader: {
-    borderBottomWidth: 1,
-    paddingBottom: 12,
-    marginBottom: 16,
+    borderBottomWidth: 1.5,
+    paddingBottom: 16,
+    marginBottom: 20,
+    alignItems: 'center',
   },
   tierTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: 12,
+    textAlign: 'center',
   },
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
+    justifyContent: 'center',
   },
   price: {
-    fontSize: 36,
+    fontSize: 38,
     fontWeight: 'bold',
-    letterSpacing: -1,
+    letterSpacing: -1.5,
+    lineHeight: 42,
   },
   pricePeriod: {
-    fontSize: 14,
+    fontSize: 16,
     marginLeft: 4,
     opacity: 0.7,
+    fontWeight: '500',
   },
   featuresContainer: {
-    marginBottom: 16,
-    flex: 1,
+    marginBottom: 20,
+    width: '100%',
+    minHeight: 200,
   },
   featureRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
-    paddingVertical: 4,
+    paddingVertical: 8,
+    minHeight: 32,
   },
   featureLabel: {
-    fontSize: 14,
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     flex: 1,
+    marginRight: 8,
   },
   featureValue: {
     fontSize: 14,
-    fontWeight: '600',
-    flex: 1,
+    fontWeight: '700',
     textAlign: 'right',
+    flexShrink: 0,
+    minWidth: 80,
   },
   description: {
     fontSize: 12,
-    marginBottom: 16,
+    marginBottom: 20,
     fontStyle: 'italic',
     lineHeight: 16,
+    textAlign: 'center',
+    opacity: 0.8,
+  },
+  buttonContainer: {
+    marginTop: 'auto',
+    paddingTop: 16,
   },
   upgradeButton: {
-    marginTop: 'auto',
-    borderRadius: 8,
+    borderRadius: 12,
+    paddingVertical: 4,
   },
 });
 

@@ -115,7 +115,7 @@ const ProfileScreen: React.FC = () => {
         .from('user_analytics')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (!error && data) {
         setAnalytics(data as UserAnalytics);

@@ -1,6 +1,6 @@
 -- Create subscription_tier_settings table to store tier configuration
 CREATE TABLE IF NOT EXISTS subscription_tier_settings (
-  tier TEXT PRIMARY KEY CHECK (tier IN ('free', 'standard', 'pro')),
+  tier TEXT PRIMARY KEY CHECK (tier IN ('free', 'rookie', 'standard', 'pro')),
   display_name TEXT NOT NULL,
   price DECIMAL(10, 2) NOT NULL DEFAULT 0,
   max_songs INTEGER, -- NULL means unlimited
@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS subscription_tier_settings (
   listed_on_discovery BOOLEAN NOT NULL DEFAULT false,
   listed_on_leaderboard BOOLEAN NOT NULL DEFAULT false,
   ads BOOLEAN NOT NULL DEFAULT true,
+  playlist BOOLEAN NOT NULL DEFAULT false,
+  collaboration BOOLEAN NOT NULL DEFAULT false,
   description TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -20,14 +22,17 @@ ALTER TABLE subscription_tier_settings
   ADD COLUMN IF NOT EXISTS dj_mode BOOLEAN NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS listed_on_discovery BOOLEAN NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS listed_on_leaderboard BOOLEAN NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS ads BOOLEAN NOT NULL DEFAULT true;
+  ADD COLUMN IF NOT EXISTS ads BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS playlist BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS collaboration BOOLEAN NOT NULL DEFAULT false;
 
 -- Insert default tier settings
-INSERT INTO subscription_tier_settings (tier, display_name, price, max_songs, queue_limit, dj_mode, listed_on_discovery, listed_on_leaderboard, ads, description)
+INSERT INTO subscription_tier_settings (tier, display_name, price, max_songs, queue_limit, dj_mode, listed_on_discovery, listed_on_leaderboard, ads, playlist, collaboration, description)
 VALUES 
-  ('free', 'Free', 0, 1, 1, false, false, false, true, 'Basic access with limited features'),
-  ('standard', 'Standard', 1, 10, 10, false, true, true, true, 'Standard access with more features'),
-  ('pro', 'Pro', 5, NULL, NULL, true, true, true, false, 'Premium access with unlimited features')
+  ('free', 'Free', 0, 1, 1, false, false, false, true, false, false, 'Basic access with limited features'),
+  ('rookie', 'Rookie', 0.50, 5, 5, false, false, false, true, false, false, 'More songs and features'),
+  ('standard', 'Standard', 1, 10, 10, false, true, true, true, false, false, 'Standard access with more features'),
+  ('pro', 'Pro', 5, NULL, NULL, true, true, true, false, true, true, 'Premium access with unlimited features')
 ON CONFLICT (tier) DO UPDATE SET
   display_name = EXCLUDED.display_name,
   price = EXCLUDED.price,
@@ -37,6 +42,8 @@ ON CONFLICT (tier) DO UPDATE SET
   listed_on_discovery = EXCLUDED.listed_on_discovery,
   listed_on_leaderboard = EXCLUDED.listed_on_leaderboard,
   ads = EXCLUDED.ads,
+  playlist = EXCLUDED.playlist,
+  collaboration = EXCLUDED.collaboration,
   description = EXCLUDED.description,
   updated_at = NOW();
 

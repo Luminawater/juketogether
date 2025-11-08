@@ -51,6 +51,35 @@ export async function loadChatMessages(
 
     if (error) {
       console.error('Error loading chat messages:', error);
+      // If the relationship error persists, try without the join as fallback
+      if (error.code === 'PGRST200' && error.message?.includes('relationship')) {
+        console.warn('Falling back to query without user_profiles join');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('chat_messages')
+          .select('id, room_id, user_id, message, message_type, track_id, created_at')
+          .eq('room_id', roomId)
+          .order('created_at', { ascending: false })
+          .limit(limit);
+        
+        if (fallbackError) {
+          console.error('Fallback query also failed:', fallbackError);
+          return [];
+        }
+        
+        // Return messages without profile data
+        return (fallbackData || []).reverse().map((msg: any) => ({
+          id: msg.id,
+          room_id: msg.room_id,
+          user_id: msg.user_id,
+          message: msg.message,
+          message_type: msg.message_type,
+          track_id: msg.track_id,
+          created_at: msg.created_at,
+          username: undefined,
+          displayName: undefined,
+          avatarUrl: undefined,
+        }));
+      }
       return [];
     }
 

@@ -48,7 +48,7 @@ export const DJModePlayer: React.FC<DJModePlayerProps> = ({
         <Card.Content style={styles.content}>
           <View style={styles.inactiveContent}>
             <MaterialCommunityIcons 
-              name="turntable" 
+              name="equalizer" 
               size={48} 
               color={theme.colors.onSurfaceVariant} 
             />
@@ -74,7 +74,7 @@ export const DJModePlayer: React.FC<DJModePlayerProps> = ({
         <View style={styles.header}>
           <View style={[styles.playerBadge, { backgroundColor: `${theme.colors.primary}20` }]}>
             <MaterialCommunityIcons 
-              name="turntable" 
+              name="equalizer" 
               size={20} 
               color={theme.colors.primary} 
             />

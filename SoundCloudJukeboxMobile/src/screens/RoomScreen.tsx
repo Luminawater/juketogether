@@ -28,7 +28,7 @@ import {
   IconButton,
   useTheme,
 } from 'react-native-paper';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../App';
@@ -44,6 +44,8 @@ import { DJModeToggle } from '../components/DJModeToggle';
 import { DJModeUpgradeAd } from '../components/DJModeUpgradeAd';
 import { DJModeConfirmDialog } from '../components/DJModeConfirmDialog';
 import { YouTubePlayer } from '../components/YouTubePlayer';
+import { SessionExitDialog } from '../components/SessionExitDialog';
+import { MiniPlayer } from '../components/MiniPlayer';
 import { djAudioService } from '../services/djAudioService';
 import { bpmDetectionService } from '../services/bpmDetectionService';
 import {
@@ -65,6 +67,7 @@ import RoomChat from '../components/RoomChat';
 import AdsBanner from '../components/AdsBanner';
 import { hasTier } from '../utils/permissions';
 import { ShareRoomDialog } from '../components/ShareRoomDialog';
+import { QueueDialog } from '../components/QueueDialog';
 import { API_URL } from '../config/constants';
 
 type RoomScreenRouteProp = RouteProp<RootStackParamList, 'Room'>;
@@ -98,6 +101,7 @@ interface RoomSettings {
   djPlayers: number;
   admins: string[];
   allowPlaylistAdditions: boolean;
+  sessionEnabled: boolean;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -140,6 +144,7 @@ const RoomScreen: React.FC = () => {
     djPlayers: 0,
     admins: [],
     allowPlaylistAdditions: false,
+    sessionEnabled: false,
   });
   const [isOwner, setIsOwner] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -147,7 +152,11 @@ const RoomScreen: React.FC = () => {
   const [addAdminInput, setAddAdminInput] = useState('');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [showQueueDialog, setShowQueueDialog] = useState(false);
   const [showDJModeConfirmDialog, setShowDJModeConfirmDialog] = useState(false);
+  const [showSessionExitDialog, setShowSessionExitDialog] = useState(false);
+  const [miniPlayerVisible, setMiniPlayerVisible] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
   const [shortCode, setShortCode] = useState<string | undefined>(undefined);
   const [creatorTier, setCreatorTier] = useState<'free' | 'standard' | 'pro'>('free');
   const [tierSettings, setTierSettings] = useState<{
@@ -422,6 +431,7 @@ const RoomScreen: React.FC = () => {
         djPlayers: updatedSettings.djPlayers || 0,
         admins: updatedSettings.admins || roomSettings.admins || [],
         allowPlaylistAdditions: updatedSettings.allowPlaylistAdditions || false,
+        sessionEnabled: updatedSettings.sessionEnabled || false,
       });
       setCanControl(updatedSettings.allowControls !== false || isOwner || isAdmin);
     };
@@ -616,6 +626,70 @@ const RoomScreen: React.FC = () => {
       setTrackReactions({ likes: 0, dislikes: 0, fantastic: 0, userReaction: null });
     }
   }, [currentTrack?.id, roomId, user?.id]);
+
+  // Navigation blocking when session is enabled
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      // Only block if session is enabled, there's a current track, and user is not the owner
+      if (
+        roomSettings.sessionEnabled &&
+        currentTrack &&
+        !isOwner &&
+        !miniPlayerVisible
+      ) {
+        // Prevent default behavior of leaving the screen
+        e.preventDefault();
+
+        // Show the exit dialog
+        setPendingNavigation(() => () => {
+          navigation.dispatch(e.data.action);
+        });
+        setShowSessionExitDialog(true);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, roomSettings.sessionEnabled, currentTrack, isOwner, miniPlayerVisible]);
+
+  // Handle session exit dialog actions
+  const handleOpenMiniPlayer = () => {
+    setShowSessionExitDialog(false);
+    setMiniPlayerVisible(true);
+    setPendingNavigation(null);
+  };
+
+  const handleExitRoom = () => {
+    setShowSessionExitDialog(false);
+    setMiniPlayerVisible(false);
+    if (pendingNavigation) {
+      pendingNavigation();
+      setPendingNavigation(null);
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  const handleCloseMiniPlayer = () => {
+    setMiniPlayerVisible(false);
+    // If we're not in the room screen, navigate back to it
+    const state = navigation.getState();
+    const currentRoute = state.routes[state.index];
+    if (currentRoute.name !== 'Room') {
+      navigation.navigate('Room', { roomId, roomName });
+    }
+  };
+
+  const handleExpandMiniPlayer = () => {
+    setMiniPlayerVisible(false);
+    // Navigate to room if not already there
+    const state = navigation.getState();
+    const currentRoute = state.routes[state.index];
+    if (currentRoute.name !== 'Room') {
+      navigation.navigate('Room', { roomId, roomName });
+    }
+    // Ensure we're on the main tab
+    setActiveTab('main');
+  };
 
   const loadTrackReactions = async () => {
     if (!currentTrack || !user || !supabase) return;
@@ -961,6 +1035,70 @@ const RoomScreen: React.FC = () => {
     }
   };
 
+  const handleQueueTracks = async (urls: string[]) => {
+    if (!user) {
+      Alert.alert(
+        'Sign Up Required',
+        'You need to create an account to add tracks to the queue. Would you like to sign up?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Sign Up', onPress: () => navigation.navigate('Auth') },
+        ]
+      );
+      return;
+    }
+
+    if (!connected) {
+      Alert.alert('Error', 'Not connected to room. Please wait...');
+      return;
+    }
+
+    if (!socketService.socket) {
+      Alert.alert('Error', 'Not connected to room socket');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Add all extracted URLs
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (const url of urls) {
+        try {
+          socketService.socket.emit('add-track', {
+            roomId,
+            trackUrl: url,
+          });
+          successCount++;
+        } catch (error) {
+          console.error('Error adding track:', error);
+          errorCount++;
+        }
+      }
+      
+      // Show success message
+      if (successCount > 0) {
+        if (urls.length === 1) {
+          Alert.alert('Success', 'Track added to queue!');
+        } else {
+          Alert.alert(
+            'Success',
+            `Added ${successCount} track${successCount === 1 ? '' : 's'} to queue${errorCount > 0 ? ` (${errorCount} failed)` : ''}`
+          );
+        }
+      } else {
+        Alert.alert('Error', 'Failed to add tracks');
+      }
+    } catch (error) {
+      console.error('Error adding tracks:', error);
+      Alert.alert('Error', 'Failed to add tracks');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const addTrack = async () => {
     if (!user) {
       Alert.alert(
@@ -1002,47 +1140,8 @@ const RoomScreen: React.FC = () => {
       return;
     }
 
-    setLoading(true);
-    try {
-      if (socketService.socket) {
-        // Add all extracted URLs
-        let successCount = 0;
-        let errorCount = 0;
-        
-        for (const url of extractedUrls) {
-          try {
-            socketService.socket.emit('add-track', {
-              roomId,
-              trackUrl: url,
-            });
-            successCount++;
-          } catch (error) {
-            console.error('Error adding track:', error);
-            errorCount++;
-          }
-        }
-        
-        // Show success message
-        if (successCount > 0) {
-          if (extractedUrls.length === 1) {
-            Alert.alert('Success', 'Track added to queue!');
-          } else {
-            Alert.alert(
-              'Success',
-              `Added ${successCount} track${successCount === 1 ? '' : 's'} to queue${errorCount > 0 ? ` (${errorCount} failed)` : ''}`
-            );
-          }
-        } else {
-          Alert.alert('Error', 'Failed to add tracks');
-        }
-      }
-      setTrackUrl('');
-    } catch (error) {
-      console.error('Error adding track:', error);
-      Alert.alert('Error', 'Failed to add track');
-    } finally {
-      setLoading(false);
-    }
+    await handleQueueTracks(extractedUrls);
+    setTrackUrl('');
   };
 
   const playPause = () => {
@@ -1162,6 +1261,7 @@ const RoomScreen: React.FC = () => {
         djMode: roomSettings.djMode,
         djPlayers: roomSettings.djPlayers,
         allowPlaylistAdditions: roomSettings.allowPlaylistAdditions,
+        sessionEnabled: roomSettings.sessionEnabled,
       },
     });
     Alert.alert('Success', 'Settings saved!');
@@ -1437,41 +1537,43 @@ const RoomScreen: React.FC = () => {
                 </View>
               ) : null}
               
-              <View style={styles.trackInfo}>
-                <View style={styles.thumbnailContainer}>
-                  <View style={[styles.thumbnailWrapper, isPlaying && styles.thumbnailWrapperPlaying]}>
-                    <Avatar.Image
-                      size={IS_MOBILE ? 100 : 120}
-                      source={{ uri: currentTrack.info?.thumbnail || 'https://via.placeholder.com/100' }}
-                      style={styles.trackThumbnail}
-                    />
-                    {isPlaying && (
-                      <View style={styles.playingIndicator}>
-                        <View style={[styles.pulseRing, { borderColor: theme.colors.primary }]} />
-                        <View style={[styles.pulseRing, styles.pulseRing2, { borderColor: theme.colors.primary }]} />
-                      </View>
-                    )}
+              <View style={[styles.trackInfoContainer, { backgroundColor: `${theme.colors.surfaceVariant}30` }]}>
+                <View style={styles.trackInfo}>
+                  <View style={styles.thumbnailContainer}>
+                    <View style={[styles.thumbnailWrapper, isPlaying && styles.thumbnailWrapperPlaying]}>
+                      <Avatar.Image
+                        size={IS_MOBILE ? 110 : 130}
+                        source={{ uri: currentTrack.info?.thumbnail || 'https://via.placeholder.com/100' }}
+                        style={styles.trackThumbnail}
+                      />
+                      {isPlaying && (
+                        <View style={styles.playingIndicator}>
+                          <View style={[styles.pulseRing, { borderColor: theme.colors.primary }]} />
+                          <View style={[styles.pulseRing, styles.pulseRing2, { borderColor: theme.colors.primary }]} />
+                        </View>
+                      )}
+                    </View>
                   </View>
-                </View>
-                <View style={styles.trackDetails}>
-                  <Text style={[styles.trackTitle, { color: theme.colors.onSurface }]} numberOfLines={2}>
-                    {currentTrack.info?.fullTitle || 'Unknown Track'}
-                  </Text>
-                  <View style={[styles.platformBadge, { backgroundColor: `${theme.colors.primary}15` }]}>
-                    <MaterialCommunityIcons 
-                      name={
-                        currentTrack.url?.includes('spotify') ? 'spotify' : 
-                        currentTrack.url?.includes('youtube') ? 'youtube' : 
-                        'music-note'
-                      }
-                      size={16}
-                      color={theme.colors.primary}
-                    />
-                    <Text style={[styles.trackPlatform, { color: theme.colors.primary }]}>
-                      {currentTrack.url?.includes('spotify') ? 'Spotify' : 
-                       currentTrack.url?.includes('youtube') ? 'YouTube' : 
-                       'SoundCloud'}
+                  <View style={styles.trackDetails}>
+                    <Text style={[styles.trackTitle, { color: theme.colors.onSurface }]} numberOfLines={2}>
+                      {currentTrack.info?.fullTitle || 'Unknown Track'}
                     </Text>
+                    <View style={[styles.platformBadge, { backgroundColor: `${theme.colors.primary}20` }]}>
+                      <MaterialCommunityIcons 
+                        name={
+                          currentTrack.url?.includes('spotify') ? 'spotify' : 
+                          currentTrack.url?.includes('youtube') ? 'youtube' : 
+                          'music-note'
+                        }
+                        size={18}
+                        color={theme.colors.primary}
+                      />
+                      <Text style={[styles.trackPlatform, { color: theme.colors.primary }]}>
+                        {currentTrack.url?.includes('spotify') ? 'Spotify' : 
+                         currentTrack.url?.includes('youtube') ? 'YouTube' : 
+                         'SoundCloud'}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               </View>
@@ -1720,11 +1822,13 @@ const RoomScreen: React.FC = () => {
       </Card>
 
       {/* Queue */}
-      <Card style={styles.card}>
-        <Card.Content>
+      <Card style={[styles.card, styles.queueCard]}>
+        <Card.Content style={styles.queueCardContent}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
-              <MaterialCommunityIcons name="playlist-music" size={22} color={theme.colors.primary} />
+              <View style={[styles.sectionIconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
+                <MaterialCommunityIcons name="playlist-music" size={22} color={theme.colors.primary} />
+              </View>
               <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
                 Queue
               </Title>
@@ -1764,24 +1868,43 @@ const RoomScreen: React.FC = () => {
               {queue.map((track, index) => (
                 <TouchableOpacity
                   key={track.id}
-                  activeOpacity={0.7}
+                  activeOpacity={0.8}
                   style={[
                     styles.queueItem, 
                     { 
-                      backgroundColor: theme.colors.surfaceVariant,
+                      backgroundColor: index === 0 
+                        ? `${theme.colors.primary}15` 
+                        : theme.colors.surfaceVariant,
                       borderLeftColor: theme.colors.primary,
-                      borderLeftWidth: index === 0 ? 3 : 0,
+                      borderLeftWidth: index === 0 ? 4 : 0,
                     }
                   ]}
                 >
                   <View style={styles.queueItemContent}>
-                    <View style={[styles.queueItemNumber, { backgroundColor: `${theme.colors.primary}20` }]}>
-                      <Text style={[styles.queueNumber, { color: theme.colors.primary }]}>
+                    <View style={[
+                      styles.queueItemNumber, 
+                      { 
+                        backgroundColor: index === 0 
+                          ? theme.colors.primary 
+                          : `${theme.colors.primary}20` 
+                      }
+                    ]}>
+                      <Text style={[
+                        styles.queueNumber, 
+                        { 
+                          color: index === 0 
+                            ? theme.colors.onPrimary 
+                            : theme.colors.primary 
+                        }
+                      ]}>
                         {index + 1}
                       </Text>
+                      {index === 0 && (
+                        <View style={[styles.nextIndicator, { backgroundColor: theme.colors.onPrimary }]} />
+                      )}
                     </View>
                     <Avatar.Image
-                      size={56}
+                      size={IS_MOBILE ? 60 : 64}
                       source={{ uri: track.info?.thumbnail || 'https://via.placeholder.com/50' }}
                       style={styles.queueItemThumbnail}
                     />
@@ -1795,7 +1918,7 @@ const RoomScreen: React.FC = () => {
                       <View style={styles.queueItemMeta}>
                         <MaterialCommunityIcons 
                           name="account" 
-                          size={12} 
+                          size={14} 
                           color={theme.colors.onSurfaceVariant} 
                         />
                         <Text 
@@ -1804,6 +1927,19 @@ const RoomScreen: React.FC = () => {
                         >
                           {track.addedBy === user?.id ? 'You' : 'Someone'}
                         </Text>
+                        {index === 0 && (
+                          <>
+                            <View style={[styles.metaDivider, { backgroundColor: theme.colors.onSurfaceVariant }]} />
+                            <MaterialCommunityIcons 
+                              name="arrow-right" 
+                              size={14} 
+                              color={theme.colors.primary} 
+                            />
+                            <Text style={[styles.nextLabel, { color: theme.colors.primary }]}>
+                              Next
+                            </Text>
+                          </>
+                        )}
                       </View>
                     </View>
                   </View>
@@ -1815,11 +1951,13 @@ const RoomScreen: React.FC = () => {
       </Card>
 
       {/* History */}
-      <Card style={styles.card}>
-        <Card.Content>
+      <Card style={[styles.card, styles.historyCard]}>
+        <Card.Content style={styles.historyCardContent}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
-              <MaterialCommunityIcons name="history" size={22} color={theme.colors.primary} />
+              <View style={[styles.sectionIconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
+                <MaterialCommunityIcons name="history" size={22} color={theme.colors.primary} />
+              </View>
               <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
                 History
               </Title>
@@ -1842,13 +1980,12 @@ const RoomScreen: React.FC = () => {
               {history.slice(0, 10).map((track) => (
                 <TouchableOpacity
                   key={track.id}
-                  activeOpacity={0.7}
+                  activeOpacity={0.8}
                   style={[
                     styles.queueItem, 
                     styles.historyItem, 
                     { 
-                      backgroundColor: `${theme.colors.surfaceVariant}80`,
-                      opacity: 0.85,
+                      backgroundColor: `${theme.colors.surfaceVariant}60`,
                     }
                   ]}
                   onPress={() => {
@@ -1867,7 +2004,7 @@ const RoomScreen: React.FC = () => {
                       />
                     </View>
                     <Avatar.Image
-                      size={56}
+                      size={IS_MOBILE ? 60 : 64}
                       source={{ uri: track.info?.thumbnail || 'https://via.placeholder.com/50' }}
                       style={[styles.queueItemThumbnail, styles.historyThumbnail]}
                     />
@@ -1881,7 +2018,7 @@ const RoomScreen: React.FC = () => {
                       <View style={styles.queueItemMeta}>
                         <MaterialCommunityIcons 
                           name="clock-outline" 
-                          size={12} 
+                          size={14} 
                           color={theme.colors.onSurfaceVariant} 
                         />
                         <Text 
@@ -1892,13 +2029,21 @@ const RoomScreen: React.FC = () => {
                         </Text>
                       </View>
                     </View>
-                    <View style={[styles.replayButton, { backgroundColor: `${theme.colors.primary}20` }]}>
+                    <TouchableOpacity
+                      style={[styles.replayButton, { backgroundColor: `${theme.colors.primary}20` }]}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        if (socketService.socket) {
+                          socketService.socket.emit('replay-track', { roomId, trackId: track.id });
+                        }
+                      }}
+                    >
                       <MaterialCommunityIcons 
                         name="replay" 
                         size={20} 
                         color={theme.colors.primary}
                       />
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 </TouchableOpacity>
               ))}
@@ -2394,12 +2539,21 @@ const RoomScreen: React.FC = () => {
                           ...Array.from({ length: roomSettings.djPlayers }, (_, i) => ({
                             text: `Player ${i + 1}`,
                             onPress: async () => {
-                              // Set the track for the selected player
-                              const newTracks = [...djPlayerTracks];
-                              newTracks[i] = track;
-                              setDjPlayerTracks(newTracks);
-                              // Load the track
-                              await handleDJPlayerLoadTrack(i);
+                              // Load the selected track to the player
+                              const success = await djAudioService.loadTrack(i, track);
+                              if (success) {
+                                const newTracks = [...djPlayerTracks];
+                                newTracks[i] = track;
+                                setDjPlayerTracks(newTracks);
+                                
+                                // Detect BPM
+                                const bpmResult = await bpmDetectionService.detectBPM(track);
+                                const newBPMs = [...djPlayerBPMs];
+                                newBPMs[i] = bpmResult.bpm;
+                                setDjPlayerBPMs(newBPMs);
+                              } else {
+                                Alert.alert('Error', 'Failed to load track to player');
+                              }
                             },
                           })),
                         ]);
@@ -2444,7 +2598,7 @@ const RoomScreen: React.FC = () => {
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content style={styles.centerContent}>
             <MaterialCommunityIcons
-              name="turntable"
+              name="equalizer"
               size={64}
               color={theme.colors.primary}
               style={styles.centerIcon}
@@ -2601,6 +2755,26 @@ const RoomScreen: React.FC = () => {
               )}
             </View>
 
+            <Divider style={styles.divider} />
+
+            {isOwner && (
+              <View style={styles.settingItem}>
+                <View style={styles.settingRow}>
+                  <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Session Mode</Text>
+                  <Switch
+                    value={roomSettings.sessionEnabled}
+                    onValueChange={(value) => {
+                      setRoomSettings(prev => ({ ...prev, sessionEnabled: value }));
+                    }}
+                    disabled={!isOwner}
+                  />
+                </View>
+                <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
+                  When enabled, users will be prompted to open a mini player when trying to leave the room during an active session
+                </Text>
+              </View>
+            )}
+
             {isOwner && (
               <>
                 <Divider style={styles.divider} />
@@ -2710,6 +2884,9 @@ const RoomScreen: React.FC = () => {
         <View style={styles.headerTop}>
           <View style={styles.headerLeft}>
             <Text style={[styles.roomTitle, { color: theme.colors.onSurface }]}>{roomName}</Text>
+            <View style={styles.connectionStatus}>
+              <View style={[styles.statusDot, { backgroundColor: connected ? '#4CAF50' : '#FF9800' }]} />
+            </View>
           </View>
           <View style={styles.headerRight}>
             {/* DJ Mode Toggle - Only for PRO users */}
@@ -2722,16 +2899,21 @@ const RoomScreen: React.FC = () => {
             )}
             <View style={styles.iconButtonWrapper}>
               <IconButton
+                icon="playlist-plus"
+                iconColor={theme.colors.onSurface}
+                size={20}
+                onPress={() => setShowQueueDialog(true)}
+                style={styles.iconButton}
+              />
+            </View>
+            <View style={styles.iconButtonWrapper}>
+              <IconButton
                 icon="share-variant"
                 iconColor={theme.colors.onSurface}
                 size={20}
                 onPress={shareRoom}
                 style={styles.iconButton}
               />
-            </View>
-            <View style={[styles.connectionStatus, { backgroundColor: connected ? 'rgba(76, 175, 80, 0.15)' : 'rgba(255, 152, 0, 0.15)' }]}>
-              <View style={[styles.statusDot, { backgroundColor: connected ? theme.colors.primary : theme.colors.error }]} />
-              <Text style={[styles.statusText, { color: theme.colors.onSurface }]}>{connected ? 'Connected' : 'Connecting...'}</Text>
             </View>
           </View>
         </View>
@@ -2868,7 +3050,7 @@ const RoomScreen: React.FC = () => {
           activeOpacity={0.7}
         >
           <MaterialCommunityIcons
-            name="turntable"
+            name="equalizer"
             size={20}
             color={(activeTab === 'djmode' || isDJModeActive) ? theme.colors.onPrimary : theme.colors.onSurface}
             style={styles.tabIcon}
@@ -2948,18 +3130,45 @@ const RoomScreen: React.FC = () => {
           Alert.alert('Success', 'Join code copied to clipboard!');
         }}
       />
+      <QueueDialog
+        visible={showQueueDialog}
+        onDismiss={() => setShowQueueDialog(false)}
+        onQueue={handleQueueTracks}
+        canQueue={isOwner || isAdmin || roomSettings.allowQueue}
+      />
 
       <DJModeConfirmDialog
         visible={showDJModeConfirmDialog}
         onConfirm={() => {
           setShowDJModeConfirmDialog(false);
-          setIsDJModeActive(true);
-          setActiveTab('djmode');
+          // Navigate to DJ Mode screen with the same room ID
+          navigation.navigate('DJMode', { roomId, roomName });
         }}
         onDismiss={() => {
           setShowDJModeConfirmDialog(false);
         }}
       />
+
+      <SessionExitDialog
+        visible={showSessionExitDialog}
+        onOpenMiniPlayer={handleOpenMiniPlayer}
+        onExitRoom={handleExitRoom}
+        onDismiss={() => {
+          setShowSessionExitDialog(false);
+          setPendingNavigation(null);
+        }}
+      />
+
+      {miniPlayerVisible && currentTrack && (
+        <MiniPlayer
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          roomName={roomName}
+          onPlayPause={playPause}
+          onExpand={handleExpandMiniPlayer}
+          onClose={handleCloseMiniPlayer}
+        />
+      )}
 
       {/* Create Playlist Dialog */}
       <Portal>
@@ -3040,6 +3249,8 @@ const styles = StyleSheet.create({
   header: {
     padding: IS_MOBILE ? 16 : 20,
     paddingTop: Platform.OS === 'web' ? 20 : (IS_MOBILE ? 50 : 60),
+    paddingBottom: IS_MOBILE ? 20 : 24,
+    marginBottom: IS_MOBILE ? 8 : 12,
     elevation: 8,
     ...(Platform.OS === 'web' ? {
       boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.25)',
@@ -3054,7 +3265,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: IS_MOBILE ? 12 : 8,
     flexWrap: IS_MOBILE ? 'wrap' : 'nowrap',
   },
   headerLeft: {
@@ -3101,45 +3312,39 @@ const styles = StyleSheet.create({
     margin: 0,
   },
   connectionStatus: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: IS_MOBILE ? 10 : 12,
-    paddingVertical: IS_MOBILE ? 6 : 7,
-    borderRadius: 20,
-    minHeight: 40,
     justifyContent: 'center',
+    padding: 4,
+    marginLeft: 12,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     ...(Platform.OS === 'web' ? {
-      boxShadow: '0px 0px 6px currentColor',
+      boxShadow: '0px 0px 8px currentColor',
     } : {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.3,
-      shadowRadius: 4,
-      elevation: 2,
+      shadowOpacity: 0.4,
+      shadowRadius: 6,
+      elevation: 3,
     }),
-  },
-  statusText: {
-    fontSize: IS_MOBILE ? 11 : 12,
-    fontWeight: '500',
   },
   connectingIndicator: {
     marginTop: 8,
   },
   roomId: {
     fontSize: IS_MOBILE ? 12 : 14,
-    marginTop: 4,
+    marginTop: IS_MOBILE ? 8 : 4,
   },
   tabs: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     paddingHorizontal: IS_MOBILE ? 4 : 8,
-    paddingTop: 4,
+    paddingTop: IS_MOBILE ? 8 : 4,
+    paddingBottom: IS_MOBILE ? 8 : 4,
+    marginBottom: IS_MOBILE ? 4 : 0,
     ...(Platform.OS === 'web' ? {
       boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
     } : {}),
@@ -3170,11 +3375,13 @@ const styles = StyleSheet.create({
   },
   tabContent: {
     flex: 1,
+    paddingTop: IS_MOBILE ? 8 : 0,
     paddingBottom: IS_MOBILE ? 20 : 40,
   },
   card: {
-    margin: IS_MOBILE ? 12 : 16,
-    marginTop: IS_MOBILE ? 12 : 16,
+    marginHorizontal: IS_MOBILE ? 16 : 16,
+    marginTop: IS_MOBILE ? 20 : 16,
+    marginBottom: IS_MOBILE ? 20 : 16,
     borderRadius: 24,
     elevation: 8,
     overflow: 'hidden',
@@ -3201,13 +3408,13 @@ const styles = StyleSheet.create({
     }),
   },
   nowPlayingContent: {
-    padding: IS_MOBILE ? 16 : 20,
+    padding: IS_MOBILE ? 20 : 20,
   },
   nowPlayingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: IS_MOBILE ? 16 : 20,
+    marginBottom: IS_MOBILE ? 20 : 20,
     gap: 8,
   },
   nowPlayingHeaderLeft: {
@@ -3246,10 +3453,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.5,
   },
+  trackInfoContainer: {
+    borderRadius: 20,
+    padding: IS_MOBILE ? 16 : 20,
+    marginVertical: IS_MOBILE ? 12 : 16,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.1)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 2,
+    }),
+  },
   trackInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: IS_MOBILE ? 16 : 20,
   },
   thumbnailContainer: {
     position: 'relative',
@@ -3304,24 +3524,26 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   trackDetails: {
-    marginLeft: IS_MOBILE ? 16 : 20,
+    marginLeft: IS_MOBILE ? 18 : 24,
     flex: 1,
+    justifyContent: 'center',
   },
   trackTitle: {
-    fontSize: IS_MOBILE ? 18 : 22,
+    fontSize: IS_MOBILE ? 20 : 24,
     fontWeight: '700',
-    letterSpacing: -0.3,
-    marginBottom: 6,
+    letterSpacing: -0.4,
+    marginBottom: 10,
+    lineHeight: IS_MOBILE ? 26 : 30,
   },
   platformBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    marginTop: 4,
   },
   trackPlatform: {
     fontSize: IS_MOBILE ? 11 : 12,
@@ -3337,8 +3559,8 @@ const styles = StyleSheet.create({
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: IS_MOBILE ? 8 : 12,
-    marginTop: IS_MOBILE ? 16 : 20,
+    gap: IS_MOBILE ? 10 : 12,
+    marginTop: IS_MOBILE ? 20 : 20,
     flexWrap: 'wrap',
   },
   controlButton: {
@@ -3586,14 +3808,53 @@ const styles = StyleSheet.create({
     fontSize: IS_MOBILE ? 12 : 13,
     fontWeight: '600',
   },
+  queueCard: {
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.15)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+      elevation: 4,
+    }),
+  },
+  queueCardContent: {
+    padding: IS_MOBILE ? 16 : 20,
+  },
+  historyCard: {
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.15)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+      elevation: 4,
+    }),
+  },
+  historyCardContent: {
+    padding: IS_MOBILE ? 16 : 20,
+  },
+  sectionIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   queueItem: {
-    marginVertical: IS_MOBILE ? 6 : 8,
+    marginVertical: IS_MOBILE ? 8 : 10,
     marginHorizontal: IS_MOBILE ? 4 : 8,
     borderRadius: 16,
-    padding: IS_MOBILE ? 12 : 14,
+    padding: IS_MOBILE ? 14 : 16,
     ...(Platform.OS === 'web' ? {
       cursor: 'pointer',
-      transition: 'transform 0.2s, box-shadow 0.2s',
+      transition: 'all 0.2s ease',
+      ':hover': {
+        transform: 'translateY(-2px)',
+        boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.2)',
+      },
     } : {}),
   },
   queueItemContent: {
@@ -3602,17 +3863,29 @@ const styles = StyleSheet.create({
     gap: IS_MOBILE ? 12 : 16,
   },
   queueItemNumber: {
-    width: IS_MOBILE ? 32 : 36,
-    height: IS_MOBILE ? 32 : 36,
-    borderRadius: IS_MOBILE ? 16 : 18,
+    width: IS_MOBILE ? 36 : 40,
+    height: IS_MOBILE ? 36 : 40,
+    borderRadius: IS_MOBILE ? 18 : 20,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  nextIndicator: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   queueNumber: {
     fontSize: IS_MOBILE ? 13 : 15,
     fontWeight: '700',
   },
   queueItemThumbnail: {
+    borderRadius: 12,
     ...(Platform.OS === 'web' ? {
       boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.25)',
     } : {
@@ -3620,6 +3893,7 @@ const styles = StyleSheet.create({
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.25,
       shadowRadius: 6,
+      elevation: 3,
     }),
   },
   historyThumbnail: {
@@ -3627,50 +3901,69 @@ const styles = StyleSheet.create({
   },
   queueItemDetails: {
     flex: 1,
-    marginLeft: 4,
+    marginLeft: 8,
+    justifyContent: 'center',
   },
   queueItemTitle: {
-    fontSize: IS_MOBILE ? 14 : 16,
+    fontSize: IS_MOBILE ? 15 : 17,
     fontWeight: '600',
-    marginBottom: 6,
+    marginBottom: 8,
+    letterSpacing: -0.2,
   },
   queueItemMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    flexWrap: 'wrap',
   },
   queueItemDescription: {
     fontSize: IS_MOBILE ? 12 : 13,
+    fontWeight: '500',
+  },
+  metaDivider: {
+    width: 1,
+    height: 12,
+    opacity: 0.3,
+  },
+  nextLabel: {
+    fontSize: IS_MOBILE ? 11 : 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   historyItem: {
-    opacity: 0.85,
+    opacity: 0.9,
   },
   historyIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: IS_MOBILE ? 36 : 40,
+    height: IS_MOBILE ? 36 : 40,
+    borderRadius: IS_MOBILE ? 18 : 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
   replayButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: IS_MOBILE ? 40 : 44,
+    height: IS_MOBILE ? 40 : 44,
+    borderRadius: IS_MOBILE ? 20 : 22,
     justifyContent: 'center',
     alignItems: 'center',
     ...(Platform.OS === 'web' ? {
       cursor: 'pointer',
-      transition: 'transform 0.2s',
+      transition: 'all 0.2s ease',
+      ':hover': {
+        transform: 'scale(1.1)',
+        backgroundColor: 'rgba(102, 126, 234, 0.3)',
+      },
     } : {}),
   },
   boostContainer: {
-    padding: IS_MOBILE ? 8 : 12,
+    padding: IS_MOBILE ? 16 : 12,
   },
   boostHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: IS_MOBILE ? 12 : 16,
+    marginBottom: IS_MOBILE ? 16 : 16,
   },
   boostTitle: {
     fontSize: IS_MOBILE ? 18 : 20,
@@ -3679,7 +3972,7 @@ const styles = StyleSheet.create({
   boostDescription: {
     fontSize: IS_MOBILE ? 13 : 14,
     lineHeight: IS_MOBILE ? 18 : 20,
-    marginBottom: IS_MOBILE ? 16 : 20,
+    marginBottom: IS_MOBILE ? 20 : 20,
   },
   boostButton: {
     marginTop: 8,

@@ -33,7 +33,7 @@ export const DJModeToggle: React.FC<DJModeToggleProps> = ({
     >
       <View style={styles.content}>
         <MaterialCommunityIcons
-          name={isDJMode ? 'turntable' : 'music-note'}
+          name={isDJMode ? 'equalizer' : 'music-note'}
           size={16}
           color={isDJMode ? theme.colors.onPrimary : theme.colors.onSurfaceVariant}
         />

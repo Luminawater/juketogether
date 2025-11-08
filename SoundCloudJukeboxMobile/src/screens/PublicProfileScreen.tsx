@@ -6,6 +6,8 @@ import {
   Alert,
   Platform,
   Share,
+  Linking,
+  TouchableOpacity,
 } from 'react-native';
 import {
   Text,
@@ -59,6 +61,9 @@ const PublicProfileScreen: React.FC = () => {
   const [collabStatus, setCollabStatus] = useState<'none' | 'pending' | 'accepted' | 'pending_incoming'>('none');
   const [loadingCollab, setLoadingCollab] = useState(false);
   const [canCollaborate, setCanCollaborate] = useState(false);
+  const [playlists, setPlaylists] = useState<any[]>([]);
+  const [loadingPlaylists, setLoadingPlaylists] = useState(false);
+  const [hasSpotify, setHasSpotify] = useState(false);
   const friendSocketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -115,6 +120,8 @@ const PublicProfileScreen: React.FC = () => {
 
       // Load analytics if profile is public or it's the current user
       await loadUserAnalytics(id);
+      await loadUserPlaylists(id);
+      await checkSpotifyConnection(id);
       setLoading(false);
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -404,13 +411,76 @@ const PublicProfileScreen: React.FC = () => {
         .from('user_analytics')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (!error && data) {
         setAnalytics(data as UserAnalytics);
       }
     } catch (error) {
       console.error('Error loading user analytics:', error);
+    }
+  };
+
+  const loadUserPlaylists = async (userId: string) => {
+    try {
+      setLoadingPlaylists(true);
+      const { data, error } = await supabase
+        .from('playlists')
+        .select(`
+          *,
+          playlist_tracks(count)
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(6); // Limit to 6 playlists for display
+
+      if (!error && data) {
+        const playlistsWithCount = data.map((p: any) => ({
+          ...p,
+          track_count: p.playlist_tracks?.[0]?.count || 0,
+        }));
+        setPlaylists(playlistsWithCount);
+      }
+    } catch (error) {
+      console.error('Error loading user playlists:', error);
+    } finally {
+      setLoadingPlaylists(false);
+    }
+  };
+
+  const checkSpotifyConnection = async (userId: string) => {
+    try {
+      // Check if user has Spotify connected via auth provider
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (!error && user) {
+        // Check if this is the current user viewing their own profile
+        if (user.id === userId) {
+          const isSpotifyUser = user.app_metadata?.provider === 'spotify' || 
+                               user.identities?.some((identity: any) => identity.provider === 'spotify');
+          setHasSpotify(isSpotifyUser || false);
+        } else {
+          // For other users, we can't check their auth provider directly
+          // We'll show the link anyway, but it might not work if they haven't connected
+          setHasSpotify(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking Spotify connection:', error);
+      setHasSpotify(false);
+    }
+  };
+
+  const handleOpenLink = (url: string) => {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        window.open(url, '_blank');
+      }
+    } else {
+      Linking.openURL(url).catch((err: any) => {
+        console.error('Error opening link:', err);
+        Alert.alert('Error', 'Could not open link');
+      });
     }
   };
 
@@ -440,9 +510,10 @@ const PublicProfileScreen: React.FC = () => {
 
   const getProfileUrl = () => {
     if (Platform.OS === 'web') {
-      // For web, use the current origin and construct the profile URL
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      return `${origin}/profile/${id}`;
+      // Always use the production domain for shared profile links
+      // This ensures links work for anyone who receives them, regardless of environment
+      const baseUrl = 'https://www.juketogether.com';
+      return `${baseUrl}/profile/${id}`;
     } else {
       // For mobile, construct a deep link URL
       return `juketogether://profile/${id}`;
@@ -722,15 +793,29 @@ const PublicProfileScreen: React.FC = () => {
 
       {/* Statistics Card */}
       {analytics && (
-        <Card style={[styles.card, { marginHorizontal: 20, marginBottom: 20 }]}>
+        <Card style={[styles.card, styles.enhancedCard, { marginHorizontal: 20, marginBottom: 20 }]}>
           <Card.Content>
-            <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Statistics
-            </Title>
+            <View style={styles.sectionHeader}>
+              <IconButton
+                icon="chart-line"
+                size={24}
+                iconColor={theme.colors.primary}
+                style={styles.sectionIcon}
+              />
+              <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+                Statistics
+              </Title>
+            </View>
             <Divider style={styles.divider} />
             
             <View style={styles.statsGrid}>
-              <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <View style={[styles.statItem, styles.enhancedStatItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                <IconButton
+                  icon="door-open"
+                  size={20}
+                  iconColor={theme.colors.primary}
+                  style={styles.statIcon}
+                />
                 <Text style={[styles.statValue, { color: theme.colors.primary }]}>
                   {analytics.total_rooms_created || 0}
                 </Text>
@@ -739,7 +824,13 @@ const PublicProfileScreen: React.FC = () => {
                 </Text>
               </View>
 
-              <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <View style={[styles.statItem, styles.enhancedStatItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                <IconButton
+                  icon="account-group"
+                  size={20}
+                  iconColor={theme.colors.primary}
+                  style={styles.statIcon}
+                />
                 <Text style={[styles.statValue, { color: theme.colors.primary }]}>
                   {analytics.total_listeners_all_rooms || 0}
                 </Text>
@@ -749,7 +840,13 @@ const PublicProfileScreen: React.FC = () => {
               </View>
 
               {analytics.total_play_time_all_rooms_seconds > 0 && (
-                <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                <View style={[styles.statItem, styles.enhancedStatItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                  <IconButton
+                    icon="clock-outline"
+                    size={20}
+                    iconColor={theme.colors.primary}
+                    style={styles.statIcon}
+                  />
                   <Text style={[styles.statValue, { color: theme.colors.primary }]}>
                     {formatPlayTime(analytics.total_play_time_all_rooms_seconds)}
                   </Text>
@@ -759,7 +856,13 @@ const PublicProfileScreen: React.FC = () => {
                 </View>
               )}
 
-              <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <View style={[styles.statItem, styles.enhancedStatItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                <IconButton
+                  icon="login"
+                  size={20}
+                  iconColor={theme.colors.primary}
+                  style={styles.statIcon}
+                />
                 <Text style={[styles.statValue, { color: theme.colors.primary }]}>
                   {analytics.total_rooms_joined || 0}
                 </Text>
@@ -767,26 +870,201 @@ const PublicProfileScreen: React.FC = () => {
                   Rooms Joined
                 </Text>
               </View>
+
+              {analytics.total_tracks_played_all_rooms > 0 && (
+                <View style={[styles.statItem, styles.enhancedStatItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                  <IconButton
+                    icon="music-note"
+                    size={20}
+                    iconColor={theme.colors.primary}
+                    style={styles.statIcon}
+                  />
+                  <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                    {analytics.total_tracks_played_all_rooms || 0}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+                    Tracks Played
+                  </Text>
+                </View>
+              )}
+
+              {analytics.total_sessions_hosted > 0 && (
+                <View style={[styles.statItem, styles.enhancedStatItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                  <IconButton
+                    icon="microphone"
+                    size={20}
+                    iconColor={theme.colors.primary}
+                    style={styles.statIcon}
+                  />
+                  <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                    {analytics.total_sessions_hosted || 0}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+                    Sessions Hosted
+                  </Text>
+                </View>
+              )}
             </View>
           </Card.Content>
         </Card>
       )}
 
-      {/* Account Information Card */}
-      <Card style={[styles.card, { marginHorizontal: 20 }]}>
+      {/* Quick Links Card */}
+      <Card style={[styles.card, styles.enhancedCard, { marginHorizontal: 20, marginBottom: 20 }]}>
         <Card.Content>
-          <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-            Account Information
-          </Title>
+          <View style={styles.sectionHeader}>
+            <IconButton
+              icon="link-variant"
+              size={24}
+              iconColor={theme.colors.primary}
+              style={styles.sectionIcon}
+            />
+            <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+              Quick Links
+            </Title>
+          </View>
+          <Divider style={styles.divider} />
+          
+          <View style={styles.quickLinksContainer}>
+            <TouchableOpacity
+              style={[styles.quickLinkButton, { backgroundColor: theme.colors.surfaceVariant }]}
+              onPress={() => handleOpenLink('https://open.spotify.com')}
+            >
+              <IconButton
+                icon="spotify"
+                size={28}
+                iconColor="#1DB954"
+                style={styles.quickLinkIcon}
+              />
+              <Text style={[styles.quickLinkText, { color: theme.colors.onSurface }]}>
+                Spotify
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickLinkButton, { backgroundColor: theme.colors.surfaceVariant }]}
+              onPress={() => handleOpenLink('https://soundcloud.com')}
+            >
+              <IconButton
+                icon="soundcloud"
+                size={28}
+                iconColor="#FF5500"
+                style={styles.quickLinkIcon}
+              />
+              <Text style={[styles.quickLinkText, { color: theme.colors.onSurface }]}>
+                SoundCloud
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickLinkButton, { backgroundColor: theme.colors.surfaceVariant }]}
+              onPress={() => handleOpenLink('https://youtube.com')}
+            >
+              <IconButton
+                icon="youtube"
+                size={28}
+                iconColor="#FF0000"
+                style={styles.quickLinkIcon}
+              />
+              <Text style={[styles.quickLinkText, { color: theme.colors.onSurface }]}>
+                YouTube
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Card.Content>
+      </Card>
+
+      {/* Playlists Card */}
+      {playlists.length > 0 && (
+        <Card style={[styles.card, styles.enhancedCard, { marginHorizontal: 20, marginBottom: 20 }]}>
+          <Card.Content>
+            <View style={styles.sectionHeader}>
+              <IconButton
+                icon="playlist-music"
+                size={24}
+                iconColor={theme.colors.primary}
+                style={styles.sectionIcon}
+              />
+              <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+                Playlists
+              </Title>
+            </View>
+            <Divider style={styles.divider} />
+            
+            {loadingPlaylists ? (
+              <ActivityIndicator size="small" style={{ marginVertical: 20 }} />
+            ) : (
+              <View style={styles.playlistsContainer}>
+                {playlists.map((playlist) => (
+                  <TouchableOpacity
+                    key={playlist.id}
+                    style={[styles.playlistItem, { backgroundColor: theme.colors.surfaceVariant }]}
+                    onPress={() => navigation.navigate('Playlist', { playlistId: playlist.id })}
+                  >
+                    <View style={styles.playlistContent}>
+                      <IconButton
+                        icon="playlist-music"
+                        size={24}
+                        iconColor={theme.colors.primary}
+                        style={styles.playlistIcon}
+                      />
+                      <View style={styles.playlistInfo}>
+                        <Text style={[styles.playlistName, { color: theme.colors.onSurface }]} numberOfLines={1}>
+                          {playlist.name}
+                        </Text>
+                        <Text style={[styles.playlistTrackCount, { color: theme.colors.onSurfaceVariant }]}>
+                          {playlist.track_count || 0} tracks
+                        </Text>
+                      </View>
+                    </View>
+                    <IconButton
+                      icon="chevron-right"
+                      size={20}
+                      iconColor={theme.colors.onSurfaceVariant}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </Card.Content>
+        </Card>
+      )}
+
+      {/* Account Information Card */}
+      <Card style={[styles.card, styles.enhancedCard, { marginHorizontal: 20 }]}>
+        <Card.Content>
+          <View style={styles.sectionHeader}>
+            <IconButton
+              icon="account-circle"
+              size={24}
+              iconColor={theme.colors.primary}
+              style={styles.sectionIcon}
+            />
+            <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+              Account Information
+            </Title>
+          </View>
           <Divider style={styles.divider} />
 
           <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>
-              Member since:
-            </Text>
+            <View style={styles.infoRowContent}>
+              <IconButton
+                icon="calendar"
+                size={20}
+                iconColor={theme.colors.onSurfaceVariant}
+                style={styles.infoIcon}
+              />
+              <Text style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>
+                Member since:
+              </Text>
+            </View>
             <Text style={[styles.infoValue, { color: theme.colors.onSurface }]}>
               {profile.created_at
-                ? new Date(profile.created_at).toLocaleDateString()
+                ? new Date(profile.created_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })
                 : 'Unknown'}
             </Text>
           </View>
@@ -808,6 +1086,9 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     marginTop: 20,
     paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   avatarContainer: {
     position: 'relative',
@@ -866,6 +1147,26 @@ const styles = StyleSheet.create({
       shadowRadius: 6,
     }),
   },
+  enhancedCard: {
+    borderRadius: 20,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.2)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 10,
+    }),
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sectionIcon: {
+    margin: 0,
+    marginRight: 8,
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -904,10 +1205,21 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
   },
+  enhancedStatItem: {
+    borderRadius: 16,
+    padding: 16,
+    minHeight: 100,
+    justifyContent: 'center',
+  },
+  statIcon: {
+    margin: 0,
+    marginBottom: 4,
+  },
   statValue: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 4,
+    marginTop: 4,
   },
   statLabel: {
     fontSize: 12,
@@ -921,6 +1233,69 @@ const styles = StyleSheet.create({
   },
   friendButton: {
     width: '100%',
+  },
+  quickLinksContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+  },
+  quickLinkButton: {
+    flex: 1,
+    minWidth: '30%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 8,
+  },
+  quickLinkIcon: {
+    margin: 0,
+    marginRight: 8,
+  },
+  quickLinkText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  playlistsContainer: {
+    marginTop: 8,
+  },
+  playlistItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  playlistContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  playlistIcon: {
+    margin: 0,
+    marginRight: 12,
+  },
+  playlistInfo: {
+    flex: 1,
+  },
+  playlistName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  playlistTrackCount: {
+    fontSize: 12,
+  },
+  infoRowContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  infoIcon: {
+    margin: 0,
+    marginRight: 8,
   },
 });
 

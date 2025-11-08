@@ -25,7 +25,7 @@ export const DJModeUpgradeAd: React.FC<DJModeUpgradeAdProps> = ({ onUpgrade }) =
       <Card.Content style={styles.content}>
         <View style={styles.iconContainer}>
           <MaterialCommunityIcons
-            name="turntable"
+            name="equalizer"
             size={64}
             color={theme.colors.primary}
           />

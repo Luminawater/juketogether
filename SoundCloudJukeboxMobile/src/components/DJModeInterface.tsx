@@ -52,7 +52,7 @@ export const DJModeInterface: React.FC<DJModeInterfaceProps> = ({
           <View style={styles.headerLeft}>
             <View style={[styles.iconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
               <MaterialCommunityIcons 
-                name="turntable" 
+                name="equalizer" 
                 size={24} 
                 color={theme.colors.primary} 
               />

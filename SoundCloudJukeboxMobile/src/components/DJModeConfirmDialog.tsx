@@ -18,7 +18,7 @@ export const DJModeConfirmDialog: React.FC<DJModeConfirmDialogProps> = ({
 
   const features = [
     {
-      icon: 'turntable',
+      icon: 'equalizer',
       title: 'Multiple Players',
       description: 'Control up to 4 simultaneous audio players for seamless mixing',
     },
@@ -63,7 +63,7 @@ export const DJModeConfirmDialog: React.FC<DJModeConfirmDialogProps> = ({
         <Dialog.Content>
           <View style={styles.iconHeader}>
             <MaterialCommunityIcons
-              name="turntable"
+              name="equalizer"
               size={48}
               color={theme.colors.primary}
             />
@@ -86,29 +86,30 @@ export const DJModeConfirmDialog: React.FC<DJModeConfirmDialogProps> = ({
             <View style={styles.featuresContainer}>
               {features.map((feature, index) => (
                 <View key={index} style={styles.featureItem}>
-                <MaterialCommunityIcons
-                  name={feature.icon as any}
-                  size={24}
-                  color={theme.colors.primary}
-                  style={styles.featureIcon}
-                />
-                <View style={styles.featureContent}>
-                  <Text
-                    style={[
-                      styles.featureTitle,
-                      { color: theme.colors.onSurface },
-                    ]}
-                  >
-                    {feature.title}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.featureDescription,
-                      { color: theme.colors.onSurfaceVariant },
-                    ]}
-                  >
-                    {feature.description}
-                  </Text>
+                  <MaterialCommunityIcons
+                    name={feature.icon as any}
+                    size={24}
+                    color={theme.colors.primary}
+                    style={styles.featureIcon}
+                  />
+                  <View style={styles.featureContent}>
+                    <Text
+                      style={[
+                        styles.featureTitle,
+                        { color: theme.colors.onSurface },
+                      ]}
+                    >
+                      {feature.title}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.featureDescription,
+                        { color: theme.colors.onSurfaceVariant },
+                      ]}
+                    >
+                      {feature.description}
+                    </Text>
+                  </View>
                 </View>
               ))}
             </View>
