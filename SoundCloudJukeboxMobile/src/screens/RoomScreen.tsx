@@ -1182,7 +1182,7 @@ const RoomScreen: React.FC = () => {
     }
   };
 
-  const purchaseBoost = async () => {
+  const purchaseBoost = useCallback(async () => {
     if (!user || !session) {
       Alert.alert('Sign In Required', 'You need to sign in to purchase a boost.');
       navigation.navigate('Auth');
@@ -1230,7 +1230,7 @@ const RoomScreen: React.FC = () => {
         },
       ]
     );
-  };
+  }, [user, session, roomId, navigation]);
 
   const renderMainTab = () => {
     // Show DJ Mode interface if active and user has PRO tier

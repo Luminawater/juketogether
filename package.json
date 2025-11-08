@@ -7,6 +7,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "start:dev": "nodemon server.js",
+    "JT": "node server.js",
     "vercel-build": "cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build",
     "build:web": "cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build",
     "test:stripe": "node test-stripe.js",

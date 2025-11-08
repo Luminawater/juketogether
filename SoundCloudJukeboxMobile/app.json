@@ -48,6 +48,7 @@
         "projectId": "your-project-id-here"
       },
       "apiUrl": "https://juketogether.vercel.app",
+      "socketUrl": "https://your-websocket-server.railway.app",
       "supabaseUrl": "https://smryjxchwbfpjvpecffg.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtcnlqeGNod2JmcGp2cGVjZmZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1MzcxOTAsImV4cCI6MjA3ODExMzE5MH0.M1jQK3TSWMaAspSOkR-x8FkIi_EECgSZjTpb9lks0hQ"
     },
