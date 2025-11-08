@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Platform, TouchableOpacity } from 'react-native';
-import { Card, Text, Title, Button, Avatar, useTheme } from 'react-native-paper';
+import { Card, Text, Title, Button, Avatar, useTheme, Switch } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Track } from '../types';
 import { TrackReactionCounts, ReactionType } from '../services/trackReactionsService';
@@ -22,6 +22,9 @@ interface NowPlayingCardProps {
   loadingReaction: boolean;
   hasUser: boolean;
   queueLength: number;
+  autoplay: boolean;
+  onToggleAutoplay: () => void;
+  canToggleAutoplay: boolean;
 }
 
 export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
@@ -36,6 +39,9 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
   loadingReaction,
   hasUser,
   queueLength,
+  autoplay,
+  onToggleAutoplay,
+  canToggleAutoplay,
 }) => {
   const theme = useTheme();
 
@@ -174,6 +180,33 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
                   <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>
                     {trackReactions.fantastic}
                   </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Autoplay Toggle */}
+            {canToggleAutoplay && (
+              <View style={[styles.autoplayContainer, { 
+                borderTopColor: theme.colors.outline,
+                borderBottomColor: theme.colors.outline,
+                backgroundColor: `${theme.colors.surfaceVariant}20`
+              }]}>
+                <View style={styles.autoplayContent}>
+                  <View style={styles.autoplayLabelContainer}>
+                    <MaterialCommunityIcons 
+                      name={autoplay ? 'play-circle' : 'play-circle-outline'} 
+                      size={20} 
+                      color={theme.colors.onSurfaceVariant} 
+                    />
+                    <Text style={[styles.autoplayLabel, { color: theme.colors.onSurface }]}>
+                      Autoplay
+                    </Text>
+                  </View>
+                  <Switch
+                    value={autoplay}
+                    onValueChange={onToggleAutoplay}
+                    color={theme.colors.primary}
+                  />
                 </View>
               </View>
             )}
@@ -454,6 +487,28 @@ const styles = StyleSheet.create({
   reactionCount: {
     fontSize: IS_MOBILE ? 12 : 13,
     fontWeight: '600',
+  },
+  autoplayContainer: {
+    marginVertical: IS_MOBILE ? 12 : 16,
+    paddingVertical: IS_MOBILE ? 12 : 14,
+    paddingHorizontal: IS_MOBILE ? 12 : 16,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderRadius: 12,
+  },
+  autoplayContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  autoplayLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  autoplayLabel: {
+    fontSize: IS_MOBILE ? 14 : 16,
+    fontWeight: '500',
   },
 });
 

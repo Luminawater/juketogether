@@ -578,6 +578,8 @@ io.on('connection', (socket) => {
       djMode: roomSettings.dj_mode || false,
       djPlayers: roomSettings.dj_players || 0,
       allowPlaylistAdditions: roomSettings.allow_playlist_additions || false,
+      sessionEnabled: roomSettings.session_enabled || false,
+      autoplay: roomSettings.autoplay !== false, // Default to true if not specified
       admins: roomAdmins,
     } : {
       visibility: 'public',
@@ -588,6 +590,8 @@ io.on('connection', (socket) => {
       djMode: false,
       djPlayers: 0,
       allowPlaylistAdditions: false,
+      sessionEnabled: false,
+      autoplay: true,
       admins: roomAdmins,
     };
 
@@ -748,7 +752,21 @@ io.on('connection', (socket) => {
     
     // Auto-play first track if no track is currently playing
     // Check if the user who added the track can play
-    if (!room.currentTrack && room.queue.length > 0) {
+    // Auto-play if: no current track OR current track exists but not playing
+    // Also check if autoplay is enabled in room settings
+    if ((!room.currentTrack || !room.isPlaying) && room.queue.length > 0) {
+      // Check autoplay setting
+      let roomSettings = null;
+      if (chatModule) {
+        roomSettings = await chatModule.getRoomSettings(roomId);
+      }
+      const autoplayEnabled = roomSettings?.autoplay !== false; // Default to true if not set
+      
+      if (!autoplayEnabled) {
+        console.log(`Auto-play disabled for room ${roomId}`);
+        return;
+      }
+      
       const firstTrack = room.queue[0];
       const trackOwnerId = firstTrack.addedBy || userId;
       const playCheck = await canUserPlay(roomId, trackOwnerId);
@@ -767,14 +785,35 @@ io.on('connection', (socket) => {
         return;
       }
       
+      // Move current track to history if it exists (but not playing)
+      if (room.currentTrack && !room.isPlaying) {
+        const historyTrack = {
+          ...room.currentTrack,
+          playedAt: Date.now()
+        };
+        room.history.unshift(historyTrack);
+        // Limit history to last 100 tracks
+        if (room.history.length > 100) {
+          room.history = room.history.slice(0, 100);
+        }
+      }
+      
       // User can play, proceed with auto-play
       room.currentTrack = room.queue.shift();
       room.isPlaying = true;
       room.position = 0;
+      room.lastBroadcastPosition = 0;
+      
       scheduleSave(roomId);
       
       io.to(roomId).emit('track-changed', room.currentTrack);
-      io.to(roomId).emit('play-track');
+      if (room.history.length > 0) {
+        io.to(roomId).emit('history-updated', room.history);
+      }
+      // Delay before playing to ensure track is loaded
+      setTimeout(() => {
+        io.to(roomId).emit('play-track');
+      }, 1500);
       console.log(`Auto-playing first track in room ${roomId}`);
     }
   });
@@ -1351,6 +1390,7 @@ io.on('connection', (socket) => {
       dj_players: settings.djPlayers,
       allow_playlist_additions: settings.allowPlaylistAdditions,
       session_enabled: settings.sessionEnabled,
+      autoplay: settings.autoplay !== false, // Default to true if not specified
     };
 
     const updatedSettings = await chatModule.updateRoomSettings(roomId, dbSettings);
@@ -1367,6 +1407,7 @@ io.on('connection', (socket) => {
         djPlayers: updatedSettings.dj_players || 0,
         allowPlaylistAdditions: updatedSettings.allow_playlist_additions || false,
         sessionEnabled: updatedSettings.session_enabled || false,
+        autoplay: updatedSettings.autoplay !== false, // Default to true if not specified
         admins: roomAdmins,
       };
       // Broadcast updated settings to all users in room

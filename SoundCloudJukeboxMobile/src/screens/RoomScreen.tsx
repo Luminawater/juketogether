@@ -116,6 +116,7 @@ interface RoomSettings {
   admins: string[];
   allowPlaylistAdditions: boolean;
   sessionEnabled: boolean;
+  autoplay: boolean;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -535,6 +536,7 @@ const RoomScreen: React.FC = () => {
     admins: [],
     allowPlaylistAdditions: false,
     sessionEnabled: false,
+    autoplay: true,
   });
   const [isOwner, setIsOwner] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -589,7 +591,6 @@ const RoomScreen: React.FC = () => {
   // Scroll detection state
   const [showHeaderControls, setShowHeaderControls] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
-  const nowPlayingRef = useRef<View>(null);
   
   // FAB animation
   const fabTranslateX = useRef(new Animated.Value(0)).current;
@@ -859,6 +860,7 @@ const RoomScreen: React.FC = () => {
         admins: updatedSettings.admins || roomSettings.admins || [],
         allowPlaylistAdditions: updatedSettings.allowPlaylistAdditions || false,
         sessionEnabled: updatedSettings.sessionEnabled || false,
+        autoplay: updatedSettings.autoplay !== false, // Default to true if not specified
       });
       setCanControl(updatedSettings.allowControls !== false || isOwner || isAdmin);
     };
@@ -1808,9 +1810,23 @@ const RoomScreen: React.FC = () => {
         djPlayers: roomSettings.djPlayers,
         allowPlaylistAdditions: roomSettings.allowPlaylistAdditions,
         sessionEnabled: roomSettings.sessionEnabled,
+        autoplay: roomSettings.autoplay,
       },
     });
     Alert.alert('Success', 'Settings saved!');
+  };
+
+  const toggleAutoplay = () => {
+    if (!isOwner && !isAdmin || !socketService.socket) return;
+    const newAutoplay = !roomSettings.autoplay;
+    setRoomSettings(prev => ({ ...prev, autoplay: newAutoplay }));
+    socketService.socket.emit('update-room-settings', {
+      roomId,
+      settings: {
+        ...roomSettings,
+        autoplay: newAutoplay,
+      },
+    });
   };
 
   const shareRoom = async () => {
@@ -1885,11 +1901,6 @@ const RoomScreen: React.FC = () => {
       ]
     );
   }, [user, session, roomId, navigation]);
-
-  const handleNowPlayingLayout = useCallback((event: any) => {
-    // Handle layout measurements if needed
-    // This can be used for scroll-to functionality or other layout-based features
-  }, []);
 
   const renderMainTab = useCallback(() => {
     // Show DJ Mode interface if active and user has PRO tier
@@ -2005,6 +2016,9 @@ const RoomScreen: React.FC = () => {
           loadingReaction={loadingReaction}
           hasUser={!!user}
           queueLength={queue.length}
+          autoplay={roomSettings.autoplay}
+          onToggleAutoplay={toggleAutoplay}
+          canToggleAutoplay={isOwner || isAdmin}
         />
       )}
 
@@ -2038,228 +2052,41 @@ const RoomScreen: React.FC = () => {
         />
       )}
 
-          <View 
-            ref={nowPlayingRef}
-            onLayout={handleNowPlayingLayout}
-            style={styles.nowPlayingHeader}
-          >
-            <View style={styles.nowPlayingHeaderLeft}>
-              <View style={[styles.iconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
-                <MaterialCommunityIcons 
-                  name="music-note" 
-                  size={24} 
-                  color={theme.colors.primary} 
-                />
-              </View>
-              <Title style={styles.nowPlayingTitle}>Now Playing</Title>
-            </View>
-            {isPlaying && (
-              <View style={[styles.liveIndicator, { backgroundColor: `${theme.colors.primary}20` }]}>
-                <View style={[styles.liveDot, { backgroundColor: theme.colors.primary }]} />
-                <Text style={[styles.liveText, { color: theme.colors.primary }]}>LIVE</Text>
-              </View>
-            )}
-          </View>
-          {currentTrack ? (
-            <>
-              {/* YouTube Player - Show for YouTube tracks */}
-              {currentTrack.url?.includes('youtube') || currentTrack.url?.includes('youtu.be') ? (
-                <View style={styles.youtubePlayerContainer}>
-                  <YouTubePlayer
-                    track={currentTrack}
-                    isPlaying={isPlaying}
-                    position={position}
-                    onPositionUpdate={(newPosition) => {
-                      // Send position update to server (which saves to Supabase)
-                      if (socketService.socket && !playbackBlocked) {
-                        socketService.socket.emit('sync-position', {
-                          roomId,
-                          position: newPosition,
-                        });
-                      }
-                    }}
-                    onReady={() => {
-                      console.log('YouTube player ready');
-                    }}
-                    onError={(error) => {
-                      console.error('YouTube player error:', error);
-                      Alert.alert('YouTube Error', error);
-                    }}
-                    onStateChange={(state) => {
-                      // Update local state based on YouTube player state
-                      // But Supabase is source of truth, so we sync to it
-                      if (state === 'playing' && !isPlaying) {
-                        // YouTube started playing, but wait for Supabase confirmation
-                      } else if (state === 'paused' && isPlaying) {
-                        // YouTube paused, but wait for Supabase confirmation
-                      }
-                    }}
-                  />
-                </View>
-              ) : null}
-              
-              <View style={[styles.trackInfoContainer, { backgroundColor: `${theme.colors.surfaceVariant}30` }]}>
-                <View style={styles.trackInfo}>
-                  <View style={styles.thumbnailContainer}>
-                    <View style={[styles.thumbnailWrapper, isPlaying && styles.thumbnailWrapperPlaying]}>
-                      <Avatar.Image
-                        size={IS_MOBILE ? 110 : 130}
-                        source={{ uri: getThumbnailUrl(currentTrack.info?.thumbnail, IS_MOBILE ? 110 : 130) }}
-                        style={styles.trackThumbnail}
-                      />
-                      {isPlaying && (
-                        <View style={styles.playingIndicator}>
-                          <View style={[styles.pulseRing, { borderColor: theme.colors.primary }]} />
-                          <View style={[styles.pulseRing, styles.pulseRing2, { borderColor: theme.colors.primary }]} />
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                  <View style={styles.trackDetails}>
-                    <Text style={[styles.trackTitle, { color: theme.colors.onSurface }]} numberOfLines={2}>
-                      {currentTrack.info?.fullTitle || 'Unknown Track'}
-                    </Text>
-                    <View style={[styles.platformBadge, { backgroundColor: `${theme.colors.primary}20` }]}>
-                      <MaterialCommunityIcons 
-                        name={
-                          currentTrack.url?.includes('spotify') ? 'spotify' : 
-                          currentTrack.url?.includes('youtube') ? 'youtube' : 
-                          'music-note'
-                        }
-                        size={18}
-                        color={theme.colors.primary}
-                      />
-                      <Text style={[styles.trackPlatform, { color: theme.colors.primary }]}>
-                        {currentTrack.url?.includes('spotify') ? 'Spotify' : 
-                         currentTrack.url?.includes('youtube') ? 'YouTube' : 
-                         'SoundCloud'}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              {/* Track Reactions */}
-              {user && (
-                <View style={[styles.reactionsContainer, { 
-                  borderTopColor: theme.colors.outline,
-                  borderBottomColor: theme.colors.outline,
-                  backgroundColor: `${theme.colors.surfaceVariant}40`
-                }]}>
-                  <View style={styles.reactionButtonGroup}>
-                    <TouchableOpacity
-                      onPress={() => handleReaction('like')}
-                      disabled={loadingReaction}
-                      style={[
-                        styles.reactionButtonTouchable,
-                        { backgroundColor: trackReactions.userReaction === 'like' ? 'rgba(76, 175, 80, 0.2)' : `${theme.colors.surfaceVariant}80` }
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name="thumb-up"
-                        size={26}
-                        color={trackReactions.userReaction === 'like' ? '#4caf50' : theme.colors.onSurfaceVariant}
-                      />
-                    </TouchableOpacity>
-                    <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>
-                      {trackReactions.likes}
-                    </Text>
-                  </View>
-
-                  <View style={styles.reactionButtonGroup}>
-                    <TouchableOpacity
-                      onPress={() => handleReaction('dislike')}
-                      disabled={loadingReaction}
-                      style={[
-                        styles.reactionButtonTouchable,
-                        { backgroundColor: trackReactions.userReaction === 'dislike' ? 'rgba(244, 67, 54, 0.2)' : `${theme.colors.surfaceVariant}80` }
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name="thumb-down"
-                        size={26}
-                        color={trackReactions.userReaction === 'dislike' ? '#f44336' : theme.colors.onSurfaceVariant}
-                      />
-                    </TouchableOpacity>
-                    <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>
-                      {trackReactions.dislikes}
-                    </Text>
-                  </View>
-
-                  <View style={styles.reactionButtonGroup}>
-                    <TouchableOpacity
-                      onPress={() => handleReaction('fantastic')}
-                      disabled={loadingReaction}
-                      style={[
-                        styles.reactionButtonTouchable,
-                        { backgroundColor: trackReactions.userReaction === 'fantastic' ? 'rgba(255, 152, 0, 0.2)' : `${theme.colors.surfaceVariant}80` }
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name="star"
-                        size={26}
-                        color={trackReactions.userReaction === 'fantastic' ? '#ff9800' : theme.colors.onSurfaceVariant}
-                      />
-                    </TouchableOpacity>
-                    <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>
-                      {trackReactions.fantastic}
-                    </Text>
-                  </View>
-                </View>
-              )}
-            </>
-          ) : (
-            <Text style={styles.noTrack}>No track playing</Text>
-          )}
-
-          {/* Playback Controls */}
-          <Card style={styles.card}>
-            <Card.Content>
-              <View style={styles.controls}>
-                <Button
-                  mode="contained"
-                  onPress={playPause}
-                  style={[styles.controlButton, styles.primaryControlButton]}
-                  contentStyle={styles.controlButtonContent}
-                  disabled={!currentTrack || !canControl}
-                  icon={isPlaying ? 'pause' : 'play'}
-                  buttonColor={theme.colors.primary}
-                  textColor={theme.colors.onPrimary}
-                >
-                  {isPlaying ? 'Pause' : 'Play'}
-                </Button>
-                <Button
-                  mode="outlined"
-                  onPress={nextTrack}
-                  style={[styles.controlButton, { borderColor: theme.colors.primary }]}
-                  contentStyle={styles.controlButtonContent}
-                  disabled={queue.length === 0 || !canControl}
-                  icon="skip-next"
-                  textColor={theme.colors.primary}
-                >
-                  Next
-                </Button>
-                <Button
-                  mode="outlined"
-                  onPress={syncToSession}
-                  style={[styles.controlButton, { borderColor: theme.colors.primary }]}
-                  contentStyle={styles.controlButtonContent}
-                  icon="sync"
-                  textColor={theme.colors.primary}
-                >
-                  Sync
-                </Button>
-              </View>
-              {!canControl && (
-                <View style={[styles.permissionNoticeContainer, { backgroundColor: `${theme.colors.error}15` }]}>
-                  <MaterialCommunityIcons name="alert-circle" size={16} color={theme.colors.error} />
-                  <Text style={[styles.permissionNotice, { color: theme.colors.error }]}>
-                    Only room owner and admins can control playback
-                  </Text>
-                </View>
-              )}
-            </Card.Content>
-          </Card>
+      {/* YouTube Player - Show for YouTube tracks (separate from NowPlayingCard) */}
+      {currentTrack && (currentTrack.url?.includes('youtube') || currentTrack.url?.includes('youtu.be')) && (
+        <View style={styles.youtubePlayerContainer}>
+          <YouTubePlayer
+            track={currentTrack}
+            isPlaying={isPlaying}
+            position={position}
+            onPositionUpdate={(newPosition) => {
+              // Send position update to server (which saves to Supabase)
+              if (socketService.socket && !playbackBlocked) {
+                socketService.socket.emit('sync-position', {
+                  roomId,
+                  position: newPosition,
+                });
+              }
+            }}
+            onReady={() => {
+              console.log('YouTube player ready');
+            }}
+            onError={(error) => {
+              console.error('YouTube player error:', error);
+              Alert.alert('YouTube Error', error);
+            }}
+            onStateChange={(state) => {
+              // Update local state based on YouTube player state
+              // But Supabase is source of truth, so we sync to it
+              if (state === 'playing' && !isPlaying) {
+                // YouTube started playing, but wait for Supabase confirmation
+              } else if (state === 'paused' && isPlaying) {
+                // YouTube paused, but wait for Supabase confirmation
+              }
+            }}
+          />
+        </View>
+      )}
       {/* Boost Banner - Show if owner is free tier and no active boost */}
       {creatorTier === 'free' && !activeBoost && (
         <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]}>
@@ -2591,8 +2418,6 @@ const RoomScreen: React.FC = () => {
     position,
     roomId,
     theme,
-    nowPlayingRef,
-    handleNowPlayingLayout,
     playPause,
     nextTrack,
     syncToSession,
