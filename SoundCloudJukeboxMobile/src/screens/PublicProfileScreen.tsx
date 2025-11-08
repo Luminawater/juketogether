@@ -5,6 +5,7 @@ import {
   ScrollView,
   Alert,
   Platform,
+  Share,
 } from 'react-native';
 import {
   Text,
@@ -16,6 +17,7 @@ import {
   Divider,
   ActivityIndicator,
   Button,
+  IconButton,
 } from 'react-native-paper';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -141,6 +143,69 @@ const PublicProfileScreen: React.FC = () => {
     return `${minutes}m`;
   };
 
+  const getProfileUrl = () => {
+    if (Platform.OS === 'web') {
+      // For web, use the current origin and construct the profile URL
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      return `${origin}/profile/${id}`;
+    } else {
+      // For mobile, construct a deep link URL
+      return `juketogether://profile/${id}`;
+    }
+  };
+
+  const handleShare = async () => {
+    if (!profile) return;
+
+    const profileUrl = getProfileUrl();
+    const shareMessage = `Check out ${profile.display_name || profile.username || 'this profile'} on JukeTogether!\n${profileUrl}`;
+
+    try {
+      if (Platform.OS === 'web') {
+        // Use Web Share API if available
+        if (typeof navigator !== 'undefined' && 'share' in navigator) {
+          await (navigator as any).share({
+            title: `${profile.display_name || profile.username || 'Profile'} - JukeTogether`,
+            text: shareMessage,
+            url: profileUrl,
+          });
+        } else {
+          // Fallback: copy to clipboard
+          if (typeof navigator !== 'undefined' && navigator.clipboard) {
+            await navigator.clipboard.writeText(profileUrl);
+            Alert.alert('Copied!', 'Profile link copied to clipboard');
+          } else {
+            Alert.alert('Share', `Profile URL: ${profileUrl}`);
+          }
+        }
+      } else {
+        // Mobile: use React Native Share
+        const result = await Share.share({
+          message: shareMessage,
+          url: profileUrl,
+          title: `${profile.display_name || profile.username || 'Profile'} - JukeTogether`,
+        });
+
+        if (result.action === Share.sharedAction) {
+          if (result.activityType) {
+            // Shared with activity type of result.activityType
+            console.log('Shared via', result.activityType);
+          } else {
+            // Shared
+            console.log('Profile shared successfully');
+          }
+        } else if (result.action === Share.dismissedAction) {
+          // Dismissed
+          console.log('Share dismissed');
+        }
+      }
+    } catch (error: any) {
+      console.error('Error sharing profile:', error);
+      // Fallback: show alert with URL
+      Alert.alert('Share Profile', `Profile URL: ${profileUrl}`);
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -223,9 +288,18 @@ const PublicProfileScreen: React.FC = () => {
             />
           ) : null}
         </View>
-        <Title style={[styles.headerTitle, { color: theme.colors.onSurface }]}>
-          {profile.username || 'user_unknown'}
-        </Title>
+        <View style={styles.headerTitleContainer}>
+          <Title style={[styles.headerTitle, { color: theme.colors.onSurface }]}>
+            {profile.username || 'user_unknown'}
+          </Title>
+          <IconButton
+            icon="share-variant"
+            size={24}
+            onPress={handleShare}
+            iconColor={theme.colors.primary}
+            style={styles.shareButton}
+          />
+        </View>
         {profile.display_name && (
           <Paragraph style={[styles.displayName, { color: theme.colors.onSurfaceVariant }]}>
             {profile.display_name}
@@ -349,11 +423,21 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
   },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    width: '100%',
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginTop: 16,
     textAlign: 'center',
+    flex: 1,
+  },
+  shareButton: {
+    margin: 0,
   },
   displayName: {
     fontSize: 16,

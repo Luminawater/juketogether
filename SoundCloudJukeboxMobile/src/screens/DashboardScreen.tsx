@@ -19,7 +19,6 @@ import {
   Button,
   TextInput,
   RadioButton,
-  Avatar,
   FAB,
   Portal,
   Dialog,
@@ -32,6 +31,7 @@ import { Room } from '../types';
 import { SUPABASE_URL } from '../config/constants';
 import { UserBadge } from '../components/UserBadge';
 import { DashboardSkeleton } from '../components/LoadingSkeleton';
+import { ProfileHeader } from '../components/ProfileHeader';
 import {
   getRemainingSongs,
   canPlaySong,
@@ -565,104 +565,7 @@ const DashboardScreen: React.FC = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header with user info */}
-      <View style={[
-        styles.header, 
-        { 
-          backgroundColor: theme.colors.surface,
-          paddingTop: Platform.OS === 'web' ? 20 : Math.max(insets.top + 10, 20),
-        }
-      ]}>
-        <View style={styles.userInfo}>
-          <View style={[styles.avatarContainer, { backgroundColor: '#667eea' }]}>
-            {profile?.avatar_url || user?.user_metadata?.avatar_url ? (
-              <Avatar.Image
-                size={56}
-                source={{
-                  uri: profile?.avatar_url || user?.user_metadata?.avatar_url || ''
-                }}
-                style={styles.avatar}
-              />
-            ) : (
-              <View style={styles.avatarInitials}>
-                <Text style={styles.avatarInitialsText}>
-                  {profile?.display_name
-                    ? profile.display_name
-                        .split(' ')
-                        .map((n) => n[0])
-                        .join('')
-                        .toUpperCase()
-                        .substring(0, 2)
-                    : profile?.username
-                    ? profile.username.substring(0, 2).toUpperCase()
-                    : user?.email
-                    ? user.email.substring(0, 2).toUpperCase()
-                    : 'U'}
-                </Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.userDetails}>
-            <Text style={[styles.userEmail, { color: theme.colors.onSurface }]}>
-              {user?.email}
-            </Text>
-            <Text style={[styles.userGreeting, { color: theme.colors.onSurfaceVariant }]}>
-              Welcome back!
-            </Text>
-            {profile && permissions && (
-              <View style={styles.userBadgesContainer}>
-                <View style={styles.userBadges}>
-                  <View
-                    style={[
-                      styles.badgePill,
-                      {
-                        backgroundColor: profile.role === 'admin' 
-                          ? '#f44336' 
-                          : profile.role === 'moderator'
-                          ? '#ff9800'
-                          : '#2196f3',
-                      },
-                    ]}
-                  >
-                    <Text style={styles.badgeText}>
-                      {profile.role === 'admin'
-                        ? 'Admin'
-                        : profile.role === 'moderator'
-                        ? 'Moderator'
-                        : 'User'}
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.badgePill,
-                      {
-                        backgroundColor:
-                          profile.subscription_tier === 'pro'
-                            ? '#667eea'
-                            : profile.subscription_tier === 'standard'
-                            ? '#4caf50'
-                            : '#9e9e9e',
-                      },
-                    ]}
-                  >
-                    <Text style={styles.badgeText}>
-                      {profile.subscription_tier === 'pro'
-                        ? 'Pro'
-                        : profile.subscription_tier === 'standard'
-                        ? 'Standard'
-                        : 'Free'}
-                    </Text>
-                  </View>
-                </View>
-                {permissions.max_songs !== Infinity && (
-                  <Text style={[styles.songCount, { color: theme.colors.onSurfaceVariant }]}>
-                    {permissions.songs_played}/{permissions.max_songs} songs played
-                  </Text>
-                )}
-              </View>
-            )}
-          </View>
-        </View>
-      </View>
+      <ProfileHeader avatarSize={56} />
 
       <ScrollView 
         style={styles.content}
@@ -975,92 +878,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: IS_MOBILE ? 16 : 20,
-    paddingBottom: IS_MOBILE ? 16 : 20,
-    elevation: 6,
-    // Web-compatible shadow
-    ...(Platform.OS === 'web' ? {
-      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.2)',
-    } : {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.15,
-      shadowRadius: 8,
-    }),
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  avatarContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  avatar: {
-    backgroundColor: 'transparent',
-  },
-  avatarInitials: {
-    width: 56,
-    height: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarInitialsText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  userDetails: {
-    marginLeft: IS_MOBILE ? 12 : 16,
-    flex: 1,
-  },
-  userEmail: {
-    fontSize: IS_MOBILE ? 15 : 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  userGreeting: {
-    fontSize: IS_MOBILE ? 13 : 14,
-    marginBottom: 8,
-  },
-  userBadgesContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  userBadges: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  badgePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 16,
-    minHeight: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-  songCount: {
-    fontSize: 12,
-    marginLeft: 4,
   },
   content: {
     flex: 1,

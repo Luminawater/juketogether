@@ -26,6 +26,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { UserBadge } from '../components/UserBadge';
+import { ProfileHeader } from '../components/ProfileHeader';
 import { getRemainingSongs } from '../utils/permissions';
 
 type ProfileScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Profile'>;
@@ -225,45 +226,7 @@ const ProfileScreen: React.FC = () => {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Welcome Header Section */}
-        <View style={[styles.welcomeHeader, { backgroundColor: theme.colors.surface }]}>
-          <View style={styles.welcomeUserInfo}>
-            <Avatar.Text
-              size={60}
-              label={getInitials()}
-              style={{ backgroundColor: theme.colors.primary }}
-            />
-            {avatarUrl ? (
-              <Avatar.Image
-                size={60}
-                source={{ uri: avatarUrl }}
-                style={styles.avatarOverlay}
-              />
-            ) : null}
-            <View style={styles.welcomeDetails}>
-              <Text style={[styles.welcomeEmail, { color: theme.colors.onSurface }]}>
-                {user?.email || 'User'}
-              </Text>
-              <Text style={[styles.welcomeGreeting, { color: theme.colors.onSurfaceVariant }]}>
-                Welcome back!
-              </Text>
-              {profile && permissions && (
-                <View style={styles.welcomeBadges}>
-                  <UserBadge
-                    role={profile.role}
-                    tier={profile.subscription_tier}
-                    showLabel={false}
-                    size="small"
-                  />
-                  {permissions.max_songs !== Infinity && (
-                    <Text style={[styles.welcomeSongCount, { color: theme.colors.onSurfaceVariant }]}>
-                      {permissions.songs_played}/{permissions.max_songs} songs played
-                    </Text>
-                  )}
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
+        <ProfileHeader avatarSize={60} paddingTop={60} useSafeArea={false} />
 
         {/* Profile Header Section */}
         <View style={styles.header}>
@@ -613,47 +576,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 40,
-  },
-  welcomeHeader: {
-    padding: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    elevation: 6,
-    // Web-compatible shadow
-    ...(Platform.OS === 'web' ? {
-      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.2)',
-    } : {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.15,
-      shadowRadius: 8,
-    }),
-  },
-  welcomeUserInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  welcomeDetails: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  welcomeEmail: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  welcomeGreeting: {
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  welcomeBadges: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  welcomeSongCount: {
-    fontSize: 12,
   },
   header: {
     alignItems: 'center',
