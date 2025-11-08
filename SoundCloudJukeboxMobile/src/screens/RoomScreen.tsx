@@ -2788,6 +2788,20 @@ const RoomScreen: React.FC = () => {
               <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
                 If disabled, only room owner and admins can add tracks to the queue
               </Text>
+              
+              <Divider style={[styles.divider, { marginVertical: 12 }]} />
+              
+              <View style={styles.settingRow}>
+                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Allow Users to Remove from Queue</Text>
+                <Switch
+                  value={roomSettings.allowQueueRemoval}
+                  onValueChange={(value) => setRoomSettings(prev => ({ ...prev, allowQueueRemoval: value }))}
+                  disabled={!isOwner && !isAdmin}
+                />
+              </View>
+              <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
+                If disabled, only room owner and admins can remove tracks. Users can always remove their own tracks.
+              </Text>
             </View>
 
             <Divider style={styles.divider} />
@@ -3325,6 +3339,26 @@ const RoomScreen: React.FC = () => {
         }}
       />
 
+      {/* MiniPlayer FAB Button */}
+      {currentTrack && (
+        <Animated.View
+          style={[
+            styles.fabContainer,
+            {
+              transform: [{ translateX: fabTranslateX }],
+            },
+          ]}
+        >
+          <FAB
+            icon="music-note"
+            style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+            onPress={handleToggleMiniPlayer}
+            label={miniPlayerVisible ? 'Hide' : 'Player'}
+            color={theme.colors.onPrimary}
+          />
+        </Animated.View>
+      )}
+
       {miniPlayerVisible && currentTrack && (
         <MiniPlayer
           currentTrack={currentTrack}
@@ -3333,6 +3367,7 @@ const RoomScreen: React.FC = () => {
           onPlayPause={playPause}
           onExpand={handleExpandMiniPlayer}
           onClose={handleCloseMiniPlayer}
+          position="left"
         />
       )}
 
@@ -4162,6 +4197,26 @@ const styles = StyleSheet.create({
   boostButton: {
     marginTop: 8,
     borderRadius: 12,
+  },
+  fabContainer: {
+    position: 'absolute',
+    bottom: IS_MOBILE ? 16 : 24,
+    left: 0,
+    zIndex: 999,
+    ...(Platform.OS === 'web' ? {
+      position: 'fixed',
+    } : {}),
+  },
+  fab: {
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.3)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 8,
+    }),
   },
 });
 
