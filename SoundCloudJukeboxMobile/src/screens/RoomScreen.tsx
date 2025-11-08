@@ -1138,9 +1138,14 @@ const RoomScreen: React.FC = () => {
   const syncToSession = () => {
     if (!connected || !socketService.socket) return;
 
+    // For YouTube tracks, we use the current position from state
+    // The YouTube player reports position updates via onPositionUpdate
+    // which updates the position state, so we can use that
+    const syncPosition = position;
+
     socketService.socket.emit('sync-all-users', {
       roomId,
-      position: position,
+      position: syncPosition,
     });
 
     setIsUserSyncedToSession(true);
@@ -2852,6 +2857,10 @@ const RoomScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  youtubePlayerContainer: {
+    marginBottom: IS_MOBILE ? 16 : 20,
+    width: '100%',
+  },
   container: {
     flex: 1,
   },
