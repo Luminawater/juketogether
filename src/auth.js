@@ -46,9 +46,20 @@ function authenticateSocket(socket, next) {
   });
 }
 
+// Validate UUID format
+function isValidUUID(str) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
 // Get user profile
 async function getUserProfile(userId) {
   try {
+    // Only query if userId is a valid UUID (not a socket ID)
+    if (!isValidUUID(userId)) {
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('user_profiles')
       .select('*')
@@ -95,6 +106,11 @@ async function updateUserProfile(userId, updates) {
 // Create user profile if it doesn't exist
 async function ensureUserProfile(userId, userMetadata) {
   try {
+    // Only create profile for valid UUIDs (authenticated users)
+    if (!isValidUUID(userId)) {
+      return null;
+    }
+
     let profile = await getUserProfile(userId);
 
     if (!profile) {
@@ -143,5 +159,6 @@ module.exports = {
   getUserProfile,
   updateUserProfile,
   ensureUserProfile,
-  findUserByUsername
+  findUserByUsername,
+  isValidUUID
 };

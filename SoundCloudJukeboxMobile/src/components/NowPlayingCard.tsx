@@ -15,9 +15,6 @@ interface NowPlayingCardProps {
   isPlaying: boolean;
   trackReactions: TrackReactionCounts;
   canControl: boolean;
-  onPlayPause: () => void;
-  onNext: () => void;
-  onSync: () => void;
   onReaction: (reactionType: ReactionType) => void;
   loadingReaction: boolean;
   hasUser: boolean;
@@ -25,6 +22,15 @@ interface NowPlayingCardProps {
   autoplay: boolean;
   onToggleAutoplay: () => void;
   canToggleAutoplay: boolean;
+  position?: number; // Position in milliseconds
+  duration?: number; // Duration in milliseconds
+  onAddToPlaylist?: () => void;
+  onPlayPause?: () => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  hasQueue?: boolean;
+  onCreatePlaylist?: () => void;
+  canCreatePlaylist?: boolean;
 }
 
 export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
@@ -32,9 +38,6 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
   isPlaying,
   trackReactions,
   canControl,
-  onPlayPause,
-  onNext,
-  onSync,
   onReaction,
   loadingReaction,
   hasUser,
@@ -42,8 +45,29 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
   autoplay,
   onToggleAutoplay,
   canToggleAutoplay,
+  position = 0,
+  duration = 0,
+  onAddToPlaylist,
+  onPlayPause,
+  onPrevious,
+  onNext,
+  hasQueue = false,
+  onCreatePlaylist,
+  canCreatePlaylist = false,
 }) => {
   const theme = useTheme();
+
+  // Format time helper
+  const formatTime = (ms: number): string => {
+    if (!ms || isNaN(ms)) return '0:00';
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Calculate progress percentage
+  const progress = duration > 0 ? (position / duration) * 100 : 0;
 
   return (
     <Card style={[styles.card, styles.nowPlayingCard, { 
@@ -181,6 +205,102 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
                     {trackReactions.fantastic}
                   </Text>
                 </View>
+
+                {onAddToPlaylist && (
+                  <View style={styles.reactionButtonGroup}>
+                    <TouchableOpacity
+                      onPress={onAddToPlaylist}
+                      style={[
+                        styles.reactionButtonTouchable,
+                        { backgroundColor: `${theme.colors.surfaceVariant}80` }
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name="plus-circle"
+                        size={26}
+                        color={theme.colors.onSurfaceVariant}
+                      />
+                    </TouchableOpacity>
+                    <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>
+                      Que
+                    </Text>
+                  </View>
+                )}
+
+                {onCreatePlaylist && canCreatePlaylist && (
+                  <View style={styles.reactionButtonGroup}>
+                    <TouchableOpacity
+                      onPress={onCreatePlaylist}
+                      style={[
+                        styles.reactionButtonTouchable,
+                        { backgroundColor: `${theme.colors.surfaceVariant}80` }
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name="playlist-music"
+                        size={26}
+                        color={theme.colors.onSurfaceVariant}
+                      />
+                    </TouchableOpacity>
+                    <Text style={[styles.reactionCount, { color: theme.colors.onSurface }]}>
+                      Playlist
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Mobile Playback Controls - Only on mobile devices, not web */}
+            {IS_MOBILE && Platform.OS !== 'web' && onPlayPause && onPrevious && onNext && (
+              <View style={[styles.mobileControlsContainer, { 
+                borderTopColor: theme.colors.outline,
+                borderBottomColor: theme.colors.outline,
+                backgroundColor: `${theme.colors.surfaceVariant}20`
+              }]}>
+                <View style={styles.mobileControlsRow}>
+                  <TouchableOpacity
+                    onPress={onPlayPause}
+                    disabled={!currentTrack || !canControl}
+                    style={[
+                      styles.mobileControlButton,
+                      { backgroundColor: theme.colors.primary }
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name={isPlaying ? 'pause' : 'play'}
+                      size={28}
+                      color={theme.colors.onPrimary}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={onPrevious}
+                    disabled={!currentTrack || !canControl}
+                    style={[
+                      styles.mobileControlButton,
+                      { backgroundColor: theme.colors.surfaceVariant }
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="skip-previous"
+                      size={24}
+                      color={theme.colors.onSurface}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={onNext}
+                    disabled={!hasQueue || !canControl}
+                    style={[
+                      styles.mobileControlButton,
+                      { backgroundColor: theme.colors.surfaceVariant }
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="skip-next"
+                      size={24}
+                      color={theme.colors.onSurface}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
 
@@ -211,50 +331,31 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
               </View>
             )}
 
-            {/* Playback Controls */}
-            <View style={styles.controls}>
-              <Button
-                mode="contained"
-                onPress={onPlayPause}
-                style={[styles.controlButton, styles.primaryControlButton]}
-                contentStyle={styles.controlButtonContent}
-                disabled={!canControl}
-                icon={isPlaying ? 'pause' : 'play'}
-                buttonColor={theme.colors.primary}
-                textColor={theme.colors.onPrimary}
-              >
-                {isPlaying ? 'Pause' : 'Play'}
-              </Button>
-              <Button
-                mode="outlined"
-                onPress={onNext}
-                style={[styles.controlButton, { borderColor: theme.colors.primary }]}
-                contentStyle={styles.controlButtonContent}
-                disabled={queueLength === 0 || !canControl}
-                icon="skip-next"
-                textColor={theme.colors.primary}
-              >
-                Next
-              </Button>
-              <Button
-                mode="outlined"
-                onPress={onSync}
-                style={[styles.controlButton, { borderColor: theme.colors.primary }]}
-                contentStyle={styles.controlButtonContent}
-                icon="sync"
-                textColor={theme.colors.primary}
-              >
-                Sync
-              </Button>
-            </View>
-            {!canControl && (
-              <View style={[styles.permissionNoticeContainer, { backgroundColor: `${theme.colors.error}15` }]}>
-                <MaterialCommunityIcons name="alert-circle" size={16} color={theme.colors.error} />
-                <Text style={[styles.permissionNotice, { color: theme.colors.error }]}>
-                  Only room owner and admins can control playback
-                </Text>
+            {/* Progress Bar and Time Display - Show for SoundCloud tracks */}
+            {currentTrack?.url?.includes('soundcloud.com') && duration > 0 && (
+              <View style={styles.progressContainer}>
+                <View style={styles.progressBarContainer}>
+                  <View 
+                    style={[
+                      styles.progressBar, 
+                      { 
+                        width: `${Math.min(100, Math.max(0, progress))}%`,
+                        backgroundColor: theme.colors.primary,
+                      }
+                    ]} 
+                  />
+                </View>
+                <View style={styles.timeContainer}>
+                  <Text style={[styles.timeText, { color: theme.colors.onSurfaceVariant }]}>
+                    {formatTime(position)}
+                  </Text>
+                  <Text style={[styles.timeText, { color: theme.colors.onSurfaceVariant }]}>
+                    {formatTime(duration)}
+                  </Text>
+                </View>
               </View>
             )}
+
           </>
         ) : (
           <Text style={[styles.noTrack, { color: theme.colors.onSurfaceVariant }]}>No track playing</Text>
@@ -509,6 +610,70 @@ const styles = StyleSheet.create({
   autoplayLabel: {
     fontSize: IS_MOBILE ? 14 : 16,
     fontWeight: '500',
+  },
+  progressContainer: {
+    marginVertical: IS_MOBILE ? 12 : 16,
+    paddingHorizontal: IS_MOBILE ? 4 : 8,
+  },
+  progressBarContainer: {
+    width: '100%',
+    height: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginBottom: 8,
+    ...(Platform.OS === 'web' ? {
+      cursor: 'pointer',
+    } : {}),
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 2,
+    ...(Platform.OS === 'web' ? {
+      transition: 'width 0.3s ease',
+    } : {}),
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  timeText: {
+    fontSize: IS_MOBILE ? 11 : 12,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+  },
+  mobileControlsContainer: {
+    marginVertical: IS_MOBILE ? 12 : 16,
+    paddingVertical: IS_MOBILE ? 12 : 14,
+    paddingHorizontal: IS_MOBILE ? 12 : 16,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderRadius: 12,
+  },
+  mobileControlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  mobileControlButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.2)',
+      cursor: 'pointer',
+      transition: 'transform 0.2s, box-shadow 0.2s',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+    }),
   },
 });
 

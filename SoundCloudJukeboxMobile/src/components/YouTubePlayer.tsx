@@ -1,8 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Platform, Dimensions } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { useTheme } from 'react-native-paper';
 import { Track } from '../types';
+
+// Conditionally import WebView only for native platforms
+let WebView: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    WebView = require('react-native-webview').WebView;
+  } catch (e) {
+    console.warn('react-native-webview not available');
+  }
+}
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const IS_MOBILE = SCREEN_WIDTH < 768;
@@ -230,18 +239,26 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   const handleMessage = (event: any) => {
     try {
       const message = JSON.parse(event.nativeEvent.data);
+      console.log('[YouTubePlayer] Received message from WebView', { 
+        type: message.type, 
+        data: message.data,
+        track: track?.url 
+      });
       
       switch (message.type) {
         case 'ready':
+          console.log('[YouTubePlayer] Player ready');
           setPlayerReady(true);
           if (onReady) onReady();
           // Sync to Supabase position when ready
           if (position > 0 && !isSyncing) {
+            console.log('[YouTubePlayer] Syncing to position on ready', { position });
             syncToPosition(position);
           }
           break;
         
         case 'stateChange':
+          console.log('[YouTubePlayer] State changed', { state: message.data?.state });
           if (onStateChange && message.data?.state) {
             onStateChange(message.data.state);
           }
@@ -259,13 +276,14 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           break;
         
         case 'error':
+          console.error('[YouTubePlayer] Player error', { error: message.data?.error });
           if (onError && message.data?.error) {
             onError(message.data.error);
           }
           break;
       }
     } catch (error) {
-      console.error('Error parsing WebView message:', error);
+      console.error('[YouTubePlayer] Error parsing WebView message:', error);
     }
   };
 
@@ -294,12 +312,28 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
 
   // Handle play/pause from Supabase state
   useEffect(() => {
-    if (!playerReady || !webViewRef.current || isSyncing) return;
+    console.log('[YouTubePlayer] Play/pause effect triggered', { 
+      isPlaying, 
+      playerReady, 
+      hasWebView: !!webViewRef.current, 
+      isSyncing,
+      track: track?.url 
+    });
+    
+    if (!playerReady || !webViewRef.current || isSyncing) {
+      console.log('[YouTubePlayer] Skipping play/pause - not ready', { 
+        playerReady, 
+        hasWebView: !!webViewRef.current, 
+        isSyncing 
+      });
+      return;
+    }
 
     const message = JSON.stringify({
       type: isPlaying ? 'play' : 'pause',
       data: {}
     });
+    console.log('[YouTubePlayer] Sending message to player', { type: isPlaying ? 'play' : 'pause', message });
     webViewRef.current.postMessage(message);
   }, [isPlaying, playerReady]);
 
@@ -326,6 +360,179 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     });
     webViewRef.current.postMessage(message);
   }, [videoId]);
+
+  // Web implementation using iframe
+  if (Platform.OS === 'web') {
+    const [ytPlayer, setYtPlayer] = useState<any>(null);
+    const containerRef = useRef<any>(null);
+
+    // Load YouTube IFrame API for web
+    useEffect(() => {
+      if (!videoId) return;
+
+      // Load YouTube IFrame API script if not already loaded
+      if (!(window as any).YT) {
+        const tag = document.createElement('script');
+        tag.src = 'https://www.youtube.com/iframe_api';
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+      }
+
+      // Initialize player when API is ready
+      const onYouTubeIframeAPIReady = () => {
+        if (!containerRef.current) return;
+
+        // Get the actual DOM element from React Native Web View ref
+        const containerElement = containerRef.current as any;
+        const domNode = containerElement?._internalFiberInstanceHandleDEV?.stateNode || 
+                       containerElement?.base || 
+                       containerElement;
+
+        if (!domNode) return;
+
+        const playerId = `youtube-player-${videoId}`;
+        let playerDiv = document.getElementById(playerId);
+        if (!playerDiv) {
+          playerDiv = document.createElement('div');
+          playerDiv.id = playerId;
+          playerDiv.style.width = '100%';
+          playerDiv.style.height = '100%';
+          domNode.appendChild(playerDiv);
+        }
+
+        const player = new (window as any).YT.Player(playerId, {
+          height: '100%',
+          width: '100%',
+          videoId: videoId,
+          playerVars: {
+            autoplay: 0,
+            controls: 1,
+            rel: 0,
+            modestbranding: 1,
+            enablejsapi: 1,
+            origin: window.location.origin,
+            playsinline: 1,
+            iv_load_policy: 3,
+          },
+          events: {
+            onReady: () => {
+              setPlayerReady(true);
+              if (onReady) onReady();
+              setYtPlayer(player);
+            },
+            onStateChange: (event: any) => {
+              let state: 'playing' | 'paused' | 'ended' | 'buffering' = 'paused';
+              if (event.data === (window as any).YT.PlayerState.PLAYING) {
+                state = 'playing';
+              } else if (event.data === (window as any).YT.PlayerState.PAUSED) {
+                state = 'paused';
+              } else if (event.data === (window as any).YT.PlayerState.ENDED) {
+                state = 'ended';
+              } else if (event.data === (window as any).YT.PlayerState.BUFFERING) {
+                state = 'buffering';
+              }
+              if (onStateChange) onStateChange(state);
+            },
+            onError: (event: any) => {
+              if (onError) {
+                onError(`YouTube player error: ${event.data}`);
+              }
+            },
+          },
+        });
+      };
+
+      if ((window as any).YT && (window as any).YT.Player) {
+        onYouTubeIframeAPIReady();
+      } else {
+        (window as any).onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
+      }
+
+      return () => {
+        if (ytPlayer && ytPlayer.destroy) {
+          ytPlayer.destroy();
+        }
+      };
+    }, [videoId]);
+
+    // Handle play/pause
+    useEffect(() => {
+      console.log('[YouTubePlayer Web] Play/pause effect triggered', { 
+        isPlaying, 
+        hasPlayer: !!ytPlayer, 
+        playerReady,
+        track: track?.url 
+      });
+      
+      if (!ytPlayer || !playerReady) {
+        console.log('[YouTubePlayer Web] Skipping play/pause - not ready', { 
+          hasPlayer: !!ytPlayer, 
+          playerReady 
+        });
+        return;
+      }
+      
+      try {
+        if (isPlaying) {
+          console.log('[YouTubePlayer Web] Calling playVideo()');
+          ytPlayer.playVideo();
+        } else {
+          console.log('[YouTubePlayer Web] Calling pauseVideo()');
+          ytPlayer.pauseVideo();
+        }
+      } catch (error) {
+        console.error('[YouTubePlayer Web] Error in play/pause:', error);
+      }
+    }, [isPlaying, ytPlayer, playerReady]);
+
+    // Handle position sync
+    useEffect(() => {
+      if (!ytPlayer || !playerReady || isSyncing) return;
+      const diff = Math.abs(position - lastSupabasePositionRef.current);
+      if (diff > 2000) {
+        lastSupabasePositionRef.current = position;
+        setIsSyncing(true);
+        ytPlayer.seekTo(position / 1000, true);
+        setTimeout(() => setIsSyncing(false), 1500);
+      }
+    }, [position, ytPlayer, playerReady]);
+
+    // Position update interval
+    useEffect(() => {
+      if (!ytPlayer || !playerReady) return;
+      const interval = setInterval(() => {
+        try {
+          const currentTime = ytPlayer.getCurrentTime();
+          const positionMs = Math.floor(currentTime * 1000);
+          if (onPositionUpdate && Math.abs(positionMs - lastPositionRef.current) > 500) {
+            lastPositionRef.current = positionMs;
+            onPositionUpdate(positionMs);
+          }
+        } catch (e) {
+          // Player might not be ready
+        }
+      }, 1000);
+      return () => clearInterval(interval);
+    }, [ytPlayer, playerReady, onPositionUpdate]);
+
+    if (!videoId) return null;
+
+    return (
+      <View 
+        style={[styles.container, { backgroundColor: theme.colors.surface }]}
+        // @ts-ignore - web-specific ref
+        ref={containerRef}
+      >
+        <View style={styles.webview} />
+      </View>
+    );
+  }
+
+  // Native implementation using WebView
+  if (!WebView) {
+    console.warn('WebView not available on this platform');
+    return null;
+  }
 
   if (!videoId) {
     return null;
@@ -390,6 +597,11 @@ const styles = StyleSheet.create({
   webview: {
     flex: 1,
     backgroundColor: 'transparent',
+    ...(Platform.OS === 'web' ? {
+      width: '100%',
+      height: '100%',
+      border: 'none',
+    } : {}),
   },
 });
 

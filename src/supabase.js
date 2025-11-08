@@ -22,12 +22,21 @@ try {
 }
 
 const supabaseUrl = process.env.SUPABASE_URL || 'https://smryjxchwbfpjvpecffg.supabase.co';
-const supabaseKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtcnlqeGNod2JmcGp2cGVjZmZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1MzcxOTAsImV4cCI6MjA3ODExMzE5MH0.M1jQK3TSWMaAspSOkR-x8FkIi_EECgSZjTpb9lks0hQ';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtcnlqeGNod2JmcGp2cGVjZmZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1MzcxOTAsImV4cCI6MjA3ODExMzE5MH0.M1jQK3TSWMaAspSOkR-x8FkIi_EECgSZjTpb9lks0hQ';
+// Service role key bypasses RLS - use for server-side operations
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || null;
 
-if (supabaseUrl && supabaseKey && fetch) {
+// Warn if service role key is not set (needed for server-side operations)
+if (!supabaseServiceRoleKey) {
+  console.warn('⚠️  SUPABASE_SERVICE_ROLE_KEY not set. Server-side tracking operations may fail due to RLS policies.');
+  console.warn('   Add SUPABASE_SERVICE_ROLE_KEY to your .env file to enable server-side analytics tracking.');
+}
+
+if (supabaseUrl && supabaseAnonKey && fetch) {
   supabaseConfig = {
     url: supabaseUrl,
-    key: supabaseKey,
+    key: supabaseAnonKey, // Default to anon key
+    serviceRoleKey: supabaseServiceRoleKey, // Service role key for RLS bypass
     restUrl: `${supabaseUrl}/rest/v1`
   };
   console.log('Supabase configured for MCP-style SQL execution');
@@ -121,7 +130,8 @@ async function executeSQL(query, params = []) {
 }
 
 // Helper to use PostgREST REST API directly (more reliable than SQL for CRUD)
-async function restRequest(method, table, data = null, filters = {}) {
+// useServiceRole: if true, uses service role key to bypass RLS (for server-side operations)
+async function restRequest(method, table, data = null, filters = {}, useServiceRole = false) {
   if (!supabaseConfig || !fetch) {
     throw new Error('Supabase not configured');
   }
@@ -140,11 +150,14 @@ async function restRequest(method, table, data = null, filters = {}) {
       url += `?${queryParams.toString()}`;
     }
 
+    // Use service role key if requested (bypasses RLS)
+    const apiKey = useServiceRole && supabaseConfig.serviceRoleKey ? supabaseConfig.serviceRoleKey : supabaseConfig.key;
+
     const options = {
       method: method,
       headers: {
-        'apikey': supabaseConfig.key,
-        'Authorization': `Bearer ${supabaseConfig.key}`,
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'Prefer': 'return=representation'
       }
@@ -278,13 +291,21 @@ async function loadRoomState(roomId) {
       historyLength: history.length
     });
 
+    // Ensure position values are integers (handle decimals, strings, NaN, etc.)
+    const safeRound = (value) => {
+      if (value === null || value === undefined) return 0;
+      const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+      if (isNaN(num) || !isFinite(num)) return 0;
+      return Math.round(num);
+    };
+
     return {
       queue: queue,
       history: history,
       currentTrack: currentTrack,
       isPlaying: roomData.is_playing || false,
-      position: roomData.position || 0,
-      lastBroadcastPosition: roomData.last_broadcast_position || 0,
+      position: safeRound(roomData.position), // Always ensure integer
+      lastBroadcastPosition: safeRound(roomData.last_broadcast_position), // Always ensure integer
       hostUserId: roomData.host_user_id || null
     };
   } catch (error) {
@@ -339,6 +360,18 @@ async function saveRoomState(roomId, roomState) {
       return track.id && track.url;
     });
 
+    // Ensure position values are integers (handle decimals, strings, NaN, etc.)
+    const safeRound = (value) => {
+      // Handle null/undefined
+      if (value === null || value === undefined) return 0;
+      // Convert to number (handles strings like "5677.713999976158")
+      const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+      // Check for invalid numbers
+      if (isNaN(num) || !isFinite(num)) return 0;
+      // Round to integer
+      return Math.round(num);
+    };
+
     // Use REST API upsert (MCP-style)
     const roomData = {
       id: roomId,
@@ -346,8 +379,8 @@ async function saveRoomState(roomId, roomState) {
       history: history,
       current_track: currentTrack,
       is_playing: roomState.isPlaying || false,
-      position: roomState.position || 0,
-      last_broadcast_position: roomState.lastBroadcastPosition || 0,
+      position: safeRound(roomState.position), // Round to integer for INTEGER column
+      last_broadcast_position: safeRound(roomState.lastBroadcastPosition), // Round to integer for INTEGER column
       host_user_id: roomState.hostUserId || null,
       updated_at: new Date().toISOString()
     };
@@ -775,25 +808,44 @@ async function trackUserJoin(roomId, hostUserId, userId) {
       joined_at: new Date().toISOString()
     };
     
-    await restRequest('POST', 'room_sessions', sessionData);
+    // Use service role key to bypass RLS for server-side tracking
+    // If service role key is not available, skip tracking (non-critical)
+    if (supabaseConfig.serviceRoleKey) {
+      try {
+        await restRequest('POST', 'room_sessions', sessionData, {}, true);
+      } catch (error) {
+        // If it still fails, log but don't throw (non-critical operation)
+        console.warn('Failed to track user join (RLS policy):', error.message);
+      }
+    } else {
+      console.warn('Skipping user join tracking - SUPABASE_SERVICE_ROLE_KEY not configured');
+    }
     
-    // Update room analytics using RPC function
-    const response = await fetch(`${supabaseConfig.restUrl}/rpc/update_room_analytics_on_join`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': supabaseConfig.key,
-        'Authorization': `Bearer ${supabaseConfig.key}`
-      },
-      body: JSON.stringify({
-        p_room_id: roomId,
-        p_host_user_id: hostUserId || null,
-        p_user_id: userId || null
-      })
-    });
-    
-    if (!response.ok) {
-      console.warn('Failed to update room analytics on join:', await response.text());
+    // Update room analytics using RPC function (also use service role key)
+    // Only attempt if service role key is available
+    if (supabaseConfig.serviceRoleKey) {
+      try {
+        const serviceKey = supabaseConfig.serviceRoleKey;
+        const response = await fetch(`${supabaseConfig.restUrl}/rpc/update_room_analytics_on_join`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`
+          },
+          body: JSON.stringify({
+            p_room_id: roomId,
+            p_host_user_id: hostUserId || null,
+            p_user_id: userId || null
+          })
+        });
+        
+        if (!response.ok) {
+          console.warn('Failed to update room analytics on join:', await response.text());
+        }
+      } catch (error) {
+        console.warn('Failed to update room analytics on join:', error.message);
+      }
     }
     
     return true;
@@ -810,13 +862,14 @@ async function trackUserLeave(roomId, userId) {
   }
   
   try {
-    // Update session and analytics using RPC function
+    // Update session and analytics using RPC function (use service role key to bypass RLS)
+    const serviceKey = supabaseConfig.serviceRoleKey || supabaseConfig.key;
     const response = await fetch(`${supabaseConfig.restUrl}/rpc/update_room_analytics_on_leave`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': supabaseConfig.key,
-        'Authorization': `Bearer ${supabaseConfig.key}`
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`
       },
       body: JSON.stringify({
         p_room_id: roomId,
@@ -854,13 +907,14 @@ async function trackTrackPlay(roomId, hostUserId, userId, track) {
     const trackTitle = track.info?.fullTitle || track.info?.title || 'Unknown Track';
     const trackArtist = track.info?.artist || null;
     
-    // Update analytics using RPC function
+    // Update analytics using RPC function (use service role key to bypass RLS)
+    const serviceKey = supabaseConfig.serviceRoleKey || supabaseConfig.key;
     const response = await fetch(`${supabaseConfig.restUrl}/rpc/update_analytics_on_track_play`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': supabaseConfig.key,
-        'Authorization': `Bearer ${supabaseConfig.key}`
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`
       },
       body: JSON.stringify({
         p_room_id: roomId,
@@ -879,30 +933,31 @@ async function trackTrackPlay(roomId, hostUserId, userId, track) {
       console.warn('Failed to update analytics on track play:', await response.text());
     }
     
-    // Increment songs_played_count for the user who added the track
+    // Increment songs_played_count for the user who added the track (use service role key)
     if (userId) {
       try {
+        const serviceKey = supabaseConfig.serviceRoleKey || supabaseConfig.key;
         const incrementResponse = await fetch(`${supabaseConfig.restUrl}/user_profiles?id=eq.${userId}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': supabaseConfig.key,
-            'Authorization': `Bearer ${supabaseConfig.key}`,
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
             'Prefer': 'return=representation'
           },
           body: JSON.stringify({
-            songs_played_count: supabaseConfig.key ? 'songs_played_count + 1' : null
+            songs_played_count: serviceKey ? 'songs_played_count + 1' : null
           })
         });
         
         // Use RPC function for incrementing (more reliable)
-        if (supabaseConfig.key) {
+        if (serviceKey) {
           const incrementRpcResponse = await fetch(`${supabaseConfig.restUrl}/rpc/increment_songs_played`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'apikey': supabaseConfig.key,
-              'Authorization': `Bearer ${supabaseConfig.key}`
+              'apikey': serviceKey,
+              'Authorization': `Bearer ${serviceKey}`
             },
             body: JSON.stringify({
               user_id: userId

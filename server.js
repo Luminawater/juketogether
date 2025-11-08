@@ -140,13 +140,21 @@ async function getRoom(roomId) {
     const savedState = await loadRoomState(roomId);
     const savedVolumes = await loadUserVolumes(roomId);
     
+    // Ensure position values are integers when loading from Supabase
+    const safeRound = (value) => {
+      if (value === null || value === undefined) return 0;
+      const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+      if (isNaN(num) || !isFinite(num)) return 0;
+      return Math.round(num);
+    };
+
     rooms.set(roomId, {
       queue: savedState?.queue || [],
       history: savedState?.history || [],
       currentTrack: savedState?.currentTrack || null,
       isPlaying: savedState?.isPlaying || false,
-      position: savedState?.position || 0,
-      lastBroadcastPosition: savedState?.lastBroadcastPosition || 0,
+      position: safeRound(savedState?.position), // Ensure integer
+      lastBroadcastPosition: safeRound(savedState?.lastBroadcastPosition), // Ensure integer
       hostUserId: savedState?.hostUserId || null,
       users: new Set(),
       userVolumes: savedVolumes || new Map(), // Map of socket.id -> volume (0-100)
@@ -179,13 +187,21 @@ function scheduleSave(roomId) {
     const room = rooms.get(roomId);
     if (room) {
       console.log(`💾 Saving room "${roomId}" to Supabase...`);
+      // Ensure position values are integers before saving
+      const safeRound = (value) => {
+        if (value === null || value === undefined) return 0;
+        const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+        if (isNaN(num) || !isFinite(num)) return 0;
+        return Math.round(num);
+      };
+
       const saved = await saveRoomState(roomId, {
         queue: room.queue,
         history: room.history,
         currentTrack: room.currentTrack,
         isPlaying: room.isPlaying,
-        position: room.position,
-        lastBroadcastPosition: room.lastBroadcastPosition,
+        position: safeRound(room.position), // Ensure integer
+        lastBroadcastPosition: safeRound(room.lastBroadcastPosition), // Ensure integer
         hostUserId: room.hostUserId
       });
       if (saved) {
@@ -512,8 +528,9 @@ io.on('connection', (socket) => {
         room.history = latestState.history || [];
         room.currentTrack = latestState.currentTrack || null;
         room.isPlaying = latestState.isPlaying || false;
-        room.position = latestState.position || 0;
-        room.lastBroadcastPosition = latestState.lastBroadcastPosition || 0;
+        // Round position values to integers (handle any existing decimal values in DB)
+        room.position = Math.round(Number(latestState.position) || 0);
+        room.lastBroadcastPosition = Math.round(Number(latestState.lastBroadcastPosition) || 0);
         // Update host from Supabase (source of truth)
         if (latestState.hostUserId) {
           room.hostUserId = latestState.hostUserId;
@@ -599,7 +616,8 @@ io.on('connection', (socket) => {
     const usersList = [];
     for (const roomUserId of room.users) {
       let userProfile = null;
-      if (authModule) {
+      // Only fetch profile for valid UUIDs (authenticated users), not Socket.io session IDs
+      if (authModule && authModule.isValidUUID && authModule.isValidUUID(roomUserId)) {
         userProfile = await authModule.getUserProfile(roomUserId);
       }
       usersList.push({
@@ -871,11 +889,13 @@ io.on('connection', (socket) => {
     const { roomId, position } = data;
     const room = await getRoom(roomId);
     
-    room.position = position;
+    // Round position to integer (database column is INTEGER)
+    const roundedPosition = Math.round(Number(position) || 0);
+    room.position = roundedPosition;
     scheduleSave(roomId);
     
-    socket.to(roomId).emit('seek-track', position);
-    console.log(`⏩ Seek in room ${roomId} to ${position} by user ${socket.id}`);
+    socket.to(roomId).emit('seek-track', roundedPosition);
+    console.log(`⏩ Seek in room ${roomId} to ${roundedPosition} by user ${socket.id}`);
   });
 
   socket.on('next-track', async (data) => {
@@ -1104,21 +1124,24 @@ io.on('connection', (socket) => {
     const { roomId, position } = data;
     const room = await getRoom(roomId);
     
+    // Round position to integer (database column is INTEGER, not decimal)
+    const roundedPosition = Math.round(Number(position) || 0);
+    
     // Don't save position 0 or very small positions if track is playing
     // This prevents overwriting a good position with 0 when track restarts
-    if (position < 1000 && room.isPlaying && room.position > 5000) {
-      console.log(`Ignoring position sync to ${position}ms - track is playing at ${room.position}ms`);
+    if (roundedPosition < 1000 && room.isPlaying && room.position > 5000) {
+      console.log(`Ignoring position sync to ${roundedPosition}ms - track is playing at ${room.position}ms`);
       return;
     }
     
     // Don't save position 0 if we're far into the track (likely stale or error)
-    if (position === 0 && room.isPlaying && room.position > 10000) {
+    if (roundedPosition === 0 && room.isPlaying && room.position > 10000) {
       console.log(`Ignoring position sync to 0ms - track is playing at ${room.position}ms (likely stale data)`);
       return;
     }
     
-    // Update room position
-    room.position = position;
+    // Update room position (always as integer)
+    room.position = roundedPosition;
     
     // Save position to Supabase (source of truth) - debounced
     scheduleSave(roomId);
@@ -1128,14 +1151,14 @@ io.on('connection', (socket) => {
     // This prevents constant seeking that causes playback interruptions
     // Increased threshold to prevent micro-adjustments that cause stuttering
     // Also don't broadcast position 0 if we're far into the track
-    if (Math.abs(room.lastBroadcastPosition - position) > 5000) {
+    if (Math.abs(room.lastBroadcastPosition - roundedPosition) > 5000) {
       // Don't broadcast position 0 if we're far into the track (prevent unwanted restarts)
-      if (position === 0 && room.isPlaying && room.position > 10000) {
+      if (roundedPosition === 0 && room.isPlaying && room.position > 10000) {
         console.log(`Not broadcasting position 0 - track is playing at ${room.position}ms`);
         return;
       }
-      socket.to(roomId).emit('seek-track', position);
-      room.lastBroadcastPosition = position;
+      socket.to(roomId).emit('seek-track', roundedPosition);
+      room.lastBroadcastPosition = roundedPosition;
     }
   });
 
@@ -1164,28 +1187,32 @@ io.on('connection', (socket) => {
     const { roomId, position } = data;
     const room = await getRoom(roomId);
     
+    // Round position to integer (database column is INTEGER)
+    const roundedPosition = Math.round(Number(position) || 0);
+    
     // Update room position
-    room.position = position;
-    room.lastBroadcastPosition = position;
+    room.position = roundedPosition;
+    room.lastBroadcastPosition = roundedPosition;
     
     // Save position to Supabase immediately (source of truth)
+    // Use roundedPosition to ensure integer values
     await saveRoomState(roomId, {
       queue: room.queue,
       history: room.history,
       currentTrack: room.currentTrack,
       isPlaying: room.isPlaying,
-      position: position,
-      lastBroadcastPosition: position,
+      position: roundedPosition, // Use rounded value, not original
+      lastBroadcastPosition: roundedPosition, // Use rounded value, not original
       hostUserId: room.hostUserId
     });
     
     // Broadcast sync command to ALL users in the room (including the one who requested it)
     // This ensures everyone, including the requester, is synced
     io.to(roomId).emit('sync-all-users', {
-      position: position
+      position: roundedPosition // Use rounded value for consistency
     });
     
-    console.log(`🔄 User ${socket.id} requested sync to position ${position} in room ${roomId} (saved to Supabase)`);
+    console.log(`🔄 User ${socket.id} requested sync to position ${roundedPosition}ms in room ${roomId} (saved to Supabase)`);
   });
 
   socket.on('get-authoritative-position', async (data) => {
@@ -1207,11 +1234,13 @@ io.on('connection', (socket) => {
       // Only sync if there's a significant difference (> 5 seconds) to reduce lag
       // This prevents frequent seeks that interrupt smooth playback
       // Increased threshold to prevent micro-adjustments that cause stuttering
-      if (Math.abs(room.position - authoritativePosition) > 5000) {
-        room.position = authoritativePosition;
-        room.lastBroadcastPosition = authoritativePosition;
-        socket.emit('seek-track', authoritativePosition);
-        console.log(`Syncing user ${socket.id} to authoritative position from Supabase: ${authoritativePosition}ms`);
+      // Round authoritative position to integer (should already be integer, but ensure it)
+      const roundedAuthoritativePosition = Math.round(Number(authoritativePosition) || 0);
+      if (Math.abs(room.position - roundedAuthoritativePosition) > 5000) {
+        room.position = roundedAuthoritativePosition;
+        room.lastBroadcastPosition = roundedAuthoritativePosition;
+        socket.emit('seek-track', roundedAuthoritativePosition);
+        console.log(`Syncing user ${socket.id} to authoritative position from Supabase: ${roundedAuthoritativePosition}ms`);
       }
     }
   });

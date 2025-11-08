@@ -16,6 +16,10 @@ interface MiniPlayerProps {
   onExpand: () => void;
   onClose: () => void;
   position?: 'left' | 'right';
+  onPrevious?: () => void;
+  onNext?: () => void;
+  hasQueue?: boolean;
+  canControl?: boolean;
 }
 
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({
@@ -26,6 +30,10 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   onExpand,
   onClose,
   position = 'right',
+  onPrevious,
+  onNext,
+  hasQueue = false,
+  canControl = true,
 }) => {
   const theme = useTheme();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -82,13 +90,34 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
           </TouchableOpacity>
 
           <View style={styles.controls}>
+            {onPrevious && (
+              <IconButton
+                icon="skip-previous"
+                size={IS_MOBILE ? 20 : 24}
+                iconColor={theme.colors.onSurface}
+                onPress={onPrevious}
+                disabled={!currentTrack || !canControl}
+                style={styles.controlButton}
+              />
+            )}
             <IconButton
               icon={isPlaying ? 'pause' : 'play'}
               size={IS_MOBILE ? 24 : 28}
               iconColor={theme.colors.primary}
               onPress={onPlayPause}
+              disabled={!currentTrack || !canControl}
               style={styles.playButton}
             />
+            {onNext && (
+              <IconButton
+                icon="skip-next"
+                size={IS_MOBILE ? 20 : 24}
+                iconColor={theme.colors.onSurface}
+                onPress={onNext}
+                disabled={!hasQueue || !canControl}
+                style={styles.controlButton}
+              />
+            )}
             <IconButton
               icon="close"
               size={IS_MOBILE ? 20 : 24}
@@ -169,6 +198,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   playButton: {
+    margin: 0,
+  },
+  controlButton: {
     margin: 0,
   },
   closeButton: {

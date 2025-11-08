@@ -3,13 +3,13 @@ import { SupabaseClient } from '@supabase/supabase-js';
 export type ReactionType = 'like' | 'dislike' | 'fantastic';
 
 export interface TrackReaction {
-  id: number;
+  id?: number; // Optional - table may use composite primary key
   room_id: string;
   track_id: string;
   user_id: string;
   reaction_type: ReactionType;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface TrackReactionCounts {
@@ -73,13 +73,14 @@ export async function setTrackReaction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Check if user already has a reaction for this track
+    // Use composite key (room_id, track_id, user_id) instead of id
     const { data: existing, error: checkError } = await supabase
       .from('track_reactions')
-      .select('id, reaction_type')
+      .select('reaction_type')
       .eq('room_id', roomId)
       .eq('track_id', trackId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     if (checkError && checkError.code !== 'PGRST116') {
       // PGRST116 is "not found" which is expected if no reaction exists
@@ -93,7 +94,9 @@ export async function setTrackReaction(
         const { error: deleteError } = await supabase
           .from('track_reactions')
           .delete()
-          .eq('id', existing.id);
+          .eq('room_id', roomId)
+          .eq('track_id', trackId)
+          .eq('user_id', userId);
 
         if (deleteError) {
           console.error('Error removing reaction:', deleteError);
@@ -101,11 +104,13 @@ export async function setTrackReaction(
         }
         return { success: true };
       } else {
-        // Update to new reaction type
+        // Update to new reaction type using composite key
         const { error: updateError } = await supabase
           .from('track_reactions')
           .update({ reaction_type: reactionType, updated_at: new Date().toISOString() })
-          .eq('id', existing.id);
+          .eq('room_id', roomId)
+          .eq('track_id', trackId)
+          .eq('user_id', userId);
 
         if (updateError) {
           console.error('Error updating reaction:', updateError);
@@ -114,14 +119,13 @@ export async function setTrackReaction(
         return { success: true };
       }
     } else {
-      // Insert new reaction
+      // Insert new reaction using RPC function to bypass RLS return issues
       const { error: insertError } = await supabase
-        .from('track_reactions')
-        .insert({
-          room_id: roomId,
-          track_id: trackId,
-          user_id: userId,
-          reaction_type: reactionType,
+        .rpc('insert_track_reaction', {
+          p_room_id: roomId,
+          p_track_id: trackId,
+          p_user_id: userId,
+          p_reaction_type: reactionType,
         });
 
       if (insertError) {

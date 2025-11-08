@@ -4,6 +4,14 @@ const { getDefaultConfig } = require('expo/metro-config');
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
+// Ensure react-native-webview is properly resolved
+config.resolver = {
+  ...config.resolver,
+  extraNodeModules: {
+    ...config.resolver?.extraNodeModules,
+  },
+};
+
 // Try to apply NativeWind if available
 let finalConfig = config;
 

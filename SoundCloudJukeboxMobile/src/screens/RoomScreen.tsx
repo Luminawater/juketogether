@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -47,6 +47,7 @@ import { DJModeToggle } from '../components/DJModeToggle';
 import { DJModeUpgradeAd } from '../components/DJModeUpgradeAd';
 import { DJModeConfirmDialog } from '../components/DJModeConfirmDialog';
 import { YouTubePlayer } from '../components/YouTubePlayer';
+import { SoundCloudPlayer } from '../components/SoundCloudPlayer';
 import { SessionExitDialog } from '../components/SessionExitDialog';
 import { MiniPlayer } from '../components/MiniPlayer';
 import { djAudioService } from '../services/djAudioService';
@@ -510,6 +511,7 @@ const RoomScreen: React.FC = () => {
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(0); // Track duration in milliseconds
   const [trackUrl, setTrackUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -597,6 +599,10 @@ const RoomScreen: React.FC = () => {
   const fabPulseAnim = useRef(new Animated.Value(1)).current;
   const fabColorAnim = useRef(new Animated.Value(0)).current;
 
+  // Previous button double-click tracking
+  const lastPreviousClickTime = useRef<number>(0);
+  const PREVIOUS_DOUBLE_CLICK_WINDOW = 2000; // 2 seconds
+
   // Playback blocking state
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
   const [blockedInfo, setBlockedInfo] = useState<{
@@ -666,6 +672,17 @@ const RoomScreen: React.FC = () => {
         purchasedBy: string;
       } | null;
     }) => {
+      console.log('[handleRoomState] Received room state', { 
+        queueLength: state.queue?.length || 0,
+        hasCurrentTrack: !!state.currentTrack,
+        currentTrackUrl: state.currentTrack?.url,
+        currentTrackPlatform: state.currentTrack?.url?.includes('soundcloud') ? 'soundcloud' : 
+                              state.currentTrack?.url?.includes('youtube') ? 'youtube' : 
+                              state.currentTrack?.url?.includes('spotify') ? 'spotify' : 'unknown',
+        isPlaying: state.isPlaying,
+        position: state.position
+      });
+      
       setQueue(state.queue || []);
       setHistory(state.history || []);
       setCurrentTrack(state.currentTrack || null);
@@ -742,10 +759,18 @@ const RoomScreen: React.FC = () => {
     };
 
     const handlePlay = () => {
+      console.log('[handlePlay] Received play event, setting isPlaying to true', { 
+        currentTrack: currentTrack?.url, 
+        wasPlaying: isPlaying 
+      });
       setIsPlaying(true);
     };
 
     const handlePause = () => {
+      console.log('[handlePause] Received pause event, setting isPlaying to false', { 
+        currentTrack: currentTrack?.url, 
+        wasPlaying: isPlaying 
+      });
       setIsPlaying(false);
     };
 
@@ -918,8 +943,15 @@ const RoomScreen: React.FC = () => {
     }
     socketService.on('trackAdded', handleTrackAdded);
     socketService.on('trackRemoved', handleTrackRemoved);
+    // Listen for both 'play'/'pause' and 'play-track'/'pause-track' events
     socketService.on('play', handlePlay);
     socketService.on('pause', handlePause);
+    
+    // Also listen for server events (play-track/pause-track)
+    if (socketService.socket) {
+      socketService.socket.on('play-track', handlePlay);
+      socketService.socket.on('pause-track', handlePause);
+    }
     socketService.on('nextTrack', handleNextTrack);
     socketService.on('userJoined', handleUserJoined);
     socketService.on('userLeft', handleUserLeft);
@@ -1004,6 +1036,10 @@ const RoomScreen: React.FC = () => {
       socketService.off('trackRemoved', handleTrackRemoved);
       socketService.off('play', handlePlay);
       socketService.off('pause', handlePause);
+      if (socketService.socket) {
+        socketService.socket.off('play-track', handlePlay);
+        socketService.socket.off('pause-track', handlePause);
+      }
       socketService.off('nextTrack', handleNextTrack);
       socketService.off('userJoined', handleUserJoined);
       socketService.off('userLeft', handleUserLeft);
@@ -1692,28 +1728,39 @@ const RoomScreen: React.FC = () => {
   };
 
   const playPause = () => {
+    console.log('[playPause] Called', { canControl, connected, currentTrack: !!currentTrack, isPlaying, roomId });
+    
     if (!canControl) {
+      console.log('[playPause] Blocked: No control permission');
       Alert.alert('Permission Denied', 'Only room owner and admins can control playback.');
       return;
     }
 
-    if (!isUserSyncedToSession) {
-      Alert.alert('Sync Required', 'You must sync to the session first. Click the Sync button.');
-      return;
-    }
-
     if (!connected) {
+      console.log('[playPause] Blocked: Not connected');
       Alert.alert('Error', 'Not connected to room');
       return;
     }
 
+    if (!currentTrack) {
+      console.log('[playPause] Blocked: No current track');
+      Alert.alert('No Track', 'No track is currently playing. Add a track to the queue first.');
+      return;
+    }
+
     if (isPlaying) {
+      console.log('[playPause] Emitting pause event', { roomId, currentTrack: currentTrack.url });
       if (socketService.socket) {
         socketService.socket.emit('pause', { roomId });
+      } else {
+        console.error('[playPause] No socket available');
       }
     } else {
+      console.log('[playPause] Emitting play event', { roomId, currentTrack: currentTrack.url });
       if (socketService.socket) {
         socketService.socket.emit('play', { roomId });
+      } else {
+        console.error('[playPause] No socket available');
       }
     }
   };
@@ -1724,11 +1771,6 @@ const RoomScreen: React.FC = () => {
       return;
     }
 
-    if (!isUserSyncedToSession) {
-      Alert.alert('Sync Required', 'You must sync to the session first.');
-      return;
-    }
-
     if (!connected) {
       Alert.alert('Error', 'Not connected to room');
       return;
@@ -1736,6 +1778,8 @@ const RoomScreen: React.FC = () => {
 
     if (queue.length > 0 && socketService.socket) {
       socketService.socket.emit('next-track', { roomId });
+    } else if (queue.length === 0) {
+      Alert.alert('No Tracks', 'Queue is empty. Add tracks to continue.');
     }
   };
 
@@ -1754,6 +1798,41 @@ const RoomScreen: React.FC = () => {
 
     setIsUserSyncedToSession(true);
     Alert.alert('Success', 'Synced to music session!');
+  };
+
+  const handlePrevious = () => {
+    if (!canControl) {
+      Alert.alert('Permission Denied', 'Only room owner and admins can control playback.');
+      return;
+    }
+
+    if (!connected) {
+      Alert.alert('Error', 'Not connected to room');
+      return;
+    }
+
+    if (!currentTrack) {
+      Alert.alert('No Track', 'No track is currently playing.');
+      return;
+    }
+
+    const now = Date.now();
+    const timeSinceLastClick = now - lastPreviousClickTime.current;
+
+    if (timeSinceLastClick < PREVIOUS_DOUBLE_CLICK_WINDOW && history.length > 0) {
+      // Second click within window - go to previous track
+      const previousTrack = history[0]; // Most recent track in history
+      if (previousTrack && socketService.socket) {
+        socketService.socket.emit('replay-track', { roomId, trackId: previousTrack.id });
+      }
+      lastPreviousClickTime.current = 0; // Reset
+    } else {
+      // First click - restart current track
+      if (socketService.socket) {
+        socketService.socket.emit('restart-track', { roomId });
+      }
+      lastPreviousClickTime.current = now;
+    }
   };
 
   const addFriend = (friendId: string) => {
@@ -2009,9 +2088,6 @@ const RoomScreen: React.FC = () => {
           isPlaying={isPlaying}
           trackReactions={trackReactions}
           canControl={canControl}
-          onPlayPause={playPause}
-          onNext={nextTrack}
-          onSync={syncToSession}
           onReaction={handleReaction}
           loadingReaction={loadingReaction}
           hasUser={!!user}
@@ -2019,6 +2095,15 @@ const RoomScreen: React.FC = () => {
           autoplay={roomSettings.autoplay}
           onToggleAutoplay={toggleAutoplay}
           canToggleAutoplay={isOwner || isAdmin}
+          position={position}
+          duration={duration}
+          onAddToPlaylist={() => setShowQueueDialog(true)}
+          onPlayPause={playPause}
+          onPrevious={handlePrevious}
+          onNext={nextTrack}
+          hasQueue={queue.length > 0}
+          onCreatePlaylist={() => setCreatePlaylistDialogVisible(true)}
+          canCreatePlaylist={!!(profile && hasTier(profile.subscription_tier, 'pro'))}
         />
       )}
 
@@ -2082,6 +2167,62 @@ const RoomScreen: React.FC = () => {
                 // YouTube started playing, but wait for Supabase confirmation
               } else if (state === 'paused' && isPlaying) {
                 // YouTube paused, but wait for Supabase confirmation
+              } else if (state === 'ended') {
+                // Track ended - trigger next track if autoplay is enabled
+                // Server will handle permission checks, so we don't need canControl here
+                if (roomSettings.autoplay && queue.length > 0 && socketService.socket) {
+                  console.log('Track ended, autoplay enabled, triggering next track');
+                  socketService.socket.emit('next-track', { roomId });
+                }
+              }
+            }}
+          />
+        </View>
+      )}
+
+      {/* SoundCloud Player - Show for SoundCloud tracks (separate from NowPlayingCard) */}
+      {currentTrack && currentTrack.url?.includes('soundcloud.com') && (
+        <View style={styles.youtubePlayerContainer}>
+          <SoundCloudPlayer
+            track={currentTrack}
+            isPlaying={isPlaying}
+            position={position}
+            onPositionUpdate={(newPosition) => {
+              // Send position update to server (which saves to Supabase)
+              console.log('[RoomScreen] SoundCloud position update', { newPosition });
+              if (socketService.socket && !playbackBlocked) {
+                socketService.socket.emit('sync-position', {
+                  roomId,
+                  position: newPosition,
+                });
+              }
+            }}
+            onDurationUpdate={(newDuration) => {
+              console.log('[RoomScreen] SoundCloud duration update', { duration: newDuration });
+              setDuration(newDuration);
+            }}
+            onReady={() => {
+              console.log('[RoomScreen] SoundCloud player ready');
+            }}
+            onError={(error) => {
+              console.error('[RoomScreen] SoundCloud player error:', error);
+              Alert.alert('SoundCloud Error', error);
+            }}
+            onStateChange={(state) => {
+              console.log('[RoomScreen] SoundCloud state changed', { state, isPlaying });
+              // Update local state based on SoundCloud player state
+              // But Supabase is source of truth, so we sync to it
+              if (state === 'playing' && !isPlaying) {
+                // SoundCloud started playing, but wait for Supabase confirmation
+              } else if (state === 'paused' && isPlaying) {
+                // SoundCloud paused, but wait for Supabase confirmation
+              } else if (state === 'ended') {
+                // Track ended - trigger next track if autoplay is enabled
+                // Server will handle permission checks, so we don't need canControl here
+                if (roomSettings.autoplay && queue.length > 0 && socketService.socket) {
+                  console.log('[RoomScreen] SoundCloud track ended, autoplay enabled, triggering next track');
+                  socketService.socket.emit('next-track', { roomId });
+                }
               }
             }}
           />
@@ -3239,6 +3380,42 @@ const RoomScreen: React.FC = () => {
   const headerTier = creatorTier || (profile?.subscription_tier as SubscriptionTier) || 'free';
   const headerColor = getTierHeaderColor(headerTier);
 
+  // Update navigation header color and add play/pause button
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerStyle: {
+        backgroundColor: headerColor,
+      },
+      headerTintColor: theme.colors.onSurface, // Ensure icons are visible
+      headerLeft: () => (
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <IconButton
+            icon="arrow-left"
+            iconColor={theme.colors.onSurface}
+            size={24}
+            onPress={() => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              }
+            }}
+            style={{ backgroundColor: 'transparent', margin: 0 }}
+          />
+          {/* Play/Pause button - Only visible on web/desktop */}
+          {Platform.OS === 'web' && !IS_MOBILE && activeTab === 'main' && (
+            <IconButton
+              icon={isPlaying ? 'pause' : 'play'}
+              iconColor={theme.colors.onSurface}
+              size={20}
+              onPress={playPause}
+              disabled={!currentTrack || !canControl}
+              style={{ backgroundColor: 'transparent', margin: 0 }}
+            />
+          )}
+        </View>
+      ),
+    });
+  }, [navigation, headerColor, theme.colors.onSurface, Platform.OS, IS_MOBILE, activeTab, isPlaying, currentTrack, canControl, playPause]);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
@@ -3260,8 +3437,8 @@ const RoomScreen: React.FC = () => {
                 disabled={!roomSettings.djMode}
               />
             )}
-            {/* Playback Controls - Show when scrolled past "Now Playing" */}
-            {showHeaderControls && activeTab === 'main' && (
+            {/* Playback Controls - Only visible on web/desktop, hidden on mobile (shown via FAB) */}
+            {activeTab === 'main' && Platform.OS === 'web' && !IS_MOBILE && (
               <>
                 <View style={styles.iconButtonWrapper}>
                   <IconButton
@@ -3275,20 +3452,21 @@ const RoomScreen: React.FC = () => {
                 </View>
                 <View style={styles.iconButtonWrapper}>
                   <IconButton
-                    icon="skip-next"
+                    icon="skip-previous"
                     iconColor={theme.colors.onSurface}
                     size={20}
-                    onPress={nextTrack}
-                    disabled={queue.length === 0 || !canControl}
+                    onPress={handlePrevious}
+                    disabled={!currentTrack || !canControl}
                     style={styles.iconButton}
                   />
                 </View>
                 <View style={styles.iconButtonWrapper}>
                   <IconButton
-                    icon="sync"
+                    icon="skip-next"
                     iconColor={theme.colors.onSurface}
                     size={20}
-                    onPress={syncToSession}
+                    onPress={nextTrack}
+                    disabled={queue.length === 0 || !canControl}
                     style={styles.iconButton}
                   />
                 </View>
@@ -3306,33 +3484,13 @@ const RoomScreen: React.FC = () => {
             </Chip>
             <Chip
               icon={({ size, color }) => (
-                <MaterialCommunityIcons name="playlist-music" size={size} color="#FFFFFF" />
+                <MaterialCommunityIcons name="format-list-bulleted" size={size} color="#FFFFFF" />
               )}
               style={[styles.userCountChip, { backgroundColor: theme.colors.secondaryContainer }]}
               textStyle={[styles.userCountChipText, { color: '#FFFFFF' }]}
             >
               {queue.length}
             </Chip>
-            <View style={styles.iconButtonWrapper}>
-              <IconButton
-                icon="playlist-plus"
-                iconColor={theme.colors.onSurface}
-                size={20}
-                onPress={() => setShowQueueDialog(true)}
-                style={styles.iconButton}
-              />
-            </View>
-            {profile && hasTier(profile.subscription_tier, 'pro') && (
-              <View style={styles.iconButtonWrapper}>
-                <IconButton
-                  icon="playlist-music"
-                  iconColor={theme.colors.onSurface}
-                  size={20}
-                  onPress={() => setCreatePlaylistDialogVisible(true)}
-                  style={styles.iconButton}
-                />
-              </View>
-            )}
             <View style={styles.iconButtonWrapper}>
               <IconButton
                 icon="share-variant"
@@ -3354,192 +3512,199 @@ const RoomScreen: React.FC = () => {
 
       {/* Tabs */}
       <View style={[styles.tabs, { backgroundColor: headerColor, borderBottomColor: theme.colors.outline }]}>
-        <TouchableOpacity
-          onPress={() => setActiveTab('main')}
-          style={[
-            styles.tabButton,
-            activeTab === 'main' && {
-              backgroundColor: theme.colors.primary,
-            },
-          ]}
-          activeOpacity={0.7}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsScrollContent}
+          style={styles.tabsScrollView}
         >
-          <MaterialCommunityIcons
-            name="music-note"
-            size={20}
-            color={activeTab === 'main' ? theme.colors.onPrimary : theme.colors.onSurface}
-            style={styles.tabIcon}
-          />
-          <Text
+          <TouchableOpacity
+            onPress={() => setActiveTab('main')}
             style={[
-              styles.tabButtonText,
-              {
-                color: activeTab === 'main' ? theme.colors.onPrimary : theme.colors.onSurface,
+              styles.tabButton,
+              activeTab === 'main' && {
+                backgroundColor: theme.colors.primary,
               },
             ]}
+            activeOpacity={0.7}
           >
-            Main
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setActiveTab('users')}
-          style={[
-            styles.tabButton,
-            activeTab === 'users' && {
-              backgroundColor: theme.colors.primary,
-            },
-          ]}
-          activeOpacity={0.7}
-        >
-          <MaterialCommunityIcons
-            name="account-group"
-            size={20}
-            color={activeTab === 'users' ? theme.colors.onPrimary : theme.colors.onSurface}
-            style={styles.tabIcon}
-          />
-          <Text
-            style={[
-              styles.tabButtonText,
-              {
-                color: activeTab === 'users' ? theme.colors.onPrimary : theme.colors.onSurface,
-              },
-            ]}
-          >
-            Users
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setActiveTab('chat')}
-          style={[
-            styles.tabButton,
-            activeTab === 'chat' && {
-              backgroundColor: theme.colors.primary,
-            },
-          ]}
-          activeOpacity={0.7}
-        >
-          <View style={styles.tabIconContainer}>
             <MaterialCommunityIcons
-              name="chat"
+              name="music-note"
               size={20}
-              color={activeTab === 'chat' ? theme.colors.onPrimary : theme.colors.onSurface}
+              color={activeTab === 'main' ? theme.colors.onPrimary : theme.colors.onSurface}
               style={styles.tabIcon}
             />
-            {unreadChatCount > 0 && (
-              <Badge
-                visible={unreadChatCount > 0}
-                size={18}
+            <Text
+              style={[
+                styles.tabButtonText,
+                {
+                  color: activeTab === 'main' ? theme.colors.onPrimary : theme.colors.onSurface,
+                },
+              ]}
+            >
+              Main
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setActiveTab('users')}
+            style={[
+              styles.tabButton,
+              activeTab === 'users' && {
+                backgroundColor: theme.colors.primary,
+              },
+            ]}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons
+              name="account-group"
+              size={20}
+              color={activeTab === 'users' ? theme.colors.onPrimary : theme.colors.onSurface}
+              style={styles.tabIcon}
+            />
+            <Text
+              style={[
+                styles.tabButtonText,
+                {
+                  color: activeTab === 'users' ? theme.colors.onPrimary : theme.colors.onSurface,
+                },
+              ]}
+            >
+              Users
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setActiveTab('chat')}
+            style={[
+              styles.tabButton,
+              activeTab === 'chat' && {
+                backgroundColor: theme.colors.primary,
+              },
+            ]}
+            activeOpacity={0.7}
+          >
+            <View style={styles.tabIconContainer}>
+              <MaterialCommunityIcons
+                name="chat"
+                size={20}
+                color={activeTab === 'chat' ? theme.colors.onPrimary : theme.colors.onSurface}
+                style={styles.tabIcon}
+              />
+              {unreadChatCount > 0 && (
+                <Badge
+                  visible={unreadChatCount > 0}
+                  size={18}
+                  style={[
+                    styles.chatBadge,
+                    { backgroundColor: theme.colors.error }
+                  ]}
+                >
+                  {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                </Badge>
+              )}
+            </View>
+            <Text
+              style={[
+                styles.tabButtonText,
+                {
+                  color: activeTab === 'chat' ? theme.colors.onPrimary : theme.colors.onSurface,
+                },
+              ]}
+            >
+              Chat
+            </Text>
+          </TouchableOpacity>
+          {user && isSpotifyUser(user) && (
+            <TouchableOpacity
+              onPress={() => setActiveTab('spotify')}
+              style={[
+                styles.tabButton,
+                activeTab === 'spotify' && {
+                  backgroundColor: theme.colors.primary,
+                },
+              ]}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name="spotify"
+                size={20}
+                color={activeTab === 'spotify' ? theme.colors.onPrimary : theme.colors.onSurface}
+                style={styles.tabIcon}
+              />
+              <Text
                 style={[
-                  styles.chatBadge,
-                  { backgroundColor: theme.colors.error }
+                  styles.tabButtonText,
+                  {
+                    color: activeTab === 'spotify' ? theme.colors.onPrimary : theme.colors.onSurface,
+                  },
                 ]}
               >
-                {unreadChatCount > 99 ? '99+' : unreadChatCount}
-              </Badge>
-            )}
-          </View>
-          <Text
-            style={[
-              styles.tabButtonText,
-              {
-                color: activeTab === 'chat' ? theme.colors.onPrimary : theme.colors.onSurface,
-              },
-            ]}
-          >
-            Chat
-          </Text>
-        </TouchableOpacity>
-        {user && isSpotifyUser(user) && (
+                Spotify
+              </Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
-            onPress={() => setActiveTab('spotify')}
+            onPress={() => {
+              if (profile && hasTier(profile.subscription_tier, 'pro') && !isDJModeActive) {
+                setShowDJModeConfirmDialog(true);
+              } else {
+                setActiveTab('djmode');
+              }
+            }}
             style={[
               styles.tabButton,
-              activeTab === 'spotify' && {
+              (activeTab === 'djmode' || isDJModeActive) && {
                 backgroundColor: theme.colors.primary,
               },
             ]}
             activeOpacity={0.7}
           >
             <MaterialCommunityIcons
-              name="spotify"
+              name="equalizer"
               size={20}
-              color={activeTab === 'spotify' ? theme.colors.onPrimary : theme.colors.onSurface}
+              color={(activeTab === 'djmode' || isDJModeActive) ? theme.colors.onPrimary : theme.colors.onSurface}
               style={styles.tabIcon}
             />
             <Text
               style={[
                 styles.tabButtonText,
                 {
-                  color: activeTab === 'spotify' ? theme.colors.onPrimary : theme.colors.onSurface,
+                  color: (activeTab === 'djmode' || isDJModeActive) ? theme.colors.onPrimary : theme.colors.onSurface,
                 },
               ]}
             >
-              Spotify
+              DJ Mode
             </Text>
           </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          onPress={() => {
-            if (profile && hasTier(profile.subscription_tier, 'pro') && !isDJModeActive) {
-              setShowDJModeConfirmDialog(true);
-            } else {
-              setActiveTab('djmode');
-            }
-          }}
-          style={[
-            styles.tabButton,
-            (activeTab === 'djmode' || isDJModeActive) && {
-              backgroundColor: theme.colors.primary,
-            },
-          ]}
-          activeOpacity={0.7}
-        >
-          <MaterialCommunityIcons
-            name="equalizer"
-            size={20}
-            color={(activeTab === 'djmode' || isDJModeActive) ? theme.colors.onPrimary : theme.colors.onSurface}
-            style={styles.tabIcon}
-          />
-          <Text
-            style={[
-              styles.tabButtonText,
-              {
-                color: (activeTab === 'djmode' || isDJModeActive) ? theme.colors.onPrimary : theme.colors.onSurface,
-              },
-            ]}
-          >
-            DJ Mode
-          </Text>
-        </TouchableOpacity>
-        {(isOwner || isAdmin) && (
-          <TouchableOpacity
-            onPress={() => setActiveTab('settings')}
-            style={[
-              styles.tabButton,
-              activeTab === 'settings' && {
-                backgroundColor: theme.colors.primary,
-              },
-            ]}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons
-              name="cog"
-              size={20}
-              color={activeTab === 'settings' ? theme.colors.onPrimary : theme.colors.onSurface}
-              style={styles.tabIcon}
-            />
-            <Text
+          {(isOwner || isAdmin) && (
+            <TouchableOpacity
+              onPress={() => setActiveTab('settings')}
               style={[
-                styles.tabButtonText,
-                {
-                  color: activeTab === 'settings' ? theme.colors.onPrimary : theme.colors.onSurface,
+                styles.tabButton,
+                activeTab === 'settings' && {
+                  backgroundColor: theme.colors.primary,
                 },
               ]}
+              activeOpacity={0.7}
             >
-              Settings
-            </Text>
-          </TouchableOpacity>
-        )}
+              <MaterialCommunityIcons
+                name="cog"
+                size={20}
+                color={activeTab === 'settings' ? theme.colors.onPrimary : theme.colors.onSurface}
+                style={styles.tabIcon}
+              />
+              <Text
+                style={[
+                  styles.tabButtonText,
+                  {
+                    color: activeTab === 'settings' ? theme.colors.onPrimary : theme.colors.onSurface,
+                  },
+                ]}
+              >
+                Settings
+              </Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
       </View>
 
       {/* Tab Content */}
@@ -3604,8 +3769,8 @@ const RoomScreen: React.FC = () => {
         }}
       />
 
-      {/* MiniPlayer FAB Button */}
-      {currentTrack && (
+      {/* MiniPlayer FAB Button - Hide when MiniPlayer is visible */}
+      {currentTrack && !miniPlayerVisible && (
         <Animated.View
           style={[
             styles.fabContainer,
@@ -3636,6 +3801,10 @@ const RoomScreen: React.FC = () => {
           onExpand={handleExpandMiniPlayer}
           onClose={handleCloseMiniPlayer}
           position="left"
+          onPrevious={handlePrevious}
+          onNext={nextTrack}
+          hasQueue={queue.length > 0}
+          canControl={canControl}
         />
       )}
 
@@ -3672,6 +3841,7 @@ const RoomScreen: React.FC = () => {
           navigation.navigate('Subscription');
         }}
       />
+
     </View>
   );
 };
@@ -3789,28 +3959,47 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabs: {
-    flexDirection: 'row',
     borderBottomWidth: 1,
-    paddingHorizontal: IS_MOBILE ? 4 : 8,
-    paddingTop: IS_MOBILE ? 6 : 4,
-    paddingBottom: IS_MOBILE ? 6 : 4,
     marginBottom: IS_MOBILE ? 2 : 0,
     ...(Platform.OS === 'web' ? {
       boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
     } : {}),
   },
+  tabsScrollView: {
+    flexGrow: 0,
+    ...(Platform.OS === 'web' && !IS_MOBILE ? {
+      width: '100%',
+    } : {}),
+  },
+  tabsScrollContent: {
+    flexDirection: 'row',
+    paddingHorizontal: IS_MOBILE ? 4 : 8,
+    paddingTop: IS_MOBILE ? 6 : 4,
+    paddingBottom: IS_MOBILE ? 6 : 4,
+    ...(Platform.OS === 'web' && !IS_MOBILE ? {
+      justifyContent: 'space-evenly',
+      minWidth: SCREEN_WIDTH,
+    } : {}),
+  },
   tabButton: {
-    flex: 1,
+    flex: IS_MOBILE ? 0 : undefined,
     minWidth: IS_MOBILE ? 80 : 100,
+    maxWidth: IS_MOBILE ? undefined : 150,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: IS_MOBILE ? 8 : 10,
     paddingHorizontal: IS_MOBILE ? 6 : 10,
     borderRadius: 12,
-    marginHorizontal: 4,
+    marginHorizontal: IS_MOBILE ? 4 : 8,
     marginBottom: 2,
-    ...(Platform.OS === 'web' ? {
+    ...(Platform.OS === 'web' && !IS_MOBILE ? {
+      cursor: 'pointer',
+      userSelect: 'none',
+      transition: 'all 0.2s ease',
+      flexGrow: 1,
+      flexShrink: 0,
+    } : Platform.OS === 'web' ? {
       cursor: 'pointer',
       userSelect: 'none',
       transition: 'all 0.2s ease',
@@ -4486,6 +4675,54 @@ const styles = StyleSheet.create({
   fabInnerGradient: {
     borderRadius: 26, // Slightly smaller to show the border
     overflow: 'hidden',
+  },
+  controllerPanel: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    zIndex: 1000,
+    transformOrigin: 'bottom right',
+  },
+  controllerPanelCard: {
+    borderRadius: 56,
+    elevation: 8,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.3)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+    }),
+  },
+  controllerPanelContent: {
+    padding: 8,
+  },
+  controllerButtonsColumn: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+  },
+  controllerButton: {
+    margin: 0,
+  },
+  controllerFABWrapper: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    zIndex: 1002,
+    elevation: 9,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.3)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+    }),
+  },
+  controllerFAB: {
+    elevation: 8,
   },
 });
 

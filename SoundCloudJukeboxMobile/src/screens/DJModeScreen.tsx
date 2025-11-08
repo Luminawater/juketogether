@@ -110,6 +110,8 @@ const DJModeScreen: React.FC = () => {
   useFocusEffect(
     React.useCallback(() => {
       let mounted = true;
+      let loadingTimeout: NodeJS.Timeout | null = null;
+      let roomStateReceived = false;
 
       // Define handlers
       const handleConnect = () => {
@@ -122,6 +124,29 @@ const DJModeScreen: React.FC = () => {
         }
       };
 
+      const handleConnectionError = (error: any) => {
+        console.error('Socket connection error:', error);
+        if (mounted && !roomStateReceived) {
+          setLoading(false);
+          if (loadingTimeout) {
+            clearTimeout(loadingTimeout);
+            loadingTimeout = null;
+          }
+          Alert.alert('Connection Error', 'Failed to connect to room. Please check your connection and try again.');
+        }
+      };
+
+      const handleSocketError = (error: any) => {
+        console.error('Socket error:', error);
+        if (mounted && !roomStateReceived) {
+          setLoading(false);
+          if (loadingTimeout) {
+            clearTimeout(loadingTimeout);
+            loadingTimeout = null;
+          }
+        }
+      };
+
       const handleRoomState = (state: RoomState & {
         roomSettings?: any;
         isOwner?: boolean;
@@ -131,6 +156,7 @@ const DJModeScreen: React.FC = () => {
         };
       }) => {
         if (mounted) {
+          roomStateReceived = true;
           setQueue(state.queue || []);
           if (state.roomSettings) {
             setRoomSettings({
@@ -146,6 +172,12 @@ const DJModeScreen: React.FC = () => {
           }
           if (state.isAdmin !== undefined) {
             setIsAdmin(state.isAdmin);
+          }
+          // Stop loading once we have room state
+          setLoading(false);
+          if (loadingTimeout) {
+            clearTimeout(loadingTimeout);
+            loadingTimeout = null;
           }
         }
       };
@@ -174,6 +206,7 @@ const DJModeScreen: React.FC = () => {
       const initializeRoom = async () => {
         try {
           setLoading(true);
+          roomStateReceived = false;
 
         // Load room settings
         const { data: settingsData, error: settingsError } = await supabase
@@ -204,6 +237,8 @@ const DJModeScreen: React.FC = () => {
 
         // Set up event listeners
         socketService.on('connect', handleConnect);
+        socketService.on('connectionError', handleConnectionError);
+        socketService.on('error', handleSocketError);
         socketService.on('roomState', handleRoomState);
         socketService.on('trackAdded', handleTrackAdded);
         socketService.on('trackRemoved', handleTrackRemoved);
@@ -214,12 +249,17 @@ const DJModeScreen: React.FC = () => {
           handleConnect();
         }
 
-        // Request room state to get tier settings
-        if (socketService.socket) {
-          socketService.socket.emit('join-room', roomId);
-        }
-
-        setLoading(false);
+        // Set a timeout to stop loading after 10 seconds if roomState never arrives
+        loadingTimeout = setTimeout(() => {
+          if (mounted && !roomStateReceived) {
+            console.warn('Room state timeout - stopping loading');
+            setLoading(false);
+            Alert.alert(
+              'Connection Timeout',
+              'Failed to receive room state. The room may be unavailable or there may be a connection issue.'
+            );
+          }
+        }, 10000);
       } catch (error) {
         console.error('Error initializing room:', error);
         if (mounted) {
@@ -233,8 +273,13 @@ const DJModeScreen: React.FC = () => {
 
       return () => {
         mounted = false;
+        if (loadingTimeout) {
+          clearTimeout(loadingTimeout);
+        }
         // Clean up event listeners
         socketService.off('connect', handleConnect);
+        socketService.off('connectionError', handleConnectionError);
+        socketService.off('error', handleSocketError);
         socketService.off('roomState', handleRoomState);
         socketService.off('trackAdded', handleTrackAdded);
         socketService.off('trackRemoved', handleTrackRemoved);

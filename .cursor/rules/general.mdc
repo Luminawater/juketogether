@@ -7,3 +7,22 @@ We're building a cross-platform Expo app that runs on both mobile (iOS/Android) 
 Keep files under 1500 lines. If a file approaches or exceeds 1500 lines, split it into multiple smaller files and import features/functions as needed. This improves maintainability and readability.
 
 All media player components (YouTube, Spotify, SoundCloud) must be responsive and synchronized with Supabase music sessions, which serve as the single source of truth for playback state. The music sessions stored in Supabase control all playback operations including: current playback time, play/pause state, track transitions (next/previous), and stop commands. Player components must continuously listen to and react to changes in the Supabase session state, ensuring all players across all platforms remain synchronized in real-time.
+
+When creating or editing subscription tier-based restrictions or features, you must update the following components to ensure consistency across the system:
+
+1. **SubscriptionScreen.tsx** (`SoundCloudJukeboxMobile/src/screens/SubscriptionScreen.tsx`): Update the `TierConfig` interface and feature rendering logic to display new restrictions/features. The screen reads from the `subscription_tier_settings` table in Supabase, so ensure the UI properly displays all tier features including new ones.
+
+2. **AdminScreen.tsx - Subscription Tier Configuration** (`SoundCloudJukeboxMobile/src/screens/AdminScreen.tsx`): Update the subscription tier configuration section (tab 1) where admins can edit tier settings. This includes:
+   - The `subscriptionTiers` state object structure
+   - The `loadSubscriptionTiers()` function to fetch from database
+   - The `saveSubscriptionTiers()` function to save changes
+   - The UI form fields for editing tier properties
+
+3. **Stripe Integration Scripts**: Update the Stripe checkout session creation endpoints in:
+   - `server.js` (`/api/stripe/create-checkout-session` endpoint)
+   - `api/index.js` (`/api/stripe/create-checkout-session` endpoint)
+   These scripts read tier data from `subscription_tier_settings` table, so they should automatically work with new fields, but verify they handle new tier values correctly.
+
+4. **Database Schema**: If adding new tier restriction fields, create a migration to add columns to the `subscription_tier_settings` table. The table structure should match the `TierConfig` interface in SubscriptionScreen.tsx.
+
+Always ensure that new tier restrictions are properly reflected in all three locations (SubscriptionScreen, AdminScreen configuration, and Stripe scripts) to maintain system consistency.

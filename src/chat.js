@@ -1,6 +1,12 @@
 // Chat functionality module
 const { supabase } = require('./auth');
 
+// Validate UUID format
+function isValidUUID(str) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
 // Load recent chat messages for a room
 async function loadChatMessages(roomId, limit = 50) {
   try {
@@ -44,6 +50,13 @@ async function loadChatMessages(roomId, limit = 50) {
 // Save a chat message
 async function saveChatMessage(roomId, userId, message, messageType = 'text', trackId = null) {
   try {
+    // Only save messages from authenticated users with valid UUIDs
+    // Anonymous users (with socket IDs) cannot save messages to database
+    if (!isValidUUID(userId)) {
+      console.log('Skipping chat message save - userId is not a valid UUID (anonymous user)');
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
