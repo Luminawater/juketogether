@@ -51,6 +51,8 @@ const DashboardScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [createDialogVisible, setCreateDialogVisible] = useState(false);
   const [joinDialogVisible, setJoinDialogVisible] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [sharingRoom, setSharingRoom] = useState<Room | null>(null);
 
   // Create room form state
   const [roomName, setRoomName] = useState('');
@@ -399,19 +401,18 @@ const DashboardScreen: React.FC = () => {
       setRoomDescription('');
       setRoomType('public');
 
-      const roomUrl = getRoomUrl(roomId, shortCode);
-      const shareMessage = getRoomShareMessage(roomName, roomId, shortCode);
-
-      Alert.alert(
-        'Success',
-        `Room created! Share code: ${shortCode}\nOr link: ${roomUrl}`,
-        [
-          { text: 'Copy Code', onPress: () => Share.share({ message: `Join my music room with code: ${shortCode}` }) },
-          { text: 'Copy Link', onPress: () => Share.share({ message: shareMessage }) },
-          { text: 'Join Room', onPress: () => joinRoom(roomId, roomName) },
-          { text: 'OK' },
-        ]
-      );
+      // Show share dialog with the newly created room
+      const newRoom: Room = {
+        id: roomId,
+        name: roomName.trim(),
+        description: roomDescription.trim() || undefined,
+        type: roomType,
+        created_by: user?.id || '',
+        created_at: new Date().toISOString(),
+        short_code: shortCode,
+      };
+      setSharingRoom(newRoom);
+      setShowShareDialog(true);
 
       loadUserRooms();
     } catch (error) {
@@ -810,9 +811,8 @@ const DashboardScreen: React.FC = () => {
                       mode="text"
                       onPress={(e) => {
                         e.stopPropagation();
-                        const roomUrl = getRoomUrl(room.id, room.short_code);
-                        const shareMessage = getRoomShareMessage(room.name, room.id, room.short_code);
-                        Share.share({ message: shareMessage, url: roomUrl });
+                        setSharingRoom(room);
+                        setShowShareDialog(true);
                       }}
                       style={styles.shareButton}
                       contentStyle={styles.shareButtonContent}
