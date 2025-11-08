@@ -79,6 +79,20 @@ const AdminScreen: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [usageHistory, setUsageHistory] = useState<UsageHistory[]>([]);
   const [loadingUserData, setLoadingUserData] = useState(false);
+  const [userDialogTab, setUserDialogTab] = useState<'general' | 'role' | 'subscription' | 'activity'>('general');
+  
+  // Activity data
+  const [activityData, setActivityData] = useState({
+    roomsCreated: 0,
+    friendsAdded: 0,
+    friendsAccepted: 0,
+    likes: 0,
+    dislikes: 0,
+    fantastic: 0,
+    queueAdditions: 0,
+    tracksPlayed: 0,
+    roomsJoined: 0,
+  });
 
   useEffect(() => {
     if (profile?.role !== 'admin') {
@@ -98,33 +112,56 @@ const AdminScreen: React.FC = () => {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      // Get all profiles - email will be shown as user ID if not available
-      const { data: profiles, error: profilesError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      
+      // Try to get all users with emails using RPC function (for admins)
+      const { data: usersData, error: rpcError } = await supabase
+        .rpc('get_all_users_for_admin');
 
-      if (profilesError) throw profilesError;
+      if (!rpcError && usersData) {
+        // Successfully got users with emails from RPC function
+        const usersWithEmails: UserProfile[] = usersData.map((u: any) => ({
+          id: u.id,
+          email: u.email || `user_${u.id.substring(0, 8)}@jukebox.app`,
+          username: u.username,
+          display_name: u.display_name,
+          role: u.role || 'user',
+          subscription_tier: u.subscription_tier || 'free',
+          songs_played_count: u.songs_played_count || 0,
+          created_at: u.created_at || '',
+          avatar_url: u.avatar_url,
+        }));
 
-      // Map profiles to user profiles
-      // Note: Email from auth.users requires admin access, so we'll use ID as identifier
-      const usersWithProfiles: UserProfile[] = (profiles || []).map((p) => ({
-        id: p.id,
-        email: `user_${p.id.substring(0, 8)}@jukebox.app`, // Placeholder - you can add email to user_profiles table
-        username: p.username,
-        display_name: p.display_name,
-        role: p.role || 'user',
-        subscription_tier: p.subscription_tier || 'free',
-        songs_played_count: p.songs_played_count || 0,
-        created_at: p.created_at || '',
-        avatar_url: p.avatar_url,
-      }));
+        setUsers(usersWithEmails);
+        setFilteredUsers(usersWithEmails);
+      } else {
+        // Fallback: Get all profiles if RPC fails
+        console.warn('RPC function failed, falling back to profiles:', rpcError);
+        const { data: profiles, error: profilesError } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-      setUsers(usersWithProfiles);
-      setFilteredUsers(usersWithProfiles);
+        if (profilesError) throw profilesError;
+
+        // Map profiles to user profiles
+        const usersWithProfiles: UserProfile[] = (profiles || []).map((p) => ({
+          id: p.id,
+          email: `user_${p.id.substring(0, 8)}@jukebox.app`, // Placeholder
+          username: p.username,
+          display_name: p.display_name,
+          role: p.role || 'user',
+          subscription_tier: p.subscription_tier || 'free',
+          songs_played_count: p.songs_played_count || 0,
+          created_at: p.created_at || '',
+          avatar_url: p.avatar_url,
+        }));
+
+        setUsers(usersWithProfiles);
+        setFilteredUsers(usersWithProfiles);
+      }
     } catch (error: any) {
       console.error('Error loading users:', error);
-      Alert.alert('Error', 'Failed to load users');
+      Alert.alert('Error', `Failed to load users: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -153,6 +190,7 @@ const AdminScreen: React.FC = () => {
     setEditingDisplayName(user.display_name || '');
     setEditingRole(user.role);
     setEditingTier(user.subscription_tier);
+    setUserDialogTab('general'); // Reset to general tab
     setUserDialogVisible(true);
     await loadUserData(user.id);
   };
@@ -177,7 +215,83 @@ const AdminScreen: React.FC = () => {
         })));
       }
 
-      // Load usage history (simplified - you can expand this)
+      // Load activity data
+      const [
+        roomsCreatedResult,
+        friendsResult,
+        reactionsResult,
+        tracksPlayedResult,
+        roomsJoinedResult,
+        queueAdditionsResult,
+      ] = await Promise.all([
+        // Rooms created (where user is host)
+        supabase
+          .from('rooms')
+          .select('id')
+          .eq('host_user_id', userId),
+        
+        // Friends (both sent and received)
+        supabase
+          .from('friends')
+          .select('*')
+          .or(`user_id.eq.${userId},friend_id.eq.${userId}`),
+        
+        // Track reactions
+        supabase
+          .from('track_reactions')
+          .select('reaction_type')
+          .eq('user_id', userId),
+        
+        // Tracks played (where user added the track)
+        supabase
+          .from('track_plays')
+          .select('id')
+          .eq('user_id', userId),
+        
+        // Rooms joined (sessions)
+        supabase
+          .from('room_sessions')
+          .select('id')
+          .eq('user_id', userId),
+        
+        // Queue additions - count tracks in queue JSONB where addedBy matches
+        // This is approximate - we'll count from room analytics or track_plays
+        supabase
+          .from('track_plays')
+          .select('id')
+          .eq('user_id', userId),
+      ]);
+
+      // Calculate activity metrics
+      const roomsCreated = roomsCreatedResult.data?.length || 0;
+      const friends = friendsResult.data || [];
+      // Friends added: where user sent the request (requested_by = userId)
+      const friendsAdded = friends.filter(f => f.requested_by === userId).length;
+      // Friends accepted: where user accepted a request (friend_id = userId and status = 'accepted')
+      const friendsAccepted = friends.filter(f => f.friend_id === userId && f.status === 'accepted').length;
+      
+      const reactions = reactionsResult.data || [];
+      const likes = reactions.filter(r => r.reaction_type === 'like').length;
+      const dislikes = reactions.filter(r => r.reaction_type === 'dislike').length;
+      const fantastic = reactions.filter(r => r.reaction_type === 'fantastic').length;
+      
+      const tracksPlayed = tracksPlayedResult.data?.length || 0;
+      const roomsJoined = roomsJoinedResult.data?.length || 0;
+      const queueAdditions = queueAdditionsResult.data?.length || 0; // Approximate
+
+      setActivityData({
+        roomsCreated,
+        friendsAdded,
+        friendsAccepted,
+        likes,
+        dislikes,
+        fantastic,
+        queueAdditions,
+        tracksPlayed,
+        roomsJoined,
+      });
+
+      // Load usage history
       const { data: profileData } = await supabase
         .from('user_profiles')
         .select('songs_played_count, created_at')
@@ -188,7 +302,7 @@ const AdminScreen: React.FC = () => {
         setUsageHistory([{
           date: new Date().toISOString().split('T')[0],
           songs_played: profileData.songs_played_count || 0,
-          rooms_created: 0, // You can add room creation tracking later
+          rooms_created: roomsCreated,
         }]);
       }
     } catch (error) {
@@ -247,12 +361,20 @@ const AdminScreen: React.FC = () => {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      <Searchbar
-        placeholder="Search users by email, username..."
-        onChangeText={setSearchQuery}
-        value={searchQuery}
-        style={styles.searchbar}
-      />
+      <View style={styles.searchContainer}>
+        <Searchbar
+          placeholder="Search users by email, username..."
+          onChangeText={setSearchQuery}
+          value={searchQuery}
+          style={styles.searchbar}
+        />
+        {!loading && (
+          <Text style={[styles.userCount, { color: theme.colors.onSurfaceVariant }]}>
+            {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
+            {searchQuery && filteredUsers.length !== users.length && ` of ${users.length} total`}
+          </Text>
+        )}
+      </View>
 
       {loading ? (
         <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>Loading users...</Text>
@@ -363,157 +485,321 @@ const AdminScreen: React.FC = () => {
           onDismiss={() => setUserDialogVisible(false)}
           style={styles.dialog}
         >
+          <Dialog.Title>{selectedUser?.email || 'User Details'}</Dialog.Title>
+          
+          {/* Tabs */}
+          <View style={[styles.dialogTabs, { borderBottomColor: theme.colors.outline }]}>
+            <Button
+              mode={userDialogTab === 'general' ? 'contained' : 'text'}
+              onPress={() => setUserDialogTab('general')}
+              style={styles.dialogTabButton}
+              compact
+            >
+              General
+            </Button>
+            <Button
+              mode={userDialogTab === 'role' ? 'contained' : 'text'}
+              onPress={() => setUserDialogTab('role')}
+              style={styles.dialogTabButton}
+              compact
+            >
+              Role
+            </Button>
+            <Button
+              mode={userDialogTab === 'subscription' ? 'contained' : 'text'}
+              onPress={() => setUserDialogTab('subscription')}
+              style={styles.dialogTabButton}
+              compact
+            >
+              Subscription
+            </Button>
+            <Button
+              mode={userDialogTab === 'activity' ? 'contained' : 'text'}
+              onPress={() => setUserDialogTab('activity')}
+              style={styles.dialogTabButton}
+              compact
+            >
+              Activity
+            </Button>
+          </View>
+
           <Dialog.ScrollArea style={styles.dialogScrollArea}>
             <ScrollView>
-              <Dialog.Title>User Details</Dialog.Title>
               <Dialog.Content>
                 {selectedUser && (
                   <>
-                    {/* User Info Section */}
-                    <View style={styles.dialogSection}>
-                      <Title style={styles.sectionTitle}>User Information</Title>
-                      
-                      <TextInput
-                        label="Email"
-                        value={selectedUser.email}
-                        mode="outlined"
-                        editable={false}
-                        style={styles.dialogInput}
-                      />
+                    {/* General Tab */}
+                    {userDialogTab === 'general' && (
+                      <View style={styles.dialogSection}>
+                        <Title style={styles.sectionTitle}>User Information</Title>
+                        
+                        <TextInput
+                          label="Email"
+                          value={selectedUser.email}
+                          mode="outlined"
+                          editable={false}
+                          style={styles.dialogInput}
+                        />
 
-                      <TextInput
-                        label="Username"
-                        value={editingUsername}
-                        onChangeText={setEditingUsername}
-                        mode="outlined"
-                        style={styles.dialogInput}
-                      />
+                        <TextInput
+                          label="Username"
+                          value={editingUsername}
+                          onChangeText={setEditingUsername}
+                          mode="outlined"
+                          style={styles.dialogInput}
+                        />
 
-                      <TextInput
-                        label="Display Name"
-                        value={editingDisplayName}
-                        onChangeText={setEditingDisplayName}
-                        mode="outlined"
-                        style={styles.dialogInput}
-                      />
-                    </View>
+                        <TextInput
+                          label="Display Name"
+                          value={editingDisplayName}
+                          onChangeText={setEditingDisplayName}
+                          mode="outlined"
+                          style={styles.dialogInput}
+                        />
 
-                    <Divider style={styles.divider} />
-
-                    {/* Role Section */}
-                    <View style={styles.dialogSection}>
-                      <Title style={styles.sectionTitle}>Role</Title>
-                      <RadioButton.Group
-                        onValueChange={(value) => setEditingRole(value as UserRole)}
-                        value={editingRole}
-                      >
-                        <View style={styles.radioOption}>
-                          <RadioButton value="user" />
-                          <Text>User</Text>
+                        <View style={[styles.infoCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+                          <Text style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>
+                            User ID
+                          </Text>
+                          <Text style={[styles.infoValue, { color: theme.colors.onSurface }]}>
+                            {selectedUser.id}
+                          </Text>
                         </View>
-                        <View style={styles.radioOption}>
-                          <RadioButton value="moderator" />
-                          <Text>Moderator</Text>
+
+                        <View style={[styles.infoCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+                          <Text style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>
+                            Joined
+                          </Text>
+                          <Text style={[styles.infoValue, { color: theme.colors.onSurface }]}>
+                            {new Date(selectedUser.created_at).toLocaleDateString()}
+                          </Text>
                         </View>
-                        <View style={styles.radioOption}>
-                          <RadioButton value="admin" />
-                          <Text>Admin</Text>
-                        </View>
-                      </RadioButton.Group>
-                    </View>
+                      </View>
+                    )}
 
-                    <Divider style={styles.divider} />
+                    {/* Role Tab */}
+                    {userDialogTab === 'role' && (
+                      <View style={styles.dialogSection}>
+                        <Title style={styles.sectionTitle}>User Role</Title>
+                        <Text style={[styles.sectionDescription, { color: theme.colors.onSurfaceVariant }]}>
+                          Change the user's role to grant different permissions
+                        </Text>
+                        
+                        <RadioButton.Group
+                          onValueChange={(value) => setEditingRole(value as UserRole)}
+                          value={editingRole}
+                        >
+                          <View style={styles.radioOption}>
+                            <RadioButton value="guest" />
+                            <Text style={{ color: theme.colors.onSurface }}>Guest - Limited access</Text>
+                          </View>
+                          <View style={styles.radioOption}>
+                            <RadioButton value="user" />
+                            <Text style={{ color: theme.colors.onSurface }}>User - Standard access</Text>
+                          </View>
+                          <View style={styles.radioOption}>
+                            <RadioButton value="moderator" />
+                            <Text style={{ color: theme.colors.onSurface }}>Moderator - Can moderate content</Text>
+                          </View>
+                          <View style={styles.radioOption}>
+                            <RadioButton value="admin" />
+                            <Text style={{ color: theme.colors.onSurface }}>Admin - Full access</Text>
+                          </View>
+                        </RadioButton.Group>
+                      </View>
+                    )}
 
-                    {/* Tier Section */}
-                    <View style={styles.dialogSection}>
-                      <Title style={styles.sectionTitle}>Subscription Tier</Title>
-                      <RadioButton.Group
-                        onValueChange={(value) => setEditingTier(value as SubscriptionTier)}
-                        value={editingTier}
-                      >
-                        <View style={styles.radioOption}>
-                          <RadioButton value="free" />
-                          <Text>Free (1 song)</Text>
-                        </View>
-                        <View style={styles.radioOption}>
-                          <RadioButton value="standard" />
-                          <Text>Standard ($2, 10 songs)</Text>
-                        </View>
-                        <View style={styles.radioOption}>
-                          <RadioButton value="pro" />
-                          <Text>Pro ($5, unlimited)</Text>
-                        </View>
-                      </RadioButton.Group>
-                    </View>
+                    {/* Subscription Tab */}
+                    {userDialogTab === 'subscription' && (
+                      <View style={styles.dialogSection}>
+                        <Title style={styles.sectionTitle}>Subscription Tier</Title>
+                        <Text style={[styles.sectionDescription, { color: theme.colors.onSurfaceVariant }]}>
+                          Change the user's subscription tier
+                        </Text>
+                        
+                        <RadioButton.Group
+                          onValueChange={(value) => setEditingTier(value as SubscriptionTier)}
+                          value={editingTier}
+                        >
+                          <View style={styles.radioOption}>
+                            <RadioButton value="free" />
+                            <Text style={{ color: theme.colors.onSurface }}>Free - 1 song limit</Text>
+                          </View>
+                          <View style={styles.radioOption}>
+                            <RadioButton value="rookie" />
+                            <Text style={{ color: theme.colors.onSurface }}>Rookie ($2) - 10 songs</Text>
+                          </View>
+                          <View style={styles.radioOption}>
+                            <RadioButton value="standard" />
+                            <Text style={{ color: theme.colors.onSurface }}>Standard ($5) - Unlimited</Text>
+                          </View>
+                          <View style={styles.radioOption}>
+                            <RadioButton value="pro" />
+                            <Text style={{ color: theme.colors.onSurface }}>Pro ($10) - Unlimited + Premium</Text>
+                          </View>
+                        </RadioButton.Group>
 
-                    <Divider style={styles.divider} />
+                        <Divider style={styles.divider} />
 
-                    {/* Payment History */}
-                    <View style={styles.dialogSection}>
-                      <Title style={styles.sectionTitle}>Payment History</Title>
-                      {loadingUserData ? (
-                        <Text>Loading...</Text>
-                      ) : payments.length === 0 ? (
-                        <Text style={[styles.noDataText, { color: theme.colors.onSurfaceVariant }]}>No payment history</Text>
-                      ) : (
-                        <DataTable>
-                          <DataTable.Header>
-                            <DataTable.Title>Date</DataTable.Title>
-                            <DataTable.Title>Tier</DataTable.Title>
-                            <DataTable.Title numeric>Amount</DataTable.Title>
-                          </DataTable.Header>
-                          {payments.map((payment) => (
-                            <DataTable.Row key={payment.id}>
-                              <DataTable.Cell>
-                                {new Date(payment.payment_date).toLocaleDateString()}
-                              </DataTable.Cell>
-                              <DataTable.Cell>
-                                {getTierDisplayName(payment.tier)}
-                              </DataTable.Cell>
-                              <DataTable.Cell numeric>
-                                ${payment.amount_paid.toFixed(2)}
-                              </DataTable.Cell>
-                            </DataTable.Row>
-                          ))}
-                        </DataTable>
-                      )}
-                    </View>
+                        <Title style={styles.sectionTitle}>Payment History</Title>
+                        {loadingUserData ? (
+                          <Text style={{ color: theme.colors.onSurfaceVariant }}>Loading...</Text>
+                        ) : payments.length === 0 ? (
+                          <Text style={[styles.noDataText, { color: theme.colors.onSurfaceVariant }]}>
+                            No payment history
+                          </Text>
+                        ) : (
+                          <DataTable>
+                            <DataTable.Header>
+                              <DataTable.Title>Date</DataTable.Title>
+                              <DataTable.Title>Tier</DataTable.Title>
+                              <DataTable.Title numeric>Amount</DataTable.Title>
+                            </DataTable.Header>
+                            {payments.map((payment) => (
+                              <DataTable.Row key={payment.id}>
+                                <DataTable.Cell>
+                                  {new Date(payment.payment_date).toLocaleDateString()}
+                                </DataTable.Cell>
+                                <DataTable.Cell>
+                                  {getTierDisplayName(payment.tier)}
+                                </DataTable.Cell>
+                                <DataTable.Cell numeric>
+                                  ${payment.amount_paid.toFixed(2)}
+                                </DataTable.Cell>
+                              </DataTable.Row>
+                            ))}
+                          </DataTable>
+                        )}
+                      </View>
+                    )}
 
-                    <Divider style={styles.divider} />
+                    {/* Activity Tab */}
+                    {userDialogTab === 'activity' && (
+                      <View style={styles.dialogSection}>
+                        <Title style={styles.sectionTitle}>User Activity</Title>
+                        <Text style={[styles.sectionDescription, { color: theme.colors.onSurfaceVariant }]}>
+                          Comprehensive activity overview
+                        </Text>
 
-                    {/* Usage History */}
-                    <View style={styles.dialogSection}>
-                      <Title style={styles.sectionTitle}>Usage History</Title>
-                      {loadingUserData ? (
-                        <Text>Loading...</Text>
-                      ) : usageHistory.length === 0 ? (
-                        <Text style={[styles.noDataText, { color: theme.colors.onSurfaceVariant }]}>No usage history</Text>
-                      ) : (
-                        <View>
-                          {usageHistory.map((usage, index) => (
-                            <View key={index} style={[styles.usageItem, { backgroundColor: theme.colors.surfaceVariant }]}>
-                              <Text style={[styles.usageDate, { color: theme.colors.onSurface }]}>
-                                {new Date(usage.date).toLocaleDateString()}
+                        {loadingUserData ? (
+                          <Text style={{ color: theme.colors.onSurfaceVariant }}>Loading activity...</Text>
+                        ) : (
+                          <>
+                            {/* Rooms Activity */}
+                            <View style={[styles.activitySection, { backgroundColor: theme.colors.surfaceVariant }]}>
+                              <Text style={[styles.activitySectionTitle, { color: theme.colors.onSurface }]}>
+                                🎵 Rooms
                               </Text>
-                              <Text style={[styles.usageText, { color: theme.colors.onSurfaceVariant }]}>
-                                Songs played: {usage.songs_played}
-                              </Text>
-                              <Text style={[styles.usageText, { color: theme.colors.onSurfaceVariant }]}>
-                                Rooms created: {usage.rooms_created}
-                              </Text>
+                              <View style={styles.activityRow}>
+                                <Text style={[styles.activityLabel, { color: theme.colors.onSurfaceVariant }]}>
+                                  Rooms Created:
+                                </Text>
+                                <Text style={[styles.activityValue, { color: theme.colors.onSurface }]}>
+                                  {activityData.roomsCreated}
+                                </Text>
+                              </View>
+                              <View style={styles.activityRow}>
+                                <Text style={[styles.activityLabel, { color: theme.colors.onSurfaceVariant }]}>
+                                  Rooms Joined:
+                                </Text>
+                                <Text style={[styles.activityValue, { color: theme.colors.onSurface }]}>
+                                  {activityData.roomsJoined}
+                                </Text>
+                              </View>
                             </View>
-                          ))}
-                        </View>
-                      )}
-                    </View>
+
+                            {/* Friends Activity */}
+                            <View style={[styles.activitySection, { backgroundColor: theme.colors.surfaceVariant }]}>
+                              <Text style={[styles.activitySectionTitle, { color: theme.colors.onSurface }]}>
+                                👥 Friends
+                              </Text>
+                              <View style={styles.activityRow}>
+                                <Text style={[styles.activityLabel, { color: theme.colors.onSurfaceVariant }]}>
+                                  Friends Added:
+                                </Text>
+                                <Text style={[styles.activityValue, { color: theme.colors.onSurface }]}>
+                                  {activityData.friendsAdded}
+                                </Text>
+                              </View>
+                              <View style={styles.activityRow}>
+                                <Text style={[styles.activityLabel, { color: theme.colors.onSurfaceVariant }]}>
+                                  Friends Accepted:
+                                </Text>
+                                <Text style={[styles.activityValue, { color: theme.colors.onSurface }]}>
+                                  {activityData.friendsAccepted}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {/* Reactions Activity */}
+                            <View style={[styles.activitySection, { backgroundColor: theme.colors.surfaceVariant }]}>
+                              <Text style={[styles.activitySectionTitle, { color: theme.colors.onSurface }]}>
+                                ⭐ Reactions
+                              </Text>
+                              <View style={styles.activityRow}>
+                                <Text style={[styles.activityLabel, { color: theme.colors.onSurfaceVariant }]}>
+                                  👍 Likes:
+                                </Text>
+                                <Text style={[styles.activityValue, { color: theme.colors.onSurface }]}>
+                                  {activityData.likes}
+                                </Text>
+                              </View>
+                              <View style={styles.activityRow}>
+                                <Text style={[styles.activityLabel, { color: theme.colors.onSurfaceVariant }]}>
+                                  👎 Dislikes:
+                                </Text>
+                                <Text style={[styles.activityValue, { color: theme.colors.onSurface }]}>
+                                  {activityData.dislikes}
+                                </Text>
+                              </View>
+                              <View style={styles.activityRow}>
+                                <Text style={[styles.activityLabel, { color: theme.colors.onSurfaceVariant }]}>
+                                  ⭐ Fantastic:
+                                </Text>
+                                <Text style={[styles.activityValue, { color: theme.colors.onSurface }]}>
+                                  {activityData.fantastic}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {/* Queue & Tracks Activity */}
+                            <View style={[styles.activitySection, { backgroundColor: theme.colors.surfaceVariant }]}>
+                              <Text style={[styles.activitySectionTitle, { color: theme.colors.onSurface }]}>
+                                🎶 Music
+                              </Text>
+                              <View style={styles.activityRow}>
+                                <Text style={[styles.activityLabel, { color: theme.colors.onSurfaceVariant }]}>
+                                  Queue Additions:
+                                </Text>
+                                <Text style={[styles.activityValue, { color: theme.colors.onSurface }]}>
+                                  {activityData.queueAdditions}
+                                </Text>
+                              </View>
+                              <View style={styles.activityRow}>
+                                <Text style={[styles.activityLabel, { color: theme.colors.onSurfaceVariant }]}>
+                                  Tracks Played:
+                                </Text>
+                                <Text style={[styles.activityValue, { color: theme.colors.onSurface }]}>
+                                  {activityData.tracksPlayed}
+                                </Text>
+                              </View>
+                            </View>
+                          </>
+                        )}
+                      </View>
+                    )}
                   </>
                 )}
               </Dialog.Content>
             </ScrollView>
           </Dialog.ScrollArea>
           <Dialog.Actions>
-            <Button onPress={() => setUserDialogVisible(false)}>Cancel</Button>
-            <Button onPress={handleSaveUser}>Save Changes</Button>
+            <Button onPress={() => setUserDialogVisible(false)}>Close</Button>
+            {(userDialogTab === 'general' || userDialogTab === 'role' || userDialogTab === 'subscription') && (
+              <Button onPress={handleSaveUser} mode="contained">
+                Save Changes
+              </Button>
+            )}
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -553,9 +839,19 @@ const styles = StyleSheet.create({
   tabContent: {
     flex: 1,
   },
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
   searchbar: {
-    margin: 16,
     marginBottom: 8,
+  },
+  userCount: {
+    fontSize: 12,
+    textAlign: 'right',
+    marginBottom: 8,
+    paddingHorizontal: 4,
   },
   loadingText: {
     textAlign: 'center',
@@ -661,6 +957,58 @@ const styles = StyleSheet.create({
   usageText: {
     fontSize: 12,
     marginBottom: 2,
+  },
+  dialogTabs: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 4,
+  },
+  dialogTabButton: {
+    flex: 1,
+    minWidth: 0,
+  },
+  infoCard: {
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  infoLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  infoValue: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  sectionDescription: {
+    fontSize: 13,
+    marginBottom: 16,
+  },
+  activitySection: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  activitySectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  activityLabel: {
+    fontSize: 14,
+    flex: 1,
+  },
+  activityValue: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 
