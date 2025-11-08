@@ -33,7 +33,6 @@ import {
 import { RouteProp, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { RootStackParamList } from '../../App';
 import { useAuth } from '../context/AuthContext';
 import { Track, SubscriptionTier } from '../types';
@@ -85,6 +84,12 @@ import { API_URL } from '../config/constants';
 import { getThumbnailUrl } from '../utils/imageUtils';
 import { AnimatedFAB } from '../components/RoomAnimatedFAB';
 import { AnimatedQueueItem } from '../components/RoomAnimatedQueueItem';
+import { RoomUsersTab } from '../components/RoomUsersTab';
+import { RoomSpotifyTab } from '../components/RoomSpotifyTab';
+import { RoomSettingsTab } from '../components/RoomSettingsTab';
+import { RoomDJModeTab } from '../components/RoomDJModeTab';
+import { RoomMainTab } from '../components/RoomMainTab';
+import { RoomHeader } from '../components/RoomHeader';
 import { roomScreenStyles } from './RoomScreen.styles';
 import { RoomUser, Friend, RoomSettings, BlockedInfo, ActiveBoost, TierSettings } from './RoomScreen.types';
 
@@ -124,7 +129,6 @@ const RoomScreen: React.FC = () => {
   // Users & Friends state
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendRequests, setFriendRequests] = useState<Friend[]>([]);
-  const [activeFriendsTab, setActiveFriendsTab] = useState<'list' | 'requests'>('list');
 
   // Settings state
   const [roomSettings, setRoomSettings] = useState<RoomSettings>({
@@ -1565,1005 +1569,8 @@ const RoomScreen: React.FC = () => {
     );
   }, [user, session, roomId, navigation]);
 
-  const renderMainTab = useCallback(() => {
-    // Show DJ Mode interface if active and user has PRO tier
-    if (isDJModeActive && roomSettings.djMode && profile && hasTier(profile.subscription_tier, 'pro')) {
-      return (
-        <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-          <DJModeInterface
-            djMode={roomSettings.djMode}
-            djPlayers={roomSettings.djPlayers}
-            playerTracks={djPlayerTracks}
-            playerPlayingStates={djPlayerPlayingStates}
-            playerVolumes={djPlayerVolumes}
-            playerBPMs={djPlayerBPMs}
-            playerPositions={djPlayerPositions}
-            playerDurations={djPlayerDurations}
-            onPlayerPlayPause={handleDJPlayerPlayPause}
-            onPlayerLoadTrack={handleDJPlayerLoadTrack}
-            onPlayerVolumeChange={handleDJPlayerVolumeChange}
-            onPlayerSeek={handleDJPlayerSeek}
-            onSyncTracks={handleDJPlayerSync}
-          />
-          
-          {/* Queue for loading tracks into DJ players */}
-          <Card style={styles.card}>
-            <Card.Content>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons name="playlist-music" size={22} color={theme.colors.primary} />
-                <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-                  Queue (Load to Players)
-                </Title>
-              </View>
-              {queue.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <MaterialCommunityIcons name="music-off" size={48} color={theme.colors.onSurfaceVariant} />
-                  <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>
-                    Queue is empty. Add tracks to load into DJ players.
-                  </Text>
-                </View>
-              ) : (
-                <ScrollView style={styles.queueList} showsVerticalScrollIndicator={false}>
-                  {queue.map((track, index) => (
-                    <List.Item
-                      key={track.id}
-                      title={track.info?.fullTitle || 'Unknown Track'}
-                      description={`${track.platform} • Click to load into a player`}
-                      left={() => (
-                        <Avatar.Image
-                          size={40}
-                          source={{ uri: getThumbnailUrl(track.info?.thumbnail, 40) }}
-                        />
-                      )}
-                      onPress={() => {
-                        // Show player selection dialog
-                        Alert.alert(
-                          'Load Track',
-                          'Select a player to load this track into:',
-                          [
-                            ...Array.from({ length: roomSettings.djPlayers }, (_, i) => ({
-                              text: `Player ${i + 1}`,
-                              onPress: () => {
-                                handleDJPlayerLoadTrack(i);
-                              },
-                            })),
-                            { text: 'Cancel', style: 'cancel' },
-                          ]
-                        );
-                      }}
-                    />
-                  ))}
-                </ScrollView>
-              )}
-            </Card.Content>
-          </Card>
-        </ScrollView>
-      );
-    }
 
-    // Standard mode interface
-    return (
-      <ScrollView 
-        ref={scrollViewRef}
-        style={styles.tabContent} 
-        showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
-        {/* Show UpgradePrompt if playback is blocked, otherwise show NowPlayingCard */}
-        {playbackBlocked && blockedInfo ? (
-        <UpgradePrompt
-          isOwner={blockedInfo.isOwner}
-          blockedAt={blockedInfo.blockedAt}
-          songsPlayed={blockedInfo.songsPlayed}
-          roomId={roomId}
-          onBoosterPurchased={() => {
-            // Refresh room state after booster purchase
-            setPlaybackBlocked(false);
-            setBlockedInfo(null);
-            if (socketService.socket) {
-              socketService.socket.emit('join-room', roomId);
-            }
-          }}
-        />
-      ) : (
-        <NowPlayingCard
-          currentTrack={currentTrack}
-          isPlaying={isPlaying}
-          trackReactions={trackReactions}
-          canControl={canControl}
-          onReaction={handleReaction}
-          loadingReaction={loadingReaction}
-          hasUser={!!user}
-          queueLength={queue.length}
-          autoplay={roomSettings.autoplay}
-          onToggleAutoplay={toggleAutoplay}
-          canToggleAutoplay={isOwner || isAdmin}
-          position={position}
-          duration={duration}
-          onAddToPlaylist={() => setShowQueueDialog(true)}
-          onPlayPause={playPause}
-          onPrevious={handlePrevious}
-          onNext={nextTrack}
-          hasQueue={queue.length > 0}
-          onCreatePlaylist={() => setCreatePlaylistDialogVisible(true)}
-          canCreatePlaylist={!!(profile && hasTier(profile.subscription_tier, 'pro'))}
-        />
-      )}
 
-      {/* DJ Mode Interface */}
-      {roomSettings.djMode && (
-        <DJModeInterface
-          djMode={roomSettings.djMode}
-          djPlayers={roomSettings.djPlayers}
-          playerTracks={djPlayerTracks}
-          playerPlayingStates={djPlayerPlayingStates}
-          onPlayerPlayPause={(playerIndex) => {
-            setDjPlayerPlayingStates(prev => {
-              const newStates = [...prev];
-              newStates[playerIndex] = !newStates[playerIndex];
-              return newStates;
-            });
-          }}
-          onPlayerLoadTrack={(playerIndex) => {
-            if (queue.length > 0) {
-              const trackToLoad = queue[0];
-              setDjPlayerTracks(prev => {
-                const newTracks = [...prev];
-                newTracks[playerIndex] = trackToLoad;
-                return newTracks;
-              });
-              setQueue(prev => prev.slice(1));
-            } else {
-              Alert.alert('No Tracks', 'Queue is empty. Add tracks to load into DJ players.');
-            }
-          }}
-        />
-      )}
-
-      {/* YouTube Player - Show for YouTube tracks (separate from NowPlayingCard) */}
-      {currentTrack && (currentTrack.url?.includes('youtube') || currentTrack.url?.includes('youtu.be')) && (
-        <View style={styles.youtubePlayerContainer}>
-          <YouTubePlayer
-            track={currentTrack}
-            isPlaying={isPlaying}
-            position={position}
-            onPositionUpdate={(newPosition) => {
-              // Send position update to server (which saves to Supabase)
-              if (socketService.socket && !playbackBlocked) {
-                socketService.socket.emit('sync-position', {
-                  roomId,
-                  position: newPosition,
-                });
-              }
-            }}
-            onReady={() => {
-              console.log('YouTube player ready');
-            }}
-            onError={(error) => {
-              console.error('YouTube player error:', error);
-              Alert.alert('YouTube Error', error);
-            }}
-            onStateChange={(state) => {
-              // Update local state based on YouTube player state
-              // But Supabase is source of truth, so we sync to it
-              if (state === 'playing' && !isPlaying) {
-                // YouTube started playing, but wait for Supabase confirmation
-              } else if (state === 'paused' && isPlaying) {
-                // YouTube paused, but wait for Supabase confirmation
-              } else if (state === 'ended') {
-                // Track ended - trigger next track if autoplay is enabled
-                // Server will handle permission checks, so we don't need canControl here
-                if (roomSettings.autoplay && queue.length > 0 && socketService.socket) {
-                  console.log('Track ended, autoplay enabled, triggering next track');
-                  socketService.socket.emit('next-track', { roomId });
-                }
-              }
-            }}
-          />
-        </View>
-      )}
-
-      {/* SoundCloud Player - Show for SoundCloud tracks (separate from NowPlayingCard) */}
-      {currentTrack && currentTrack.url?.includes('soundcloud.com') && (
-        <View style={styles.youtubePlayerContainer}>
-          <SoundCloudPlayer
-            track={currentTrack}
-            isPlaying={isPlaying}
-            position={position}
-            onPositionUpdate={(newPosition) => {
-              // Send position update to server (which saves to Supabase)
-              console.log('[RoomScreen] SoundCloud position update', { newPosition });
-              if (socketService.socket && !playbackBlocked) {
-                socketService.socket.emit('sync-position', {
-                  roomId,
-                  position: newPosition,
-                });
-              }
-            }}
-            onDurationUpdate={(newDuration) => {
-              console.log('[RoomScreen] SoundCloud duration update', { duration: newDuration });
-              setDuration(newDuration);
-            }}
-            onReady={() => {
-              console.log('[RoomScreen] SoundCloud player ready');
-            }}
-            onError={(error) => {
-              console.error('[RoomScreen] SoundCloud player error:', error);
-              Alert.alert('SoundCloud Error', error);
-            }}
-            onStateChange={(state) => {
-              console.log('[RoomScreen] SoundCloud state changed', { state, isPlaying });
-              // Update local state based on SoundCloud player state
-              // But Supabase is source of truth, so we sync to it
-              if (state === 'playing' && !isPlaying) {
-                // SoundCloud started playing, but wait for Supabase confirmation
-              } else if (state === 'paused' && isPlaying) {
-                // SoundCloud paused, but wait for Supabase confirmation
-              } else if (state === 'ended') {
-                // Track ended - trigger next track if autoplay is enabled
-                // Server will handle permission checks, so we don't need canControl here
-                if (roomSettings.autoplay && queue.length > 0 && socketService.socket) {
-                  console.log('[RoomScreen] SoundCloud track ended, autoplay enabled, triggering next track');
-                  socketService.socket.emit('next-track', { roomId });
-                }
-              }
-            }}
-          />
-        </View>
-      )}
-      {/* Boost Banner - Show if owner is free tier and no active boost */}
-      {creatorTier === 'free' && !activeBoost && (
-        <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]}>
-          <Card.Content>
-            <View style={styles.boostContainer}>
-              <View style={styles.boostHeader}>
-                <MaterialCommunityIcons name="rocket-launch" size={24} color={theme.colors.primary} />
-                <Title style={[styles.boostTitle, { color: theme.colors.onSurface }]}>
-                  Boost This Room
-                </Title>
-              </View>
-              <Text style={[styles.boostDescription, { color: theme.colors.onSurfaceVariant }]}>
-                This room is on Free tier. Purchase a 1-hour boost for $1 USD to unlock Pro tier benefits:
-                {'\n'}• Unlimited queue
-                {'\n'}• DJ Mode
-                {'\n'}• No ads
-              </Text>
-              <Button
-                mode="contained"
-                onPress={purchaseBoost}
-                loading={purchasingBoost}
-                disabled={purchasingBoost}
-                style={styles.boostButton}
-                buttonColor={theme.colors.primary}
-                textColor={theme.colors.onPrimary}
-                icon="rocket-launch"
-              >
-                {purchasingBoost ? 'Processing...' : 'Boost for $1 USD'}
-              </Button>
-            </View>
-          </Card.Content>
-        </Card>
-      )}
-
-      {/* Active Boost Banner */}
-      {activeBoost && (
-        <Card style={[styles.card, { backgroundColor: `${theme.colors.primary}15`, borderColor: theme.colors.primary, borderWidth: 2 }]}>
-          <Card.Content>
-            <View style={styles.boostContainer}>
-              <View style={styles.boostHeader}>
-                <MaterialCommunityIcons name="rocket-launch" size={24} color={theme.colors.primary} />
-                <Title style={[styles.boostTitle, { color: theme.colors.primary }]}>
-                  Boost Active! 🚀
-                </Title>
-              </View>
-              <Text style={[styles.boostDescription, { color: theme.colors.onSurface }]}>
-                Room has Pro tier benefits for {activeBoost.minutesRemaining} more minute{activeBoost.minutesRemaining !== 1 ? 's' : ''}
-              </Text>
-            </View>
-          </Card.Content>
-        </Card>
-      )}
-
-      {/* Ads Banner - Show based on room creator's tier, not current user's tier */}
-      {tierSettings.ads && (
-        <AdsBanner
-          onUpgradePress={() => {
-            if (!user) {
-              // If not logged in, navigate to auth screen
-              navigation.navigate('Auth');
-            } else {
-              // Navigate to subscription screen
-              navigation.navigate('Subscription');
-            }
-          }}
-        />
-      )}
-
-      {/* Add Track */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="plus-circle" size={22} color={theme.colors.primary} />
-            <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Add Track
-            </Title>
-          </View>
-          {!user && (
-            <View style={[styles.infoNotice, { backgroundColor: `${theme.colors.primary}15` }]}>
-              <MaterialCommunityIcons name="information" size={18} color={theme.colors.primary} />
-              <Text style={[styles.infoNoticeText, { color: theme.colors.primary }]}>
-                Sign up to add tracks to the queue
-              </Text>
-            </View>
-          )}
-          {user && !isOwner && !isAdmin && !roomSettings.allowQueue && (
-            <View style={[styles.permissionNoticeContainer, { backgroundColor: `${theme.colors.error}15` }]}>
-              <MaterialCommunityIcons name="alert-circle" size={16} color={theme.colors.error} />
-              <Text style={[styles.permissionNotice, { color: theme.colors.error }]}>
-                Only room owner and admins can add tracks to the queue
-              </Text>
-            </View>
-          )}
-          <TextInput
-            label="SoundCloud, Spotify, or YouTube URL"
-            value={trackUrl}
-            onChangeText={setTrackUrl}
-            mode="outlined"
-            placeholder="Paste URL(s) or text with URLs..."
-            multiline
-            numberOfLines={3}
-            style={styles.urlInput}
-            editable={!!user && (isOwner || isAdmin || roomSettings.allowQueue)}
-            onSubmitEditing={addTrack}
-            outlineColor={theme.colors.primary}
-            activeOutlineColor={theme.colors.primary}
-          />
-          <Button
-            mode="contained"
-            onPress={addTrack}
-            loading={loading}
-            disabled={loading || !user || (!isOwner && !isAdmin && !roomSettings.allowQueue)}
-            style={styles.addButton}
-            buttonColor={theme.colors.primary}
-            textColor={theme.colors.onPrimary}
-            icon="plus"
-          >
-            {user ? 'Add to Queue' : 'Sign Up to Add Tracks'}
-          </Button>
-        </Card.Content>
-      </Card>
-
-      {/* Queue */}
-      <Card style={[styles.card, styles.queueCard]}>
-        <Card.Content style={styles.queueCardContent}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionHeaderLeft}>
-              <View style={[styles.sectionIconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
-                <MaterialCommunityIcons name="playlist-music" size={22} color={theme.colors.primary} />
-              </View>
-              <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-                Queue
-              </Title>
-            </View>
-            <View style={[styles.countBadge, { backgroundColor: `${theme.colors.primary}20` }]}>
-              <Text style={[styles.countBadgeText, { color: theme.colors.primary }]}>
-                {queue.length}
-                {tierSettings.queueLimit !== null && ` / ${tierSettings.queueLimit}`}
-              </Text>
-            </View>
-          </View>
-          {tierSettings.queueLimit !== null && queue.length >= tierSettings.queueLimit && (
-            <View style={[styles.permissionNoticeContainer, { backgroundColor: `${theme.colors.error}15` }]}>
-              <MaterialCommunityIcons name="alert-circle" size={16} color={theme.colors.error} />
-              <Text style={[styles.permissionNotice, { color: theme.colors.error }]}>
-                Queue limit reached ({tierSettings.queueLimit} songs). Room creator needs to upgrade to increase limit.
-              </Text>
-            </View>
-          )}
-          {tierSettings.queueLimit !== null && queue.length >= tierSettings.queueLimit * 0.8 && queue.length < tierSettings.queueLimit && (
-            <View style={[styles.infoNotice, { backgroundColor: `${theme.colors.primary}15` }]}>
-              <MaterialCommunityIcons name="information" size={18} color={theme.colors.primary} />
-              <Text style={[styles.infoNoticeText, { color: theme.colors.primary }]}>
-                Queue limit: {queue.length} / {tierSettings.queueLimit} songs
-              </Text>
-            </View>
-          )}
-          {queue.length === 0 ? (
-            <View style={styles.emptyState}>
-              <MaterialCommunityIcons name="music-off" size={48} color={theme.colors.onSurfaceVariant} />
-              <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>
-                Queue is empty. Add a track to get started!
-              </Text>
-            </View>
-          ) : (
-            <ScrollView style={styles.queueList} showsVerticalScrollIndicator={false}>
-              {queue.map((track, index) => {
-                const canRemove = isOwner || isAdmin || roomSettings.allowQueueRemoval || 
-                  (track.addedBy === user?.id);
-                const isRemoving = removingTrackIds.has(track.id);
-                
-                return (
-                  <AnimatedQueueItem
-                    key={track.id}
-                    track={track}
-                    index={index}
-                    canRemove={canRemove}
-                    isRemoving={isRemoving}
-                    theme={theme}
-                    user={user}
-                    onRemove={handleRemoveTrack}
-                  />
-                );
-              })}
-            </ScrollView>
-          )}
-        </Card.Content>
-      </Card>
-
-      {/* History */}
-      <Card style={[styles.card, styles.historyCard]}>
-        <Card.Content style={styles.historyCardContent}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionHeaderLeft}>
-              <View style={[styles.sectionIconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
-                <MaterialCommunityIcons name="history" size={22} color={theme.colors.primary} />
-              </View>
-              <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-                History
-              </Title>
-            </View>
-            <View style={[styles.countBadge, { backgroundColor: `${theme.colors.primary}20` }]}>
-              <Text style={[styles.countBadgeText, { color: theme.colors.primary }]}>
-                {history.length}
-              </Text>
-            </View>
-          </View>
-          {history.length === 0 ? (
-            <View style={styles.emptyState}>
-              <MaterialCommunityIcons name="clock-outline" size={48} color={theme.colors.onSurfaceVariant} />
-              <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>
-                No tracks played yet
-              </Text>
-            </View>
-          ) : (
-            <ScrollView style={styles.queueList} showsVerticalScrollIndicator={false}>
-              {history.slice(0, 10).map((track) => (
-                <TouchableOpacity
-                  key={track.id}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.queueItem, 
-                    styles.historyItem, 
-                    { 
-                      backgroundColor: `${theme.colors.surfaceVariant}60`,
-                    }
-                  ]}
-                  onPress={() => {
-                    // Replay track
-                    if (socketService.socket) {
-                      socketService.socket.emit('replay-track', { roomId, trackId: track.id });
-                    }
-                  }}
-                >
-                  <View style={styles.queueItemContent}>
-                    <View style={[styles.historyIconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
-                      <MaterialCommunityIcons 
-                        name="history" 
-                        size={18} 
-                        color={theme.colors.primary}
-                      />
-                    </View>
-                    <Avatar.Image
-                      size={IS_MOBILE ? 60 : 64}
-                      source={{ uri: getThumbnailUrl(track.info?.thumbnail, IS_MOBILE ? 60 : 64) }}
-                      style={[styles.queueItemThumbnail, styles.historyThumbnail]}
-                    />
-                    <View style={styles.queueItemDetails}>
-                      <Text 
-                        style={[styles.queueItemTitle, { color: theme.colors.onSurface }]}
-                        numberOfLines={1}
-                      >
-                        {track.info?.fullTitle || 'Unknown Track'}
-                      </Text>
-                      <View style={styles.queueItemMeta}>
-                        <MaterialCommunityIcons 
-                          name="clock-outline" 
-                          size={14} 
-                          color={theme.colors.onSurfaceVariant} 
-                        />
-                        <Text 
-                          style={[styles.queueItemDescription, { color: theme.colors.onSurfaceVariant }]}
-                          numberOfLines={1}
-                        >
-                          Previously played
-                        </Text>
-                      </View>
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.replayButton, { backgroundColor: `${theme.colors.primary}20` }]}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        if (socketService.socket) {
-                          socketService.socket.emit('replay-track', { roomId, trackId: track.id });
-                        }
-                      }}
-                    >
-                      <MaterialCommunityIcons 
-                        name="replay" 
-                        size={20} 
-                        color={theme.colors.primary}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
-        </Card.Content>
-      </Card>
-
-      {/* Create Playlist Button - Only show for PRO tier users */}
-      {profile && profile.subscription_tier === 'pro' && (
-        <Card style={styles.card}>
-          <Card.Content>
-            <Button
-              mode="contained"
-              onPress={() => setCreatePlaylistDialogVisible(true)}
-              icon="playlist-plus"
-              style={styles.addButton}
-              buttonColor={theme.colors.primary}
-              textColor={theme.colors.onPrimary}
-            >
-              Create Playlist from Room
-            </Button>
-            <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant, marginTop: 8 }]}>
-              Create a playlist with all tracks from history and queue
-            </Text>
-          </Card.Content>
-        </Card>
-      )}
-    </ScrollView>
-  );
-  }, [
-    isDJModeActive,
-    roomSettings,
-    profile,
-    scrollViewRef,
-    handleScroll,
-    playbackBlocked,
-    blockedInfo,
-    currentTrack,
-    isPlaying,
-    trackReactions,
-    canControl,
-    user,
-    queue,
-    position,
-    roomId,
-    theme,
-    playPause,
-    nextTrack,
-    syncToSession,
-    handleReaction,
-    loadingReaction,
-    handleDJPlayerPlayPause,
-    handleDJPlayerLoadTrack,
-    handleDJPlayerVolumeChange,
-    handleDJPlayerSeek,
-    handleDJPlayerSync,
-    purchaseBoost,
-    purchasingBoost,
-    activeBoost,
-    tierSettings,
-    navigation,
-    djPlayerTracks,
-    djPlayerPlayingStates,
-    djPlayerVolumes,
-    djPlayerBPMs,
-    djPlayerPositions,
-    djPlayerDurations,
-    setDjPlayerTracks,
-    setQueue,
-  ]);
-
-  const renderUsersTab = () => (
-    <ScrollView style={styles.tabContent}>
-      {/* Users in Room */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title>Users in Room ({userCount})</Title>
-          <ScrollView style={styles.usersList}>
-            {users.map((roomUser) => {
-              const isMe = roomUser.userId === user?.id;
-              const isFriend = friends.some(f => 
-                (f.user_id === roomUser.userId && f.friend_id === user?.id) ||
-                (f.friend_id === roomUser.userId && f.user_id === user?.id)
-              );
-              const hasPendingRequest = friendRequests.some(r => 
-                (r.user_id === roomUser.userId && r.friend_id === user?.id) ||
-                (r.friend_id === roomUser.userId && r.user_id === user?.id)
-              );
-
-              return (
-                <List.Item
-                  key={roomUser.userId}
-                  title={roomUser.userProfile?.username || roomUser.userProfile?.display_name || 'Anonymous User'}
-                  description={
-                    isMe ? 'You' :
-                    roomUser.isOwner ? 'Room Owner' :
-                    roomUser.isAdmin ? 'Admin' : 'User'
-                  }
-                  left={() => (
-                    <Avatar.Image
-                      size={40}
-                      source={{
-                        uri: roomUser.userProfile?.avatar_url ||
-                             `https://ui-avatars.com/api/?name=${encodeURIComponent(roomUser.userProfile?.username || '')}&background=667eea&color=fff`
-                      }}
-                    />
-                  )}
-                  right={() => (
-                    <View style={styles.userActions}>
-                      {isMe && <Chip>You</Chip>}
-                      {roomUser.isOwner && <Chip icon="crown">Owner</Chip>}
-                      {roomUser.isAdmin && <Chip icon="shield">Admin</Chip>}
-                      {!isMe && !isFriend && !hasPendingRequest && (
-                        <Button
-                          icon="account-plus"
-                          mode="text"
-                          compact
-                          onPress={() => addFriend(roomUser.userId)}
-                        >
-                          Add Friend
-                        </Button>
-                      )}
-                      {!isMe && hasPendingRequest && friendRequests.find(r => r.user_id === user?.id && r.friend_id === roomUser.userId) && (
-                        <Text style={styles.requestSent}>Request sent</Text>
-                      )}
-                      {!isMe && hasPendingRequest && friendRequests.find(r => r.user_id === roomUser.userId && r.friend_id === user?.id) && (
-                        <View style={styles.requestActions}>
-                          <Button
-                            icon="check"
-                            mode="text"
-                            compact
-                            onPress={() => acceptFriendRequest(roomUser.userId)}
-                          >
-                            Accept
-                          </Button>
-                          <Button
-                            icon="close"
-                            mode="text"
-                            compact
-                            onPress={() => rejectFriendRequest(roomUser.userId)}
-                          >
-                            Reject
-                          </Button>
-                        </View>
-                      )}
-                    </View>
-                  )}
-                />
-              );
-            })}
-          </ScrollView>
-        </Card.Content>
-      </Card>
-
-      {/* Friends Section */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title>Friends</Title>
-          <View style={styles.friendsTabs}>
-            <Button
-              mode={activeFriendsTab === 'list' ? 'contained' : 'outlined'}
-              onPress={() => setActiveFriendsTab('list')}
-              style={styles.friendsTabButton}
-            >
-              My Friends
-            </Button>
-            <Button
-              mode={activeFriendsTab === 'requests' ? 'contained' : 'outlined'}
-              onPress={() => setActiveFriendsTab('requests')}
-              style={styles.friendsTabButton}
-            >
-              Requests ({friendRequests.filter(r => r.friend_id === user?.id).length})
-            </Button>
-          </View>
-
-          {activeFriendsTab === 'list' ? (
-            <ScrollView style={styles.friendsList}>
-              {friends.length === 0 ? (
-                <Text style={styles.emptyQueue}>No friends yet</Text>
-              ) : (
-                friends.map((friend) => (
-                  <List.Item
-                    key={friend.id}
-                    title={friend.username || 'Friend'}
-                    left={() => (
-                      <Avatar.Image
-                        size={40}
-                        source={{
-                          uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(friend.username || '')}&background=667eea&color=fff`
-                        }}
-                      />
-                    )}
-                    right={() => (
-                      <Button
-                        icon="account-remove"
-                        mode="text"
-                        compact
-                        onPress={() => removeFriend(friend.friend_id === user?.id ? friend.user_id : friend.friend_id)}
-                      >
-                        Remove
-                      </Button>
-                    )}
-                  />
-                ))
-              )}
-            </ScrollView>
-          ) : (
-            <ScrollView style={styles.friendsList}>
-              {friendRequests.filter(r => r.friend_id === user?.id).length === 0 ? (
-                <Text style={styles.emptyQueue}>No pending requests</Text>
-              ) : (
-                friendRequests
-                  .filter(r => r.friend_id === user?.id)
-                  .map((request) => (
-                    <List.Item
-                      key={request.id}
-                      title={request.username || 'User'}
-                      description="Wants to be your friend"
-                      left={() => (
-                        <Avatar.Image
-                          size={40}
-                          source={{
-                            uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(request.username || '')}&background=667eea&color=fff`
-                          }}
-                        />
-                      )}
-                      right={() => (
-                        <View style={styles.requestActions}>
-                          <Button
-                            icon="check"
-                            mode="contained"
-                            compact
-                            onPress={() => acceptFriendRequest(request.user_id)}
-                          >
-                            Accept
-                          </Button>
-                          <Button
-                            icon="close"
-                            mode="outlined"
-                            compact
-                            onPress={() => rejectFriendRequest(request.user_id)}
-                          >
-                            Reject
-                          </Button>
-                        </View>
-                      )}
-                    />
-                  ))
-              )}
-            </ScrollView>
-          )}
-        </Card.Content>
-      </Card>
-    </ScrollView>
-  );
-
-  const renderSpotifyTab = () => {
-    const isSpotifyLoggedIn = user && isSpotifyUser(user);
-
-    if (!isSpotifyLoggedIn) {
-      return (
-        <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
-              <Title style={{ color: theme.colors.onSurface }}>Spotify Playlists</Title>
-              <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>
-                Sign in with Spotify to browse and queue songs from your playlists.
-              </Text>
-              <Button
-                mode="contained"
-                onPress={() => navigation.navigate('Auth')}
-                icon="spotify"
-                style={styles.addButton}
-              >
-                Sign In with Spotify
-              </Button>
-            </Card.Content>
-          </Card>
-        </ScrollView>
-      );
-    }
-
-    if (selectedPlaylist) {
-      return (
-        <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
-              <View style={styles.playlistHeader}>
-                <Button
-                  icon="arrow-left"
-                  mode="text"
-                  onPress={() => {
-                    setSelectedPlaylist(null);
-                    setPlaylistTracks([]);
-                  }}
-                >
-                  Back to Playlists
-                </Button>
-                <Title style={{ color: theme.colors.onSurface }}>{selectedPlaylist.name}</Title>
-                {selectedPlaylist.description && (
-                  <Text style={[styles.playlistDescription, { color: theme.colors.onSurfaceVariant }]}>{selectedPlaylist.description}</Text>
-                )}
-                {selectedPlaylist.tracks && (
-                  <Text style={[styles.trackCount, { color: theme.colors.onSurfaceVariant }]}>
-                    {selectedPlaylist.tracks.total} tracks
-                  </Text>
-                )}
-              </View>
-            </Card.Content>
-          </Card>
-
-          {spotifyError && (
-            <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-              <Card.Content>
-                <Text style={[styles.errorText, { color: theme.colors.error }]}>{spotifyError}</Text>
-                <Button
-                  mode="outlined"
-                  onPress={() => loadPlaylistTracks(selectedPlaylist)}
-                  style={styles.addButton}
-                >
-                  Retry
-                </Button>
-              </Card.Content>
-            </Card>
-          )}
-
-          {loadingTracks ? (
-            <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-              <Card.Content>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>Loading tracks...</Text>
-              </Card.Content>
-            </Card>
-          ) : playlistTracks.length > 0 ? (
-            <>
-              <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-                <Card.Content>
-                  <Button
-                    mode="contained"
-                    onPress={queueAllTracks}
-                    icon="playlist-plus"
-                    style={styles.addButton}
-                  >
-                    Queue All Tracks
-                  </Button>
-                </Card.Content>
-              </Card>
-              <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-                <Card.Content>
-                  <Title style={{ color: theme.colors.onSurface }}>Tracks</Title>
-                  <ScrollView style={styles.queueList}>
-                    {playlistTracks.map((track) => (
-                      <List.Item
-                        key={track.id}
-                        title={track.name}
-                        description={track.artists.map(a => a.name).join(', ')}
-                        left={() => (
-                          <Avatar.Image
-                            size={40}
-                            source={{
-                              uri: getThumbnailUrl(track.album?.images?.[0]?.url, 40)
-                            }}
-                          />
-                        )}
-                        right={() => (
-                          <Button
-                            icon="plus"
-                            mode="text"
-                            compact
-                            onPress={() => queueSpotifyTrack(track)}
-                          >
-                            Queue
-                          </Button>
-                        )}
-                      />
-                    ))}
-                  </ScrollView>
-                </Card.Content>
-              </Card>
-            </>
-          ) : (
-            <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-              <Card.Content>
-                <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>No tracks found in this playlist</Text>
-              </Card.Content>
-            </Card>
-          )}
-        </ScrollView>
-      );
-    }
-
-    return (
-      <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
-            <View style={styles.playlistHeader}>
-              <Title style={{ color: theme.colors.onSurface }}>Your Spotify Playlists</Title>
-              <Button
-                icon="refresh"
-                mode="text"
-                onPress={loadSpotifyPlaylists}
-                disabled={loadingPlaylists}
-              >
-                Refresh
-              </Button>
-            </View>
-          </Card.Content>
-        </Card>
-
-        {spotifyError && (
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
-              <Text style={[styles.errorText, { color: theme.colors.error }]}>{spotifyError}</Text>
-              <Button
-                mode="outlined"
-                onPress={loadSpotifyPlaylists}
-                style={styles.addButton}
-              >
-                Retry
-              </Button>
-            </Card.Content>
-          </Card>
-        )}
-
-        {loadingPlaylists ? (
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>Loading playlists...</Text>
-            </Card.Content>
-          </Card>
-        ) : spotifyPlaylists.length > 0 ? (
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
-              <ScrollView style={styles.queueList}>
-                {spotifyPlaylists.map((playlist) => (
-                  <List.Item
-                    key={playlist.id}
-                    title={playlist.name}
-                    description={
-                      playlist.owner?.display_name
-                        ? `By ${playlist.owner.display_name} • ${playlist.tracks?.total || 0} tracks`
-                        : `${playlist.tracks?.total || 0} tracks`
-                    }
-                    left={() => (
-                      <Avatar.Image
-                        size={50}
-                        source={{
-                          uri: getThumbnailUrl(playlist.images?.[0]?.url, 50)
-                        }}
-                      />
-                    )}
-                    onPress={() => loadPlaylistTracks(playlist)}
-                  />
-                ))}
-              </ScrollView>
-            </Card.Content>
-          </Card>
-        ) : (
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
-              <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>No playlists found</Text>
-            </Card.Content>
-          </Card>
-        )}
-      </ScrollView>
-    );
-  };
 
   // Automatically enable DJ mode when DJ Mode tab is accessed by Pro user
   useEffect(() => {
@@ -2580,365 +1587,7 @@ const RoomScreen: React.FC = () => {
     }
   }, [activeTab, profile, tierSettings.djMode, roomSettings.djMode, isOwner, isAdmin, roomId]);
 
-  const renderDJModeTab = () => {
-    const isPro = profile && hasTier(profile.subscription_tier, 'pro');
 
-    if (!isPro) {
-      return (
-        <ScrollView
-          style={styles.tabContent}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <DJModeUpgradeAd
-            onUpgrade={() => {
-              navigation.navigate('Subscription');
-            }}
-          />
-        </ScrollView>
-      );
-    }
-
-    // Check if DJ mode is available (room creator has Pro tier)
-    if (!tierSettings.djMode) {
-      return (
-        <ScrollView
-          style={styles.tabContent}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content style={styles.centerContent}>
-              <MaterialCommunityIcons
-                name="equalizer"
-                size={64}
-                color={theme.colors.primary}
-                style={styles.centerIcon}
-              />
-              <Text style={[styles.noAccess, { color: theme.colors.onSurface, fontSize: 18, marginBottom: 8 }]}>
-                DJ Mode Not Available
-              </Text>
-              <Text style={[styles.noAccessSubtext, { color: theme.colors.onSurfaceVariant }]}>
-                The room creator needs to have a Pro tier subscription to enable DJ Mode.
-              </Text>
-            </Card.Content>
-          </Card>
-        </ScrollView>
-      );
-    }
-
-    // If user is pro and DJ mode is available, show the DJ interface
-    if (roomSettings.djMode || (isOwner || isAdmin)) {
-      return (
-        <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-          <DJModeInterface
-            djMode={roomSettings.djMode}
-            djPlayers={roomSettings.djPlayers}
-            playerTracks={djPlayerTracks}
-            playerPlayingStates={djPlayerPlayingStates}
-            playerVolumes={djPlayerVolumes}
-            playerBPMs={djPlayerBPMs}
-            playerPositions={djPlayerPositions}
-            playerDurations={djPlayerDurations}
-            onPlayerPlayPause={handleDJPlayerPlayPause}
-            onPlayerLoadTrack={handleDJPlayerLoadTrack}
-            onPlayerVolumeChange={handleDJPlayerVolumeChange}
-            onPlayerSeek={handleDJPlayerSeek}
-            onSyncTracks={handleDJPlayerSync}
-          />
-          
-          {/* Queue for loading tracks into DJ players */}
-          <Card style={styles.card}>
-            <Card.Content>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons name="playlist-music" size={22} color={theme.colors.primary} />
-                <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-                  Queue (Load to Players)
-                </Title>
-              </View>
-              {queue.length === 0 ? (
-                <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>
-                  No tracks in queue
-                </Text>
-              ) : (
-                <ScrollView style={styles.queueList}>
-                  {queue.map((track, index) => (
-                    <Card
-                      key={index}
-                      style={[styles.queueItem, { backgroundColor: theme.colors.surfaceVariant }]}
-                      onPress={() => {
-                        // Track can be loaded to a player from here
-                        Alert.alert('Load Track', `Select a player to load "${track.info?.fullTitle || 'Unknown Track'}"`, [
-                          { text: 'Cancel', style: 'cancel' },
-                          ...Array.from({ length: roomSettings.djPlayers }, (_, i) => ({
-                            text: `Player ${i + 1}`,
-                            onPress: async () => {
-                              // Load the selected track to the player
-                              const success = await djAudioService.loadTrack(i, track);
-                              if (success) {
-                                const newTracks = [...djPlayerTracks];
-                                newTracks[i] = track;
-                                setDjPlayerTracks(newTracks);
-                                
-                                // Detect BPM
-                                const bpmResult = await bpmDetectionService.detectBPM(track);
-                                const newBPMs = [...djPlayerBPMs];
-                                newBPMs[i] = bpmResult.bpm;
-                                setDjPlayerBPMs(newBPMs);
-                              } else {
-                                Alert.alert('Error', 'Failed to load track to player');
-                              }
-                            },
-                          })),
-                        ]);
-                      }}
-                    >
-                      <Card.Content style={styles.queueItemContent}>
-                        <MaterialCommunityIcons name="music" size={20} color={theme.colors.primary} />
-                        <View style={styles.queueItemDetails}>
-                          <Text style={[styles.queueItemTitle, { color: theme.colors.onSurface }]} numberOfLines={1}>
-                            {track.info?.fullTitle || 'Unknown Track'}
-                          </Text>
-                          <View style={styles.queueItemMeta}>
-                            <MaterialCommunityIcons 
-                              name="account" 
-                              size={12} 
-                              color={theme.colors.onSurfaceVariant} 
-                            />
-                            <Text style={[styles.queueItemDescription, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
-                              {track.info?.artist || 'Unknown Artist'}
-                            </Text>
-                          </View>
-                        </View>
-                        <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.onSurfaceVariant} />
-                      </Card.Content>
-                    </Card>
-                  ))}
-                </ScrollView>
-              )}
-            </Card.Content>
-          </Card>
-        </ScrollView>
-      );
-    }
-
-    // Loading state while DJ mode is being enabled
-    return (
-      <ScrollView
-        style={styles.tabContent}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content style={styles.centerContent}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={[styles.noAccess, { color: theme.colors.onSurface, fontSize: 18, marginTop: 16 }]}>
-              Enabling DJ Mode...
-            </Text>
-          </Card.Content>
-        </Card>
-      </ScrollView>
-    );
-  };
-
-  const renderSettingsTab = () => {
-    if (!isOwner && !isAdmin) {
-      return (
-        <View style={styles.tabContent}>
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
-              <Text style={[styles.noAccess, { color: theme.colors.onSurfaceVariant }]}>You don't have access to room settings.</Text>
-              <Text style={[styles.noAccessSubtext, { color: theme.colors.onSurfaceVariant }]}>Only room owners and admins can access settings.</Text>
-            </Card.Content>
-          </Card>
-        </View>
-      );
-    }
-
-    return (
-      <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
-            <Title style={{ color: theme.colors.onSurface }}>Room Settings</Title>
-            
-            <View style={styles.settingItem}>
-              <View style={styles.settingRow}>
-                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Private Room</Text>
-                <Switch
-                  value={roomSettings.isPrivate}
-                  onValueChange={(value) => setRoomSettings(prev => ({ ...prev, isPrivate: value }))}
-                  disabled={!isOwner}
-                />
-              </View>
-              <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
-                Only users with the reference code can join
-              </Text>
-            </View>
-
-            <Divider style={styles.divider} />
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingRow}>
-                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Allow Users to Control Playback</Text>
-                <Switch
-                  value={roomSettings.allowControls}
-                  onValueChange={(value) => setRoomSettings(prev => ({ ...prev, allowControls: value }))}
-                  disabled={!isOwner && !isAdmin}
-                />
-              </View>
-              <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
-                If disabled, only room owner and admins can control playback
-              </Text>
-            </View>
-
-            <Divider style={styles.divider} />
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingRow}>
-                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Allow Users to Queue Songs</Text>
-                <Switch
-                  value={roomSettings.allowQueue}
-                  onValueChange={(value) => setRoomSettings(prev => ({ ...prev, allowQueue: value }))}
-                  disabled={!isOwner && !isAdmin}
-                />
-              </View>
-              <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
-                If disabled, only room owner and admins can add tracks to the queue
-              </Text>
-              
-              <Divider style={[styles.divider, { marginVertical: 12 }]} />
-              
-              <View style={styles.settingRow}>
-                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Allow Users to Remove from Queue</Text>
-                <Switch
-                  value={roomSettings.allowQueueRemoval}
-                  onValueChange={(value) => setRoomSettings(prev => ({ ...prev, allowQueueRemoval: value }))}
-                  disabled={!isOwner && !isAdmin}
-                />
-              </View>
-              <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
-                If disabled, only room owner and admins can remove tracks. Users can always remove their own tracks.
-              </Text>
-            </View>
-
-            <Divider style={styles.divider} />
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingRow}>
-                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Can other people add to playlist?</Text>
-                <Switch
-                  value={roomSettings.allowPlaylistAdditions}
-                  onValueChange={(value) => setRoomSettings(prev => ({ ...prev, allowPlaylistAdditions: value }))}
-                  disabled={!isOwner && !isAdmin}
-                />
-              </View>
-              <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
-                If enabled, other users can add tracks to playlists created from this room
-              </Text>
-            </View>
-
-            <Divider style={styles.divider} />
-
-            {isOwner && (
-              <View style={styles.settingItem}>
-                <View style={styles.settingRow}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Session Mode</Text>
-                  <Switch
-                    value={roomSettings.sessionEnabled}
-                    onValueChange={(value) => {
-                      setRoomSettings(prev => ({ ...prev, sessionEnabled: value }));
-                    }}
-                    disabled={!isOwner}
-                  />
-                </View>
-                <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
-                  When enabled, users will be prompted to open a mini player when trying to leave the room during an active session
-                </Text>
-              </View>
-            )}
-
-            {isOwner && (
-              <>
-                <Divider style={styles.divider} />
-                <View style={styles.settingItem}>
-                  <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>Room Admins</Text>
-                  <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
-                    Admins can access settings and control playback
-                  </Text>
-                  
-                  <ScrollView style={styles.adminsList}>
-                    {roomSettings.admins.length === 0 ? (
-                      <Text style={[styles.emptyQueue, { color: theme.colors.onSurfaceVariant }]}>No admins added yet</Text>
-                    ) : (
-                      roomSettings.admins.map((adminId) => {
-                        const adminUser = users.find(u => u.userId === adminId);
-                        return (
-                          <List.Item
-                            key={adminId}
-                            title={adminUser?.userProfile?.username || 'Admin'}
-                            left={() => (
-                              <Avatar.Image
-                                size={40}
-                                source={{
-                                  uri: adminUser?.userProfile?.avatar_url ||
-                                       `https://ui-avatars.com/api/?name=${encodeURIComponent(adminUser?.userProfile?.username || '')}&background=667eea&color=fff`
-                                }}
-                              />
-                            )}
-                            right={() => (
-                              <Button
-                                icon="delete"
-                                mode="text"
-                                compact
-                                onPress={() => removeAdmin(adminId)}
-                              >
-                                Remove
-                              </Button>
-                            )}
-                          />
-                        );
-                      })
-                    )}
-                  </ScrollView>
-
-                  <View style={styles.addAdminForm}>
-                    <TextInput
-                      label="Username"
-                      value={addAdminInput}
-                      onChangeText={setAddAdminInput}
-                      mode="outlined"
-                      placeholder="Enter username to add as admin"
-                      style={styles.adminInput}
-                      onSubmitEditing={addAdmin}
-                    />
-                    <Button
-                      mode="contained"
-                      onPress={addAdmin}
-                      icon="account-plus"
-                      style={styles.addAdminButton}
-                    >
-                      Add Admin
-                    </Button>
-                  </View>
-                </View>
-              </>
-            )}
-
-            <Divider style={styles.divider} />
-
-            <Button
-              mode="contained"
-              onPress={saveSettings}
-              icon="content-save"
-              style={styles.saveButton}
-            >
-              Save Settings
-            </Button>
-          </Card.Content>
-        </Card>
-      </ScrollView>
-    );
-  };
 
   const renderChatTab = () => {
     if (!supabase) {
@@ -2975,305 +1624,169 @@ const RoomScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: headerColor }]}>
-        <View style={styles.headerTop}>
-          <View style={styles.headerLeft}>
-            <Text style={[styles.roomTitle, { color: theme.colors.onSurface }]}>{roomName}</Text>
-            {/* Play/Pause button - Only visible on web/desktop, positioned AFTER room name */}
-            {Platform.OS === 'web' && !IS_MOBILE && activeTab === 'main' && (
-              <View style={styles.iconButtonWrapper}>
-                <IconButton
-                  icon={isPlaying ? 'pause' : 'play'}
-                  iconColor={theme.colors.onSurface}
-                  size={20}
-                  onPress={playPause}
-                  disabled={!currentTrack || !canControl}
-                  style={styles.iconButton}
-                />
-              </View>
-            )}
-            <View style={styles.connectionStatus}>
-              <View style={[styles.statusDot, { backgroundColor: connected ? '#4CAF50' : '#FF9800' }]} />
-            </View>
-            <View style={{ flex: 1 }} />
-          </View>
-          <View style={styles.headerRight}>
-            {/* DJ Mode Toggle - Only for PRO users */}
-            {profile && hasTier(profile.subscription_tier, 'pro') && roomSettings.djMode && (
-              <DJModeToggle
-                isDJMode={isDJModeActive}
-                onToggle={() => setIsDJModeActive(!isDJModeActive)}
-                disabled={!roomSettings.djMode}
-              />
-            )}
-            {/* Playback Controls - Only visible on web/desktop, hidden on mobile (shown via FAB) */}
-            {activeTab === 'main' && Platform.OS === 'web' && !IS_MOBILE && (
-              <>
-                <View style={styles.iconButtonWrapper}>
-                  <IconButton
-                    icon="skip-previous"
-                    iconColor={theme.colors.onSurface}
-                    size={20}
-                    onPress={handlePrevious}
-                    disabled={!currentTrack || !canControl}
-                    style={styles.iconButton}
-                  />
-                </View>
-                <View style={styles.iconButtonWrapper}>
-                  <IconButton
-                    icon="skip-next"
-                    iconColor={theme.colors.onSurface}
-                    size={20}
-                    onPress={nextTrack}
-                    disabled={queue.length === 0 || !canControl}
-                    style={styles.iconButton}
-                  />
-                </View>
-              </>
-            )}
-            <Chip
-              icon={({ size, color }) => (
-                <MaterialCommunityIcons name="account-group" size={size} color="#FFFFFF" />
-              )}
-              style={[styles.userCountChip, { backgroundColor: theme.colors.primaryContainer }]}
-              textStyle={[styles.userCountChipText, { color: '#FFFFFF' }]}
-              onPress={() => setActiveTab('users')}
-            >
-              {userCount}
-            </Chip>
-            <Chip
-              icon={({ size, color }) => (
-                <MaterialCommunityIcons name="format-list-bulleted" size={size} color="#FFFFFF" />
-              )}
-              style={[styles.userCountChip, { backgroundColor: theme.colors.secondaryContainer }]}
-              textStyle={[styles.userCountChipText, { color: '#FFFFFF' }]}
-            >
-              {queue.length}
-            </Chip>
-            <View style={styles.iconButtonWrapper}>
-              <IconButton
-                icon="share-variant"
-                iconColor={theme.colors.onSurface}
-                size={20}
-                onPress={shareRoom}
-                style={styles.iconButton}
-              />
-            </View>
-          </View>
-        </View>
-        {shortCode && (
-          <Text style={[styles.roomId, { color: theme.colors.onSurfaceVariant }]}>
-            Reference: {shortCode}
-          </Text>
-        )}
-        {!connected && <ActivityIndicator size="small" color={theme.colors.onSurface} style={styles.connectingIndicator} />}
-      </View>
-
-      {/* Tabs */}
-      <View style={[styles.tabs, { backgroundColor: headerColor, borderBottomColor: theme.colors.outline }]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsScrollContent}
-          style={styles.tabsScrollView}
-        >
-          <TouchableOpacity
-            onPress={() => setActiveTab('main')}
-            style={[
-              styles.tabButton,
-              activeTab === 'main' && {
-                backgroundColor: theme.colors.primary,
-              },
-            ]}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons
-              name="music-note"
-              size={20}
-              color={activeTab === 'main' ? theme.colors.onPrimary : theme.colors.onSurface}
-              style={styles.tabIcon}
-            />
-            <Text
-              style={[
-                styles.tabButtonText,
-                {
-                  color: activeTab === 'main' ? theme.colors.onPrimary : theme.colors.onSurface,
-                },
-              ]}
-            >
-              Main
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setActiveTab('users')}
-            style={[
-              styles.tabButton,
-              activeTab === 'users' && {
-                backgroundColor: theme.colors.primary,
-              },
-            ]}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons
-              name="account-group"
-              size={20}
-              color={activeTab === 'users' ? theme.colors.onPrimary : theme.colors.onSurface}
-              style={styles.tabIcon}
-            />
-            <Text
-              style={[
-                styles.tabButtonText,
-                {
-                  color: activeTab === 'users' ? theme.colors.onPrimary : theme.colors.onSurface,
-                },
-              ]}
-            >
-              Users
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setActiveTab('chat')}
-            style={[
-              styles.tabButton,
-              activeTab === 'chat' && {
-                backgroundColor: theme.colors.primary,
-              },
-            ]}
-            activeOpacity={0.7}
-          >
-            <View style={styles.tabIconContainer}>
-              <MaterialCommunityIcons
-                name="chat"
-                size={20}
-                color={activeTab === 'chat' ? theme.colors.onPrimary : theme.colors.onSurface}
-                style={styles.tabIcon}
-              />
-              {unreadChatCount > 0 && (
-                <Badge
-                  visible={unreadChatCount > 0}
-                  size={18}
-                  style={[
-                    styles.chatBadge,
-                    { backgroundColor: theme.colors.error }
-                  ]}
-                >
-                  {unreadChatCount > 99 ? '99+' : unreadChatCount}
-                </Badge>
-              )}
-            </View>
-            <Text
-              style={[
-                styles.tabButtonText,
-                {
-                  color: activeTab === 'chat' ? theme.colors.onPrimary : theme.colors.onSurface,
-                },
-              ]}
-            >
-              Chat
-            </Text>
-          </TouchableOpacity>
-          {user && isSpotifyUser(user) && (
-            <TouchableOpacity
-              onPress={() => setActiveTab('spotify')}
-              style={[
-                styles.tabButton,
-                activeTab === 'spotify' && {
-                  backgroundColor: theme.colors.primary,
-                },
-              ]}
-              activeOpacity={0.7}
-            >
-              <MaterialCommunityIcons
-                name="spotify"
-                size={20}
-                color={activeTab === 'spotify' ? theme.colors.onPrimary : theme.colors.onSurface}
-                style={styles.tabIcon}
-              />
-              <Text
-                style={[
-                  styles.tabButtonText,
-                  {
-                    color: activeTab === 'spotify' ? theme.colors.onPrimary : theme.colors.onSurface,
-                  },
-                ]}
-              >
-                Spotify
-              </Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            onPress={() => {
-              if (profile && hasTier(profile.subscription_tier, 'pro') && !isDJModeActive) {
-                setShowDJModeConfirmDialog(true);
-              } else {
-                setActiveTab('djmode');
-              }
-            }}
-            style={[
-              styles.tabButton,
-              (activeTab === 'djmode' || isDJModeActive) && {
-                backgroundColor: theme.colors.primary,
-              },
-            ]}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons
-              name="equalizer"
-              size={20}
-              color={(activeTab === 'djmode' || isDJModeActive) ? theme.colors.onPrimary : theme.colors.onSurface}
-              style={styles.tabIcon}
-            />
-            <Text
-              style={[
-                styles.tabButtonText,
-                {
-                  color: (activeTab === 'djmode' || isDJModeActive) ? theme.colors.onPrimary : theme.colors.onSurface,
-                },
-              ]}
-            >
-              DJ Mode
-            </Text>
-          </TouchableOpacity>
-          {(isOwner || isAdmin) && (
-            <TouchableOpacity
-              onPress={() => setActiveTab('settings')}
-              style={[
-                styles.tabButton,
-                activeTab === 'settings' && {
-                  backgroundColor: theme.colors.primary,
-                },
-              ]}
-              activeOpacity={0.7}
-            >
-              <MaterialCommunityIcons
-                name="cog"
-                size={20}
-                color={activeTab === 'settings' ? theme.colors.onPrimary : theme.colors.onSurface}
-                style={styles.tabIcon}
-              />
-              <Text
-                style={[
-                  styles.tabButtonText,
-                  {
-                    color: activeTab === 'settings' ? theme.colors.onPrimary : theme.colors.onSurface,
-                  },
-                ]}
-              >
-                Settings
-              </Text>
-            </TouchableOpacity>
-          )}
-        </ScrollView>
-      </View>
+      <RoomHeader
+        headerColor={headerColor}
+        roomName={roomName || ''}
+        shortCode={shortCode || null}
+        connected={connected}
+        activeTab={activeTab}
+        isPlaying={isPlaying}
+        currentTrack={currentTrack}
+        canControl={canControl}
+        queue={queue}
+        userCount={userCount}
+        profile={profile}
+        roomSettings={roomSettings}
+        isDJModeActive={isDJModeActive}
+        setIsDJModeActive={setIsDJModeActive}
+        playPause={playPause}
+        handlePrevious={handlePrevious}
+        nextTrack={nextTrack}
+        shareRoom={shareRoom}
+        setActiveTab={setActiveTab}
+        unreadChatCount={unreadChatCount}
+        user={user}
+        tierSettings={tierSettings}
+        isOwner={isOwner}
+        isAdmin={isAdmin}
+        setShowDJModeConfirmDialog={setShowDJModeConfirmDialog}
+      />
 
       {/* Tab Content */}
-      {activeTab === 'main' && renderMainTab()}
-      {activeTab === 'users' && renderUsersTab()}
+      {activeTab === 'main' && (
+        <RoomMainTab
+          isDJModeActive={isDJModeActive}
+          roomSettings={roomSettings}
+          profile={profile}
+          scrollViewRef={scrollViewRef}
+          handleScroll={handleScroll}
+          playbackBlocked={playbackBlocked}
+          blockedInfo={blockedInfo}
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          trackReactions={trackReactions}
+          canControl={canControl}
+          user={user}
+          queue={queue}
+          history={history}
+          position={position}
+          duration={duration}
+          roomId={roomId}
+          playPause={playPause}
+          handlePrevious={handlePrevious}
+          nextTrack={nextTrack}
+          handleReaction={handleReaction}
+          loadingReaction={loadingReaction}
+          toggleAutoplay={toggleAutoplay}
+          isOwner={isOwner}
+          isAdmin={isAdmin}
+          trackUrl={trackUrl}
+          setTrackUrl={setTrackUrl}
+          addTrack={addTrack}
+          loading={loading}
+          removingTrackIds={removingTrackIds}
+          handleRemoveTrack={handleRemoveTrack}
+          setDuration={setDuration}
+          purchaseBoost={purchaseBoost}
+          purchasingBoost={purchasingBoost}
+          creatorTier={creatorTier}
+          activeBoost={activeBoost}
+          tierSettings={tierSettings}
+          navigation={navigation}
+          djPlayerTracks={djPlayerTracks}
+          djPlayerPlayingStates={djPlayerPlayingStates}
+          djPlayerVolumes={djPlayerVolumes}
+          djPlayerBPMs={djPlayerBPMs}
+          djPlayerPositions={djPlayerPositions}
+          djPlayerDurations={djPlayerDurations}
+          handleDJPlayerPlayPause={handleDJPlayerPlayPause}
+          handleDJPlayerLoadTrack={handleDJPlayerLoadTrack}
+          handleDJPlayerVolumeChange={handleDJPlayerVolumeChange}
+          handleDJPlayerSeek={handleDJPlayerSeek}
+          handleDJPlayerSync={handleDJPlayerSync}
+          setDjPlayerTracks={setDjPlayerTracks}
+          setQueue={setQueue}
+          setShowQueueDialog={setShowQueueDialog}
+          setCreatePlaylistDialogVisible={setCreatePlaylistDialogVisible}
+          setPlaybackBlocked={setPlaybackBlocked}
+          setBlockedInfo={setBlockedInfo}
+        />
+      )}
+      {activeTab === 'users' && (
+        <RoomUsersTab
+          users={users}
+          userCount={userCount}
+          user={user}
+          friends={friends}
+          friendRequests={friendRequests}
+          onAddFriend={addFriend}
+          onAcceptFriendRequest={acceptFriendRequest}
+          onRejectFriendRequest={rejectFriendRequest}
+          onRemoveFriend={removeFriend}
+        />
+      )}
       {activeTab === 'chat' && renderChatTab()}
-      {activeTab === 'spotify' && renderSpotifyTab()}
-      {activeTab === 'djmode' && renderDJModeTab()}
-      {activeTab === 'settings' && renderSettingsTab()}
+      {activeTab === 'spotify' && (
+        <RoomSpotifyTab
+          user={user}
+          navigation={navigation}
+          spotifyPlaylists={spotifyPlaylists}
+          selectedPlaylist={selectedPlaylist}
+          playlistTracks={playlistTracks}
+          loadingPlaylists={loadingPlaylists}
+          loadingTracks={loadingTracks}
+          spotifyError={spotifyError}
+          onLoadPlaylists={loadSpotifyPlaylists}
+          onSelectPlaylist={(playlist) => {
+            if (playlist) {
+              loadPlaylistTracks(playlist);
+            } else {
+              setSelectedPlaylist(null);
+              setPlaylistTracks([]);
+            }
+          }}
+          onQueueTrack={queueSpotifyTrack}
+          onQueueAllTracks={queueAllTracks}
+        />
+      )}
+      {activeTab === 'djmode' && (
+        <RoomDJModeTab
+          profile={profile}
+          navigation={navigation}
+          isOwner={isOwner}
+          isAdmin={isAdmin}
+          roomSettings={roomSettings}
+          tierSettings={tierSettings}
+          queue={queue}
+          djPlayerTracks={djPlayerTracks}
+          djPlayerPlayingStates={djPlayerPlayingStates}
+          djPlayerVolumes={djPlayerVolumes}
+          djPlayerBPMs={djPlayerBPMs}
+          djPlayerPositions={djPlayerPositions}
+          djPlayerDurations={djPlayerDurations}
+          onPlayerPlayPause={handleDJPlayerPlayPause}
+          onPlayerLoadTrack={handleDJPlayerLoadTrack}
+          onPlayerVolumeChange={handleDJPlayerVolumeChange}
+          onPlayerSeek={handleDJPlayerSeek}
+          onSyncTracks={handleDJPlayerSync}
+          onSetDjPlayerTracks={setDjPlayerTracks}
+          onSetDjPlayerBPMs={setDjPlayerBPMs}
+        />
+      )}
+      {activeTab === 'settings' && (
+        <RoomSettingsTab
+          isOwner={isOwner}
+          isAdmin={isAdmin}
+          roomSettings={roomSettings}
+          users={users}
+          addAdminInput={addAdminInput}
+          onSettingsChange={setRoomSettings}
+          onAddAdminInputChange={setAddAdminInput}
+          onAddAdmin={addAdmin}
+          onRemoveAdmin={removeAdmin}
+          onSaveSettings={saveSettings}
+        />
+      )}
 
       {/* Floating Player - Hidden by default, only show when explicitly requested */}
       {currentTrack && floatingPlayerVisible && !miniPlayerVisible && (

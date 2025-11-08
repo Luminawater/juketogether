@@ -64,6 +64,7 @@ export const SoundCloudPlayer: React.FC<SoundCloudPlayerProps> = ({
   // Web-specific state (hooks must be called unconditionally)
   const [scWidget, setScWidget] = useState<any>(null);
   const positionIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastLoadedTrackUrlRef = useRef<string>(''); // Track last loaded track URL to avoid reloading
 
   const trackUrl = track?.url || '';
   const embedUrl = trackUrl ? convertToEmbedUrl(trackUrl) : '';
@@ -434,9 +435,9 @@ export const SoundCloudPlayer: React.FC<SoundCloudPlayerProps> = ({
     webViewRef.current.postMessage(message);
   }, [trackUrl]);
 
-  // Web implementation - Load SoundCloud Widget API
+  // Web implementation - Initialize SoundCloud Widget API (only once, when trackUrl is available)
   useEffect(() => {
-    if (Platform.OS !== 'web' || !trackUrl) return;
+    if (Platform.OS !== 'web' || !trackUrl || scWidget) return; // Don't initialize if no trackUrl or widget already exists
 
     // Load SoundCloud Widget API script if not already loaded
     if (!(window as any).SC) {
@@ -448,7 +449,7 @@ export const SoundCloudPlayer: React.FC<SoundCloudPlayerProps> = ({
 
     // Initialize widget when API is ready
     const initializeWidget = () => {
-      if (!containerRef.current) return;
+      if (!containerRef.current || scWidget) return; // Don't recreate if widget exists
 
       const containerElement = containerRef.current as any;
       const domNode = containerElement?._internalFiberInstanceHandleDEV?.stateNode || 
@@ -467,7 +468,7 @@ export const SoundCloudPlayer: React.FC<SoundCloudPlayerProps> = ({
       widgetDiv.style.height = '400px';
       domNode.appendChild(widgetDiv);
 
-      // Create iframe
+      // Create iframe with initial track
       const iframe = document.createElement('iframe');
       iframe.width = '100%';
       iframe.height = '400';
@@ -490,6 +491,10 @@ export const SoundCloudPlayer: React.FC<SoundCloudPlayerProps> = ({
             console.log('[SoundCloudPlayer Web] Widget ready');
             setPlayerReady(true);
             setScWidget(widget);
+            // Update last loaded track URL when widget becomes ready
+            if (trackUrl) {
+              lastLoadedTrackUrlRef.current = trackUrl;
+            }
             if (onReady) onReady();
             
             // Get duration when ready
@@ -576,11 +581,43 @@ export const SoundCloudPlayer: React.FC<SoundCloudPlayerProps> = ({
         clearInterval(positionIntervalRef.current);
         positionIntervalRef.current = null;
       }
-      if (scWidget && (scWidget as any).destroy) {
-        (scWidget as any).destroy();
-      }
+      // Don't destroy widget on cleanup - let it persist for track changes
     };
-  }, [trackUrl, Platform.OS]);
+  }, [Platform.OS, trackUrl, scWidget]); // Initialize when trackUrl becomes available (if widget doesn't exist)
+
+  // Web implementation - Load new track using widget.load() (more efficient than recreating iframe)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !trackUrl || !scWidget) return;
+    
+    // Avoid reloading the same track
+    if (lastLoadedTrackUrlRef.current === trackUrl) {
+      return;
+    }
+
+    console.log('[SoundCloudPlayer Web] Loading new track via widget.load()', { trackUrl });
+    setPlayerReady(false); // Reset ready state until new track loads
+    lastLoadedTrackUrlRef.current = trackUrl; // Update last loaded track
+    
+    try {
+      const embedUrl = convertToEmbedUrl(trackUrl);
+      const widgetUrl = `https://w.soundcloud.com/player/?url=${encodeURIComponent(embedUrl)}&color=%23667eea&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=false&visual=true&buying=false&sharing=false&download=false&show_artwork=true&single_active=false`;
+      
+      // Use widget.load() to change tracks without recreating iframe (SoundCloud best practice)
+      scWidget.load(widgetUrl, {
+        auto_play: false
+      });
+      
+      // Widget will fire READY event when new track is loaded
+      // The existing READY handler will update playerReady state
+    } catch (error) {
+      console.error('[SoundCloudPlayer Web] Error loading track:', error);
+      if (onError) {
+        onError(`Failed to load track: ${error}`);
+      }
+      setPlayerReady(true); // Reset ready state on error
+      lastLoadedTrackUrlRef.current = ''; // Reset on error so we can retry
+    }
+  }, [trackUrl, scWidget, Platform.OS]);
 
   // Web implementation - Handle play/pause
   useEffect(() => {
