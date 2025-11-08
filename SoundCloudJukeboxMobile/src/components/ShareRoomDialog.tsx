@@ -33,6 +33,8 @@ export const ShareRoomDialog: React.FC<ShareRoomDialogProps> = ({
   const theme = useTheme();
   const roomUrl = getRoomUrl(roomId, shortCode);
 
+  // Force recompile to clear cache
+
   const handleCopyUrl = async () => {
     const success = await clipboardHelpers.copy(roomUrl);
     if (success) {

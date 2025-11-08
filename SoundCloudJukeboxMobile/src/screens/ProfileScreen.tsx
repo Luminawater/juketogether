@@ -264,20 +264,22 @@ const ProfileScreen: React.FC = () => {
 
         {/* Profile Header Section */}
         <View style={styles.header}>
-          <Avatar.Text
-            size={80}
-            label={getInitials()}
-            style={{ backgroundColor: theme.colors.primary }}
-          />
-          {avatarUrl ? (
-            <Avatar.Image
+          <View style={styles.avatarContainer}>
+            <Avatar.Text
               size={80}
-              source={{ uri: avatarUrl }}
-              style={styles.avatar}
+              label={getInitials()}
+              style={{ backgroundColor: theme.colors.primary }}
             />
-          ) : null}
+            {avatarUrl ? (
+              <Avatar.Image
+                size={80}
+                source={{ uri: avatarUrl }}
+                style={styles.avatar}
+              />
+            ) : null}
+          </View>
           <Title style={[styles.headerTitle, { color: theme.colors.onSurface }]}>
-            {displayName || username || 'User Profile'}
+            {username || 'user_unknown'}
           </Title>
           {djName ? (
             <Paragraph style={[styles.djName, { color: theme.colors.primary }]}>
@@ -291,7 +293,7 @@ const ProfileScreen: React.FC = () => {
         </View>
 
         {/* Statistics Card */}
-        {(permissions || analytics) && (
+        {permissions && (
           <Card style={[styles.card, { marginHorizontal: 20, marginBottom: 20 }]}>
             <Card.Content>
               <Title style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
@@ -299,68 +301,75 @@ const ProfileScreen: React.FC = () => {
               </Title>
               <Divider style={styles.divider} />
               
-              <View style={styles.statsGrid}>
-                {permissions && (
-                  <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
-                    <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                      {permissions.songs_played}
-                      {permissions.max_songs !== Infinity && `/${permissions.max_songs}`}
+              <View style={styles.progressContainer}>
+                <View style={styles.progressInfo}>
+                  <Text style={[styles.progressText, { color: theme.colors.onSurface }]}>
+                    {permissions.songs_played}/{permissions.max_songs !== Infinity ? permissions.max_songs : '∞'} Songs played
+                  </Text>
+                  {permissions.max_songs !== Infinity && (
+                    <Text style={[styles.progressRemaining, { color: theme.colors.onSurfaceVariant }]}>
+                      {getRemainingSongs(permissions) === Infinity 
+                        ? 'Unlimited remaining' 
+                        : `${getRemainingSongs(permissions)} remaining`}
                     </Text>
-                    <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
-                      Songs Played
-                    </Text>
-                    {permissions.max_songs !== Infinity && (
-                      <Text style={[styles.statSubtext, { color: theme.colors.onSurfaceVariant }]}>
-                        {getRemainingSongs(permissions) === Infinity 
-                          ? 'Unlimited remaining' 
-                          : `${getRemainingSongs(permissions)} remaining`}
-                      </Text>
-                    )}
+                  )}
+                </View>
+                {permissions.max_songs !== Infinity && (
+                  <View style={[styles.progressBarContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
+                    <View 
+                      style={[
+                        styles.progressBar, 
+                        { 
+                          width: `${Math.min(100, (permissions.songs_played / permissions.max_songs) * 100)}%`,
+                          backgroundColor: theme.colors.primary 
+                        }
+                      ]} 
+                    />
                   </View>
                 )}
-
-                {analytics && (
-                  <>
-                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
-                      <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                        {analytics.total_rooms_created || 0}
-                      </Text>
-                      <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
-                        Rooms Created
-                      </Text>
-                    </View>
-
-                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
-                      <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                        {analytics.total_listeners_all_rooms || 0}
-                      </Text>
-                      <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
-                        Total Listeners
-                      </Text>
-                    </View>
-
-                    {analytics.total_play_time_all_rooms_seconds > 0 && (
-                      <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
-                        <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                          {formatPlayTime(analytics.total_play_time_all_rooms_seconds)}
-                        </Text>
-                        <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
-                          Total Play Time
-                        </Text>
-                      </View>
-                    )}
-
-                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
-                      <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                        {analytics.total_rooms_joined || 0}
-                      </Text>
-                      <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
-                        Rooms Joined
-                      </Text>
-                    </View>
-                  </>
-                )}
               </View>
+
+              {analytics && (
+                <View style={styles.statsGrid}>
+                  <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                    <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                      {analytics.total_rooms_created || 0}
+                    </Text>
+                    <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+                      Rooms Created
+                    </Text>
+                  </View>
+
+                  <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                    <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                      {analytics.total_listeners_all_rooms || 0}
+                    </Text>
+                    <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+                      Total Listeners
+                    </Text>
+                  </View>
+
+                  {analytics.total_play_time_all_rooms_seconds > 0 && (
+                    <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                      <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                        {formatPlayTime(analytics.total_play_time_all_rooms_seconds)}
+                      </Text>
+                      <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+                        Total Play Time
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={[styles.statItem, { backgroundColor: theme.colors.surfaceVariant }]}>
+                    <Text style={[styles.statValue, { color: theme.colors.primary }]}>
+                      {analytics.total_rooms_joined || 0}
+                    </Text>
+                    <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+                      Rooms Joined
+                    </Text>
+                  </View>
+                </View>
+              )}
             </Card.Content>
           </Card>
         )}
@@ -430,7 +439,7 @@ const ProfileScreen: React.FC = () => {
 
             <View style={styles.countryContainer}>
               <Text style={[styles.countryLabel, { color: theme.colors.onSurface }]}>
-                Country:
+                Country
               </Text>
               <Menu
                 visible={countryMenuVisible}
@@ -442,6 +451,7 @@ const ProfileScreen: React.FC = () => {
                     style={styles.countryButton}
                     disabled={saving}
                     icon="map-marker"
+                    contentStyle={styles.countryButtonContent}
                   >
                     {country || 'Select Country'}
                   </Button>
@@ -630,8 +640,14 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingHorizontal: 20,
   },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
   avatar: {
     position: 'absolute',
+    top: 0,
+    left: 0,
   },
   avatarOverlay: {
     position: 'absolute',
@@ -767,6 +783,35 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  progressContainer: {
+    marginTop: 8,
+  },
+  progressInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  progressText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  progressRemaining: {
+    fontSize: 12,
+  },
+  progressBarContainer: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  countryButtonContent: {
+    justifyContent: 'flex-start',
   },
 });
 

@@ -104,9 +104,14 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({ visible, onDismiss, naviga
 
   const handleNavigate = (screen: keyof RootStackParamList) => {
     onDismiss();
-    // React Navigation will handle nested navigation automatically
-    // If the screen is in a nested drawer, it will navigate to Dashboard first
-    navigation.navigate(screen);
+    // For drawer screens (which are nested in Dashboard), use nested navigation
+    const drawerScreens = ['Home', 'Discovery', 'Leaderboard', 'Friends', 'Profile', 'Admin'];
+    if (drawerScreens.includes(screen)) {
+      // Navigate to Dashboard screen, then to the specific drawer screen
+      (navigation as any).navigate('Dashboard', { screen });
+    } else {
+      navigation.navigate(screen);
+    }
   };
 
   const handleSignOut = async () => {

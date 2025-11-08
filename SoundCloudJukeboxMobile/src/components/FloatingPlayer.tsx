@@ -14,6 +14,9 @@ interface FloatingPlayerProps {
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const IS_MOBILE = SCREEN_WIDTH < 768;
+const PLAYER_WIDTH = IS_MOBILE ? Math.min(SCREEN_WIDTH - 32, 300) : 300;
+const MINIMIZED_WIDTH = IS_MOBILE ? Math.min(SCREEN_WIDTH - 32, 250) : 250;
 
 export const FloatingPlayer: React.FC<FloatingPlayerProps> = ({
   currentTrack,
@@ -176,7 +179,7 @@ export const FloatingPlayer: React.FC<FloatingPlayerProps> = ({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    width: 300,
+    width: PLAYER_WIDTH,
     zIndex: 1000,
     elevation: 10,
     ...(Platform.OS === 'web' ? {
@@ -185,7 +188,7 @@ const styles = StyleSheet.create({
   },
   minimizedContainer: {
     position: 'absolute',
-    width: 250,
+    width: MINIMIZED_WIDTH,
     zIndex: 1000,
     elevation: 10,
     ...(Platform.OS === 'web' ? {
@@ -210,32 +213,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: IS_MOBILE ? 10 : 12,
   },
   title: {
-    fontSize: 16,
+    fontSize: IS_MOBILE ? 14 : 16,
     fontWeight: 'bold',
   },
   headerButtons: {
     flexDirection: 'row',
   },
   trackInfo: {
-    marginBottom: 16,
+    marginBottom: IS_MOBILE ? 12 : 16,
   },
   trackTitle: {
-    fontSize: 14,
+    fontSize: IS_MOBILE ? 13 : 14,
     fontWeight: '600',
     marginBottom: 4,
   },
   trackPlatform: {
-    fontSize: 12,
+    fontSize: IS_MOBILE ? 11 : 12,
   },
   controls: {
     flexDirection: 'row',
-    gap: 8,
+    gap: IS_MOBILE ? 6 : 8,
   },
   controlButton: {
     flex: 1,
+    minHeight: 44, // iOS/Android minimum touch target
   },
   minimizedContent: {
     flexDirection: 'row',
@@ -247,7 +251,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   minimizedTrackTitle: {
-    fontSize: 12,
+    fontSize: IS_MOBILE ? 11 : 12,
     fontWeight: '600',
   },
   minimizedControls: {

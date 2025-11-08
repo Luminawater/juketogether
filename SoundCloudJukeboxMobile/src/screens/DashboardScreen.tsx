@@ -8,7 +8,9 @@ import {
   TouchableOpacity,
   Platform,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Text,
   Card,
@@ -42,10 +44,15 @@ import { ShareRoomDialog } from '../components/ShareRoomDialog';
 
 type DashboardScreenNavigationProp = NavigationProp<RootStackParamList, 'Dashboard'>;
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const IS_MOBILE = SCREEN_WIDTH < 768;
+const IS_SMALL_MOBILE = SCREEN_WIDTH < 400;
+
 const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<DashboardScreenNavigationProp>();
   const { user, session, profile, permissions, signOut, supabase } = useAuth();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
@@ -558,7 +565,13 @@ const DashboardScreen: React.FC = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header with user info */}
-      <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
+      <View style={[
+        styles.header, 
+        { 
+          backgroundColor: theme.colors.surface,
+          paddingTop: Platform.OS === 'web' ? 20 : Math.max(insets.top + 10, 20),
+        }
+      ]}>
         <View style={styles.userInfo}>
           <View style={[styles.avatarContainer, { backgroundColor: '#667eea' }]}>
             {profile?.avatar_url || user?.user_metadata?.avatar_url ? (
@@ -653,14 +666,23 @@ const DashboardScreen: React.FC = () => {
 
       <ScrollView 
         style={styles.content}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: IS_MOBILE ? Math.max(insets.bottom, 20) : 40 }
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.actionsSection}>
+        <View style={[
+          styles.actionsSection,
+          IS_SMALL_MOBILE && styles.actionsSectionMobile
+        ]}>
           <Button
             mode="contained"
             onPress={() => setCreateDialogVisible(true)}
-            style={styles.primaryActionButton}
+            style={[
+              styles.primaryActionButton,
+              IS_SMALL_MOBILE && styles.fullWidthButton
+            ]}
             contentStyle={styles.primaryActionContent}
             icon="plus"
           >
@@ -669,7 +691,10 @@ const DashboardScreen: React.FC = () => {
           <Button
             mode="outlined"
             onPress={() => setJoinDialogVisible(true)}
-            style={styles.secondaryActionButton}
+            style={[
+              styles.secondaryActionButton,
+              IS_SMALL_MOBILE && styles.fullWidthButton
+            ]}
             contentStyle={styles.secondaryActionContent}
             icon="account-plus"
           >
@@ -954,9 +979,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
+    padding: IS_MOBILE ? 16 : 20,
+    paddingBottom: IS_MOBILE ? 16 : 20,
     elevation: 6,
     // Web-compatible shadow
     ...(Platform.OS === 'web' ? {
@@ -997,16 +1021,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   userDetails: {
-    marginLeft: 16,
+    marginLeft: IS_MOBILE ? 12 : 16,
     flex: 1,
   },
   userEmail: {
-    fontSize: 16,
+    fontSize: IS_MOBILE ? 15 : 16,
     fontWeight: '600',
     marginBottom: 4,
   },
   userGreeting: {
-    fontSize: 14,
+    fontSize: IS_MOBILE ? 13 : 14,
     marginBottom: 8,
   },
   userBadgesContainer: {
@@ -1042,13 +1066,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: IS_MOBILE ? 16 : 20,
   },
   actionsSection: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 32,
+    gap: IS_MOBILE ? 10 : 12,
+    marginBottom: IS_MOBILE ? 24 : 32,
+  },
+  actionsSectionMobile: {
+    flexDirection: 'column',
+  },
+  fullWidthButton: {
+    width: '100%',
   },
   primaryActionButton: {
     flex: 1,
@@ -1059,14 +1088,16 @@ const styles = StyleSheet.create({
     } : {}),
   },
   primaryActionContent: {
-    paddingVertical: 8,
+    paddingVertical: IS_MOBILE ? 10 : 8,
+    minHeight: 44, // iOS/Android minimum touch target
   },
   secondaryActionButton: {
-    flex: 1,
+    flex: IS_SMALL_MOBILE ? 0 : 1,
     borderRadius: 12,
   },
   secondaryActionContent: {
-    paddingVertical: 8,
+    paddingVertical: IS_MOBILE ? 10 : 8,
+    minHeight: 44, // iOS/Android minimum touch target
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1075,12 +1106,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 24,
+    fontSize: IS_MOBILE ? 20 : 24,
     fontWeight: '700',
     letterSpacing: -0.5,
   },
   roomCount: {
-    fontSize: 14,
+    fontSize: IS_MOBILE ? 13 : 14,
     fontWeight: '500',
   },
   emptyCard: {
@@ -1091,7 +1122,7 @@ const styles = StyleSheet.create({
     } : {}),
   },
   emptyCardContent: {
-    padding: 48,
+    padding: IS_MOBILE ? 32 : 48,
     alignItems: 'center',
   },
   emptyIcon: {
@@ -1099,15 +1130,15 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   emptyText: {
-    fontSize: 20,
+    fontSize: IS_MOBILE ? 18 : 20,
     fontWeight: '600',
     textAlign: 'center',
     marginBottom: 8,
   },
   emptySubtext: {
-    fontSize: 14,
+    fontSize: IS_MOBILE ? 13 : 14,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: IS_MOBILE ? 18 : 20,
   },
   roomCard: {
     marginBottom: 16,
@@ -1125,19 +1156,19 @@ const styles = StyleSheet.create({
     }),
   },
   roomCardContent: {
-    padding: 20,
+    padding: IS_MOBILE ? 16 : 20,
   },
   roomHeader: {
     flexDirection: 'row',
     marginBottom: 16,
   },
   roomIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: IS_MOBILE ? 44 : 48,
+    height: IS_MOBILE ? 44 : 48,
+    borderRadius: IS_MOBILE ? 10 : 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: IS_MOBILE ? 10 : 12,
   },
   roomTitleRow: {
     flexDirection: 'row',
@@ -1165,13 +1196,13 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   roomTitle: {
-    fontSize: 18,
+    fontSize: IS_MOBILE ? 16 : 18,
     fontWeight: '600',
     flex: 1,
   },
   roomDescription: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: IS_MOBILE ? 13 : 14,
+    lineHeight: IS_MOBILE ? 18 : 20,
     marginTop: 4,
   },
   roomTypeBadge: {
@@ -1202,17 +1233,19 @@ const styles = StyleSheet.create({
     } : {}),
   },
   joinButtonContent: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: IS_MOBILE ? 10 : 8,
+    paddingHorizontal: IS_MOBILE ? 14 : 16,
+    minHeight: 44, // iOS/Android minimum touch target
   },
   shareButton: {
     flex: 1,
     borderRadius: 12,
-    minWidth: 80,
+    minWidth: IS_MOBILE ? 70 : 80,
   },
   shareButtonContent: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: IS_MOBILE ? 10 : 8,
+    paddingHorizontal: IS_MOBILE ? 10 : 12,
+    minHeight: 44, // iOS/Android minimum touch target
   },
   roomButtonContent: {
     paddingVertical: 6,

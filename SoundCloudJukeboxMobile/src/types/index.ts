@@ -18,6 +18,8 @@ export interface UserProfile {
   subscription_tier: SubscriptionTier;
   songs_played_count: number;
   country?: string;
+  show_in_leaderboard?: boolean;
+  show_in_discovery?: boolean;
   created_at: string;
   updated_at: string;
 }

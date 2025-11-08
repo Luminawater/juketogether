@@ -5,6 +5,7 @@ import { createDrawerNavigator } from '@react-navigation/drawer';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
 import { Platform } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
 
 // Import screens
@@ -183,12 +184,13 @@ const AuthenticatedStack = () => {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <PaperProvider theme={darkTheme}>
-        <NavigationContainer 
-          theme={CustomNavigationDarkTheme}
-          linking={linking}
-        >
+    <SafeAreaProvider>
+      <AuthProvider>
+        <PaperProvider theme={darkTheme}>
+          <NavigationContainer 
+            theme={CustomNavigationDarkTheme}
+            linking={linking}
+          >
           <Stack.Navigator
             initialRouteName="Home"
             screenOptions={{
@@ -232,5 +234,6 @@ export default function App() {
         </NavigationContainer>
       </PaperProvider>
     </AuthProvider>
+    </SafeAreaProvider>
   );
 }
