@@ -137,6 +137,16 @@ const RoomScreen: React.FC = () => {
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [shortCode, setShortCode] = useState<string | undefined>(undefined);
+  const [creatorTier, setCreatorTier] = useState<'free' | 'standard' | 'pro'>('free');
+  const [tierSettings, setTierSettings] = useState<{
+    queueLimit: number | null;
+    djMode: boolean;
+    ads: boolean;
+  }>({
+    queueLimit: 1,
+    djMode: false,
+    ads: true,
+  });
 
   // Spotify state
   const [spotifyPlaylists, setSpotifyPlaylists] = useState<SpotifyPlaylist[]>([]);
@@ -186,6 +196,12 @@ const RoomScreen: React.FC = () => {
       roomSettings?: RoomSettings;
       isOwner?: boolean;
       isAdmin?: boolean;
+      creatorTier?: 'free' | 'standard' | 'pro';
+      tierSettings?: {
+        queueLimit: number | null;
+        djMode: boolean;
+        ads: boolean;
+      };
     }) => {
       setQueue(state.queue || []);
       setHistory(state.history || []);
@@ -201,6 +217,14 @@ const RoomScreen: React.FC = () => {
       }
       setIsOwner(!!state.isOwner);
       setIsAdmin(!!state.isAdmin);
+      
+      // Update creator tier and tier settings
+      if (state.creatorTier) {
+        setCreatorTier(state.creatorTier);
+      }
+      if (state.tierSettings) {
+        setTierSettings(state.tierSettings);
+      }
     };
 
     const handleTrackAdded = (track: Track) => {
@@ -923,8 +947,8 @@ const RoomScreen: React.FC = () => {
               )}
             </Card.Content>
           </Card>
-      {/* Ads Banner - Only show for non-PRO users */}
-      {(!profile || !hasTier(profile.subscription_tier, 'pro')) && (
+      {/* Ads Banner - Show based on room creator's tier, not current user's tier */}
+      {tierSettings.ads && (
         <AdsBanner
           onUpgradePress={() => {
             if (!user) {
@@ -1005,9 +1029,26 @@ const RoomScreen: React.FC = () => {
             <View style={[styles.countBadge, { backgroundColor: `${theme.colors.primary}20` }]}>
               <Text style={[styles.countBadgeText, { color: theme.colors.primary }]}>
                 {queue.length}
+                {tierSettings.queueLimit !== null && ` / ${tierSettings.queueLimit}`}
               </Text>
             </View>
           </View>
+          {tierSettings.queueLimit !== null && queue.length >= tierSettings.queueLimit && (
+            <View style={[styles.permissionNoticeContainer, { backgroundColor: `${theme.colors.error}15` }]}>
+              <MaterialCommunityIcons name="alert-circle" size={16} color={theme.colors.error} />
+              <Text style={[styles.permissionNotice, { color: theme.colors.error }]}>
+                Queue limit reached ({tierSettings.queueLimit} songs). Room creator needs to upgrade to increase limit.
+              </Text>
+            </View>
+          )}
+          {tierSettings.queueLimit !== null && queue.length >= tierSettings.queueLimit * 0.8 && queue.length < tierSettings.queueLimit && (
+            <View style={[styles.infoNotice, { backgroundColor: `${theme.colors.primary}15` }]}>
+              <MaterialCommunityIcons name="information" size={18} color={theme.colors.primary} />
+              <Text style={[styles.infoNoticeText, { color: theme.colors.primary }]}>
+                Queue limit: {queue.length} / {tierSettings.queueLimit} songs
+              </Text>
+            </View>
+          )}
           {queue.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialCommunityIcons name="music-off" size={48} color={theme.colors.onSurfaceVariant} />
@@ -1633,7 +1674,7 @@ const RoomScreen: React.FC = () => {
 
             <View style={styles.settingItem}>
               <View style={styles.settingRow}>
-                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>DJ Mode (Standard Tier)</Text>
+                <Text style={[styles.settingLabel, { color: theme.colors.onSurface }]}>DJ Mode</Text>
                 <Switch
                   value={roomSettings.djMode}
                   onValueChange={(value) => {
@@ -1643,11 +1684,13 @@ const RoomScreen: React.FC = () => {
                       djPlayers: value ? prev.djPlayers : 0 // Reset players when disabling
                     }));
                   }}
-                  disabled={!isOwner}
+                  disabled={!isOwner || !tierSettings.djMode}
                 />
               </View>
               <Text style={[styles.settingDescription, { color: theme.colors.onSurfaceVariant }]}>
-                Enable DJ mode to add up to 3 additional players for mixing tracks
+                {!tierSettings.djMode 
+                  ? `DJ Mode requires Pro tier. Current creator tier: ${creatorTier}. Upgrade to Pro to enable DJ mode.`
+                  : 'Enable DJ mode to add up to 3 additional players for mixing tracks'}
               </Text>
               
               {roomSettings.djMode && (
@@ -2611,3 +2654,4 @@ const styles = StyleSheet.create({
 });
 
 export default RoomScreen;
+

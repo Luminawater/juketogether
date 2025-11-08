@@ -12,6 +12,12 @@ export interface RoomState {
   roomSettings?: any;
   isOwner?: boolean;
   isAdmin?: boolean;
+  creatorTier?: 'free' | 'standard' | 'pro';
+  tierSettings?: {
+    queueLimit: number | null;
+    djMode: boolean;
+    ads: boolean;
+  };
 }
 
 class SocketService {

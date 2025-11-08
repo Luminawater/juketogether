@@ -170,6 +170,87 @@ function scheduleSave(roomId) {
   saveQueue.set(roomId, timeout);
 }
 
+// Helper function to get room creator's subscription tier
+async function getRoomCreatorTier(roomId) {
+  if (!supabase) return 'free';
+  
+  try {
+    const room = await getRoom(roomId);
+    const creatorId = room.hostUserId;
+    
+    if (!creatorId) return 'free';
+    
+    // Try to get creator ID from rooms table if hostUserId is not set
+    const { data: roomData } = await supabase
+      .from('rooms')
+      .select('created_by, host_user_id')
+      .eq('id', roomId)
+      .single();
+    
+    const actualCreatorId = roomData?.created_by || roomData?.host_user_id || creatorId;
+    
+    if (!actualCreatorId) return 'free';
+    
+    // Get creator's subscription tier
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('subscription_tier')
+      .eq('id', actualCreatorId)
+      .single();
+    
+    return profile?.subscription_tier || 'free';
+  } catch (error) {
+    console.error('Error getting room creator tier:', error);
+    return 'free';
+  }
+}
+
+// Helper function to get tier settings
+async function getTierSettings(tier) {
+  if (!supabase) {
+    // Return default settings if Supabase not available
+    const defaults = {
+      free: { queue_limit: 1, dj_mode: false, ads: true },
+      standard: { queue_limit: 10, dj_mode: false, ads: true },
+      pro: { queue_limit: null, dj_mode: true, ads: false },
+    };
+    return defaults[tier] || defaults.free;
+  }
+  
+  try {
+    const { data } = await supabase
+      .from('subscription_tier_settings')
+      .select('queue_limit, dj_mode, ads')
+      .eq('tier', tier)
+      .single();
+    
+    if (data) {
+      return {
+        queue_limit: data.queue_limit,
+        dj_mode: data.dj_mode || false,
+        ads: data.ads !== undefined ? data.ads : true,
+      };
+    }
+    
+    // Fallback to defaults if not found
+    const defaults = {
+      free: { queue_limit: 1, dj_mode: false, ads: true },
+      standard: { queue_limit: 10, dj_mode: false, ads: true },
+      pro: { queue_limit: null, dj_mode: true, ads: false },
+    };
+    return defaults[tier] || defaults.free;
+  } catch (error) {
+    console.error('Error getting tier settings:', error);
+    // Return defaults on error
+    const defaults = {
+      free: { queue_limit: 1, dj_mode: false, ads: true },
+      standard: { queue_limit: 10, dj_mode: false, ads: true },
+      pro: { queue_limit: null, dj_mode: true, ads: false },
+    };
+    return defaults[tier] || defaults.free;
+  }
+}
+
 // Helper function to check if user can control playback
 async function canUserControl(roomId, userId) {
   const room = await getRoom(roomId);
@@ -345,6 +426,10 @@ io.on('connection', (socket) => {
       });
     }
 
+    // Get creator tier and tier settings for the room
+    const creatorTier = await getRoomCreatorTier(roomId);
+    const tierSettings = await getTierSettings(creatorTier);
+
     socket.emit('room-state', {
       queue: room.queue,
       history: room.history,
@@ -359,6 +444,12 @@ io.on('connection', (socket) => {
       users: usersList,
       isOwner,
       isAdmin,
+      creatorTier,
+      tierSettings: {
+        queueLimit: tierSettings.queue_limit,
+        djMode: tierSettings.dj_mode,
+        ads: tierSettings.ads,
+      },
     });
 
     console.log(`📤 Room "${roomId}" state sent to user (synced from Supabase)`);
@@ -416,6 +507,19 @@ io.on('connection', (socket) => {
     
     if (!canQueue) {
       socket.emit('error', { message: 'You do not have permission to add tracks to the queue' });
+      return;
+    }
+    
+    // Check queue limit based on room creator's tier
+    const creatorTier = await getRoomCreatorTier(roomId);
+    const tierSettings = await getTierSettings(creatorTier);
+    const queueLimit = tierSettings.queue_limit;
+    
+    // Check if queue limit is reached (null means unlimited)
+    if (queueLimit !== null && room.queue.length >= queueLimit) {
+      socket.emit('error', { 
+        message: `Queue limit reached (${queueLimit} songs). The room creator needs to upgrade to ${creatorTier === 'free' ? 'Standard or Pro' : 'Pro'} tier to increase the limit.` 
+      });
       return;
     }
     
@@ -918,6 +1022,19 @@ io.on('connection', (socket) => {
     if (!isOwner && !isAdmin) {
       socket.emit('error', { message: 'Only room owner and admins can update settings' });
       return;
+    }
+
+    // Check if DJ mode is allowed based on creator's tier
+    if (settings.djMode) {
+      const creatorTier = await getRoomCreatorTier(roomId);
+      const tierSettings = await getTierSettings(creatorTier);
+      
+      if (!tierSettings.dj_mode) {
+        socket.emit('error', { 
+          message: `DJ Mode requires Pro tier. The room creator currently has ${creatorTier} tier. Please upgrade to Pro tier to enable DJ Mode.` 
+        });
+        return;
+      }
     }
 
     // Convert camelCase to snake_case for database
