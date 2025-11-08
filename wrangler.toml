@@ -1,4 +1,0 @@
-# Cloudflare Pages configuration
-# Note: This file is optional for Pages deployments
-# Pages uses the build output directory setting in the dashboard
-pages_build_output_dir = "web-build"
