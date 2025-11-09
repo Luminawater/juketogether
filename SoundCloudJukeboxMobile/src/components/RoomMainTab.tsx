@@ -282,6 +282,7 @@ export const RoomMainTab: React.FC<RoomMainTabProps> = ({
           onCreatePlaylist={() => setCreatePlaylistDialogVisible(true)}
           canCreatePlaylist={!!(profile && hasTier(profile.subscription_tier, 'pro'))}
           onMark={onMark}
+          onQueueSongs={() => setShowQueueDialog(true)}
         />
       )}
 

@@ -35,6 +35,7 @@ interface NowPlayingCardProps {
   onCreatePlaylist?: () => void;
   canCreatePlaylist?: boolean;
   onMark?: () => void;
+  onQueueSongs?: () => void; // Handler to open queue dialog
 }
 
 export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
@@ -61,6 +62,7 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
   onCreatePlaylist,
   canCreatePlaylist = false,
   onMark,
+  onQueueSongs,
 }) => {
   const theme = useTheme();
 
@@ -426,7 +428,20 @@ export const NowPlayingCard: React.FC<NowPlayingCardProps> = ({
 
           </>
         ) : (
-          <Text style={[styles.noTrack, { color: theme.colors.onSurfaceVariant }]}>No track playing</Text>
+          <View style={styles.noTrackContainer}>
+            <Text style={[styles.noTrack, { color: theme.colors.onSurfaceVariant }]}>No track playing</Text>
+            {onQueueSongs && (
+              <Button
+                mode="contained"
+                icon="playlist-plus"
+                onPress={onQueueSongs}
+                style={styles.queueButton}
+                contentStyle={styles.queueButtonContent}
+              >
+                Queue songs
+              </Button>
+            )}
+          </View>
         )}
           </Card.Content>
         </Card>
@@ -600,6 +615,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
     paddingVertical: IS_MOBILE ? 20 : 20,
+  },
+  noTrackContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: IS_MOBILE ? 20 : 24,
+    gap: 16,
+  },
+  queueButton: {
+    marginTop: 8,
+    borderRadius: 12,
+  },
+  queueButtonContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   controls: {
     flexDirection: 'row',
