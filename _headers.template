@@ -1,31 +1,152 @@
 # Cloudflare Pages headers configuration
 # This ensures fonts and assets are served with correct MIME types
+# NOTE: In Cloudflare Pages, patterns must match specific paths
 
-# Font files - match all .ttf files regardless of path
-/*.ttf
+# Font files in any subdirectory - use full path patterns
+/assets/*.ttf
   Access-Control-Allow-Origin: *
   Content-Type: font/ttf
   Cache-Control: public, max-age=31536000, immutable
 
-# Font files - match all .woff files
-/*.woff
+/assets/*/*.ttf
+  Access-Control-Allow-Origin: *
+  Content-Type: font/ttf
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*.ttf
+  Access-Control-Allow-Origin: *
+  Content-Type: font/ttf
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*.ttf
+  Access-Control-Allow-Origin: *
+  Content-Type: font/ttf
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*/*.ttf
+  Access-Control-Allow-Origin: *
+  Content-Type: font/ttf
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*/*/*.ttf
+  Access-Control-Allow-Origin: *
+  Content-Type: font/ttf
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*/*/*/*.ttf
+  Access-Control-Allow-Origin: *
+  Content-Type: font/ttf
+  Cache-Control: public, max-age=31536000, immutable
+
+# WOFF fonts
+/assets/*.woff
   Access-Control-Allow-Origin: *
   Content-Type: font/woff
   Cache-Control: public, max-age=31536000, immutable
 
-# Font files - match all .woff2 files
-/*.woff2
+/assets/*/*.woff
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*.woff
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*.woff
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*/*.woff
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*/*/*.woff
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*/*/*/*.woff
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff
+  Cache-Control: public, max-age=31536000, immutable
+
+# WOFF2 fonts
+/assets/*.woff2
   Access-Control-Allow-Origin: *
   Content-Type: font/woff2
   Cache-Control: public, max-age=31536000, immutable
 
-# Font files - match all .eot files
-/*.eot
+/assets/*/*.woff2
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*.woff2
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*.woff2
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*/*.woff2
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*/*/*.woff2
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*/*/*/*.woff2
+  Access-Control-Allow-Origin: *
+  Content-Type: font/woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+# EOT fonts
+/assets/*.eot
   Access-Control-Allow-Origin: *
   Content-Type: application/vnd.ms-fontobject
   Cache-Control: public, max-age=31536000, immutable
 
-# Static assets
+/assets/*/*.eot
+  Access-Control-Allow-Origin: *
+  Content-Type: application/vnd.ms-fontobject
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*.eot
+  Access-Control-Allow-Origin: *
+  Content-Type: application/vnd.ms-fontobject
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*.eot
+  Access-Control-Allow-Origin: *
+  Content-Type: application/vnd.ms-fontobject
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*/*.eot
+  Access-Control-Allow-Origin: *
+  Content-Type: application/vnd.ms-fontobject
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*/*/*.eot
+  Access-Control-Allow-Origin: *
+  Content-Type: application/vnd.ms-fontobject
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*/*/*/*/*/*/*.eot
+  Access-Control-Allow-Origin: *
+  Content-Type: application/vnd.ms-fontobject
+  Cache-Control: public, max-age=31536000, immutable
+
+# Static assets at root
 /*.js
   Access-Control-Allow-Origin: *
   Content-Type: application/javascript
@@ -41,7 +162,7 @@
   Content-Type: application/json
   Cache-Control: public, max-age=31536000, immutable
 
-# Images
+# Images at root
 /*.png
   Access-Control-Allow-Origin: *
   Content-Type: image/png
