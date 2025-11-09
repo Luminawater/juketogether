@@ -324,22 +324,65 @@ const DJModeScreen: React.FC = () => {
           setLoading(true);
           roomStateReceived = false;
 
-        // Load room settings
-        const { data: settingsData, error: settingsError } = await supabase
-          .from('room_settings')
-          .select('dj_mode, dj_players')
-          .eq('room_id', roomId)
-          .single();
+        // Load room settings and tier settings from Supabase
+        const [settingsResult, tierResult] = await Promise.all([
+          supabase
+            .from('room_settings')
+            .select('dj_mode, dj_players, room_id')
+            .eq('room_id', roomId)
+            .single(),
+          supabase
+            .from('rooms')
+            .select('creator_id')
+            .eq('id', roomId)
+            .single()
+        ]);
+
+        const { data: settingsData, error: settingsError } = settingsResult;
+        const { data: roomData } = tierResult;
 
         if (settingsError && settingsError.code !== 'PGRST116') {
           console.error('Error loading room settings:', settingsError);
         }
 
-        if (settingsData && mounted) {
-          setRoomSettings({
-            djMode: settingsData.dj_mode || false,
-            djPlayers: settingsData.dj_players || 0,
-          });
+        // Load tier settings for the room creator
+        let loadedTierSettings = { djMode: false };
+        if (roomData?.creator_id) {
+          const { data: creatorProfile } = await supabase
+            .from('user_profiles')
+            .select('subscription_tier')
+            .eq('id', roomData.creator_id)
+            .single();
+          
+          if (creatorProfile) {
+            loadedTierSettings = {
+              djMode: hasTier(creatorProfile.subscription_tier, 'pro'),
+            };
+          }
+        }
+
+        // Check if user is owner
+        let loadedIsOwner = false;
+        if (user && roomData?.creator_id) {
+          loadedIsOwner = user.id === roomData.creator_id;
+        }
+
+        if (mounted) {
+          if (settingsData) {
+            setRoomSettings({
+              djMode: settingsData.dj_mode || false,
+              djPlayers: settingsData.dj_players || 0,
+            });
+          }
+          setTierSettings(loadedTierSettings);
+          setIsOwner(loadedIsOwner);
+          // Admin status will be set from socket roomState if available
+
+          // Stop loading once we've loaded the data from Supabase
+          // Socket roomState will update these values if it arrives later, but we don't need to wait
+          console.log('Room settings loaded from Supabase, stopping loading');
+          setLoading(false);
+          roomStateReceived = true; // Mark as received to prevent timeout
         }
 
         // Connect to socket
@@ -365,17 +408,21 @@ const DJModeScreen: React.FC = () => {
           handleConnect();
         }
 
-        // Set a timeout to stop loading after 10 seconds if roomState never arrives
+        // Set a timeout to stop loading after 5 seconds if roomState never arrives
+        // Reduced from 10 seconds since we now have fallback data
         loadingTimeout = setTimeout(() => {
           if (mounted && !roomStateReceived) {
-            console.warn('Room state timeout - stopping loading');
+            console.warn('Room state timeout - stopping loading with fallback data');
             setLoading(false);
-            Alert.alert(
-              'Connection Timeout',
-              'Failed to receive room state. The room may be unavailable or there may be a connection issue.'
-            );
+            // Don't show alert if we already have the settings loaded
+            if (!settingsData?.dj_mode) {
+              Alert.alert(
+                'Connection Timeout',
+                'Failed to receive room state. Using cached settings. Some features may be limited.'
+              );
+            }
           }
-        }, 10000);
+        }, 5000);
       } catch (error) {
         console.error('Error initializing room:', error);
         if (mounted) {
