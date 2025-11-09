@@ -382,9 +382,9 @@ const DJModeScreen: React.FC = () => {
             .single(),
           supabase
             .from('rooms')
-            .select('creator_id')
+            .select('host_user_id')
             .eq('id', roomId)
-            .single()
+            .maybeSingle()
         ]);
 
         const { data: settingsData, error: settingsError } = settingsResult;
@@ -396,11 +396,12 @@ const DJModeScreen: React.FC = () => {
 
         // Load tier settings for the room creator
         let loadedTierSettings = { djMode: false };
-        if (roomData?.creator_id) {
+        const creatorId = roomData?.host_user_id;
+        if (creatorId) {
           const { data: creatorProfile, error: creatorProfileError } = await supabase
             .from('user_profiles')
             .select('subscription_tier')
-            .eq('id', roomData.creator_id)
+            .eq('id', creatorId)
             .maybeSingle();
           
           if (creatorProfileError) {
@@ -412,14 +413,14 @@ const DJModeScreen: React.FC = () => {
               djMode: hasTier(creatorProfile.subscription_tier, 'pro'),
             };
             console.log('Creator tier loaded:', {
-              creatorId: roomData.creator_id,
+              creatorId: creatorId,
               tier: creatorProfile.subscription_tier,
               djModeAvailable: loadedTierSettings.djMode
             });
           } else {
             console.warn('Creator profile not found for room:', roomId);
             // If current user is the creator and is Pro, allow DJ mode
-            if (user && user.id === roomData.creator_id) {
+            if (user && user.id === creatorId) {
               const isPro = profile && hasTier(profile.subscription_tier, 'pro');
               if (isPro) {
                 console.log('Current user is Pro creator, enabling DJ mode');
@@ -431,8 +432,8 @@ const DJModeScreen: React.FC = () => {
 
         // Check if user is owner
         let loadedIsOwner = false;
-        if (user && roomData?.creator_id) {
-          loadedIsOwner = user.id === roomData.creator_id;
+        if (user && creatorId) {
+          loadedIsOwner = user.id === creatorId;
         }
 
         // If current user is the creator and is Pro, allow DJ mode even if creator profile query failed
