@@ -70,6 +70,7 @@ const DJModeScreen: React.FC = () => {
   }>({ djMode: false });
   const [isOwner, setIsOwner] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isEnablingDJMode, setIsEnablingDJMode] = useState(false);
 
   // DJ Mode state
   const [djPlayerTracks, setDjPlayerTracks] = useState<(Track | null)[]>([null, null, null, null]);
@@ -116,16 +117,60 @@ const DJModeScreen: React.FC = () => {
   // Automatically enable DJ mode if user is Pro and room creator has Pro tier
   useEffect(() => {
     const isPro = profile && hasTier(profile.subscription_tier, 'pro');
-    if (isPro && tierSettings.djMode && !roomSettings.djMode && (isOwner || isAdmin) && socketService.socket && connected) {
-      socketService.socket.emit('update-room-settings', {
-        roomId,
-        settings: {
-          djMode: true,
-          djPlayers: roomSettings.djPlayers || 1,
-        },
-      });
+    if (isPro && tierSettings.djMode && !roomSettings.djMode && (isOwner || isAdmin) && !isEnablingDJMode) {
+      setIsEnablingDJMode(true);
+      
+      // Check if Socket.io is available
+      if (socketService.socket && connected) {
+        // Use Socket.io if available
+        socketService.socket.emit('update-room-settings', {
+          roomId,
+          settings: {
+            djMode: true,
+            djPlayers: roomSettings.djPlayers || 1,
+          },
+        });
+        // Reset enabling flag after a short delay (Socket.io will update via roomSettingsUpdated event)
+        setTimeout(() => setIsEnablingDJMode(false), 2000);
+      } else if (supabase && user) {
+        // Fallback to Supabase when Socket.io is disabled
+        const updateRoomSettings = async () => {
+          try {
+            const { error } = await supabase
+              .from('room_settings')
+              .upsert({
+                room_id: roomId,
+                dj_mode: true,
+                dj_players: roomSettings.djPlayers || 1,
+              }, {
+                onConflict: 'room_id'
+              });
+
+            if (error) {
+              console.error('Error enabling DJ mode via Supabase:', error);
+              setIsEnablingDJMode(false);
+            } else {
+              console.log('DJ mode enabled via Supabase');
+              // Update local state
+              setRoomSettings(prev => ({
+                ...prev,
+                djMode: true,
+                djPlayers: prev.djPlayers || 1,
+              }));
+              setIsEnablingDJMode(false);
+            }
+          } catch (error) {
+            console.error('Error updating room settings:', error);
+            setIsEnablingDJMode(false);
+          }
+        };
+
+        updateRoomSettings();
+      } else {
+        setIsEnablingDJMode(false);
+      }
     }
-  }, [profile, tierSettings.djMode, roomSettings.djMode, isOwner, isAdmin, roomId, connected]);
+  }, [profile, tierSettings.djMode, roomSettings.djMode, isOwner, isAdmin, roomId, connected, supabase, user, isEnablingDJMode]);
 
   // Control glowing background animations based on music playing state
   useEffect(() => {
@@ -316,6 +361,10 @@ const DJModeScreen: React.FC = () => {
             djMode: updatedSettings.djMode || false,
             djPlayers: updatedSettings.djPlayers || 0,
           });
+          // Reset enabling flag when settings are updated
+          if (updatedSettings.djMode) {
+            setIsEnablingDJMode(false);
+          }
         }
       };
 
@@ -348,16 +397,35 @@ const DJModeScreen: React.FC = () => {
         // Load tier settings for the room creator
         let loadedTierSettings = { djMode: false };
         if (roomData?.creator_id) {
-          const { data: creatorProfile } = await supabase
+          const { data: creatorProfile, error: creatorProfileError } = await supabase
             .from('user_profiles')
             .select('subscription_tier')
             .eq('id', roomData.creator_id)
-            .single();
+            .maybeSingle();
+          
+          if (creatorProfileError) {
+            console.error('Error loading creator profile:', creatorProfileError);
+          }
           
           if (creatorProfile) {
             loadedTierSettings = {
               djMode: hasTier(creatorProfile.subscription_tier, 'pro'),
             };
+            console.log('Creator tier loaded:', {
+              creatorId: roomData.creator_id,
+              tier: creatorProfile.subscription_tier,
+              djModeAvailable: loadedTierSettings.djMode
+            });
+          } else {
+            console.warn('Creator profile not found for room:', roomId);
+            // If current user is the creator and is Pro, allow DJ mode
+            if (user && user.id === roomData.creator_id) {
+              const isPro = profile && hasTier(profile.subscription_tier, 'pro');
+              if (isPro) {
+                console.log('Current user is Pro creator, enabling DJ mode');
+                loadedTierSettings = { djMode: true };
+              }
+            }
           }
         }
 
@@ -365,6 +433,15 @@ const DJModeScreen: React.FC = () => {
         let loadedIsOwner = false;
         if (user && roomData?.creator_id) {
           loadedIsOwner = user.id === roomData.creator_id;
+        }
+
+        // If current user is the creator and is Pro, allow DJ mode even if creator profile query failed
+        if (loadedIsOwner && profile) {
+          const isPro = hasTier(profile.subscription_tier, 'pro');
+          if (isPro && !loadedTierSettings.djMode) {
+            console.log('Current user is Pro creator, overriding tier settings to enable DJ mode');
+            loadedTierSettings = { djMode: true };
+          }
         }
 
         if (mounted) {
@@ -643,7 +720,7 @@ const DJModeScreen: React.FC = () => {
   }
 
   // Show loading while DJ mode is being enabled
-  if (!roomSettings.djMode && (isOwner || isAdmin)) {
+  if (isEnablingDJMode && !loading) {
     return (
       <View style={[styles.container, { backgroundColor: DJ_THEME_COLORS.background }]}>
         <Card style={[styles.card, { backgroundColor: DJ_THEME_COLORS.surface }]}>
