@@ -75,25 +75,25 @@ if (Platform.OS === 'web') {
         return;
       }
       
-      // Handle useNativeDriver warning
+      // Handle useNativeDriver warning - completely suppress (expected on web)
       if (
         message.includes('useNativeDriver') ||
         message.includes('native animated module is missing') ||
         message.includes('RCTAnimation')
       ) {
-        const count = (warningSources.get('useNativeDriver') || 0) + 1;
-        warningSources.set('useNativeDriver', count);
-        
-        if (count <= MAX_DETAILED_LOGS) {
-          const stack = new Error().stack;
-          const source = stack?.split('\n').slice(2, 6).join('\n') || 'unknown';
-          
-          console.group(`🔍 [TRACE ${count}] useNativeDriver warning`);
-          originalWarn(...args);
-          console.log('📍 Stack trace:', source);
-          console.groupEnd();
-        }
-        // Suppress after first few - this is expected on web
+        // This is expected behavior on web - React Native Web doesn't support native animations
+        // Suppress completely to reduce console noise
+        return;
+      }
+      
+      // Handle touch event warnings - suppress (minor web compatibility issue)
+      if (
+        message.includes('Cannot record touch end without a touch start') ||
+        message.includes('Touch End') ||
+        message.includes('Touch Bank')
+      ) {
+        // This is a minor web compatibility issue with React Native's touch handling
+        // Suppress to reduce console noise
         return;
       }
       

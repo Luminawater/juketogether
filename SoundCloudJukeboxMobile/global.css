@@ -2,3 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Ensure MaterialCommunityIcons font loads on web */
+/* Using CDN as fallback for local development */
+@font-face {
+  font-family: 'MaterialCommunityIcons';
+  src: url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@15.0.3/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+

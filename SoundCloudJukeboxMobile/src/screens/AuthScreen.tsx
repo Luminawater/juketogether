@@ -19,6 +19,16 @@ import { useAuth } from '../context/AuthContext';
 // Import logos
 const SpotifyLogo = require('../../assets/Spotify-logo.png');
 
+// Google Logo Component (Official 4-color design using Views - works cross-platform)
+const GoogleLogo: React.FC<{ size?: number }> = ({ size = 18 }) => (
+  <View style={{ width: size, height: size, position: 'relative', borderRadius: 2, overflow: 'hidden' }}>
+    <View style={{ position: 'absolute', top: 0, left: 0, width: size / 2, height: size / 2, backgroundColor: '#4285F4' }} />
+    <View style={{ position: 'absolute', top: 0, right: 0, width: size / 2, height: size / 2, backgroundColor: '#EA4335' }} />
+    <View style={{ position: 'absolute', bottom: 0, left: 0, width: size / 2, height: size / 2, backgroundColor: '#FBBC05' }} />
+    <View style={{ position: 'absolute', bottom: 0, right: 0, width: size / 2, height: size / 2, backgroundColor: '#34A853' }} />
+  </View>
+);
+
 type AuthScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Auth'>;
 
 const AuthScreen: React.FC = () => {
@@ -50,6 +60,34 @@ const AuthScreen: React.FC = () => {
       navigation.replace('Home');
     }
   }, [user, loading, navigation]);
+
+  // Inject web-specific CSS for OAuth button hover effects
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const styleId = 'oauth-button-styles';
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+          .google-oauth-button:hover {
+            box-shadow: 0 1px 3px 0 rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15) !important;
+            background-color: #f8f9fa !important;
+          }
+          .google-oauth-button:active {
+            box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15) !important;
+          }
+          .spotify-oauth-button:hover {
+            background-color: #1ed760 !important;
+            box-shadow: 0 2px 8px rgba(29, 185, 84, 0.4) !important;
+          }
+          .spotify-oauth-button:active {
+            background-color: #1aa34a !important;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
+  }, []);
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -164,21 +202,14 @@ const AuthScreen: React.FC = () => {
                     !!loadingOAuth && styles.oauthButtonDisabled,
                   ]}
                   activeOpacity={0.8}
+                  {...(Platform.OS === 'web' ? { className: 'google-oauth-button' } : {})}
                 >
                   {loadingOAuth === 'google' ? (
                     <Text style={styles.googleButtonText}>Loading...</Text>
                   ) : (
                     <View style={styles.oauthButtonContent}>
-                      {/* Google Logo SVG */}
-                      <View style={styles.googleLogoContainer}>
-                        <View style={styles.googleLogo}>
-                          <View style={[styles.googleLogoPart, { backgroundColor: '#4285F4', top: 0, left: 0 }]} />
-                          <View style={[styles.googleLogoPart, { backgroundColor: '#EA4335', top: 0, right: 0 }]} />
-                          <View style={[styles.googleLogoPart, { backgroundColor: '#FBBC05', bottom: 0, left: 0 }]} />
-                          <View style={[styles.googleLogoPart, { backgroundColor: '#34A853', bottom: 0, right: 0 }]} />
-                        </View>
-                      </View>
-                      <Text style={[styles.googleButtonText, { marginLeft: 12 }]}>Sign in with Google</Text>
+                      <GoogleLogo size={18} />
+                      <Text style={styles.googleButtonText}>Sign in with Google</Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -194,6 +225,7 @@ const AuthScreen: React.FC = () => {
                     !!loadingOAuth && styles.oauthButtonDisabled,
                   ]}
                   activeOpacity={0.8}
+                  {...(Platform.OS === 'web' ? { className: 'spotify-oauth-button' } : {})}
                 >
                   {loadingOAuth === 'spotify' ? (
                     <Text style={styles.spotifyButtonText}>Loading...</Text>
@@ -432,15 +464,16 @@ const styles = StyleSheet.create({
   },
   oauthButton: {
     borderRadius: 4,
-    paddingVertical: 12,
+    paddingVertical: 11,
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 40,
+    width: '100%',
     ...(Platform.OS === 'web' ? {
       cursor: 'pointer',
       transition: 'all 0.2s ease',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
+      boxShadow: '0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15)',
     } : {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 1 },
@@ -455,22 +488,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#dadce0',
     marginBottom: 12,
-    ...(Platform.OS === 'web' ? {
-      ':hover': {
-        boxShadow: '0 2px 6px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.3)',
-      },
-    } : {}),
   },
   // Spotify Button - Official Design (Green)
   spotifyButton: {
     backgroundColor: '#1DB954',
     borderWidth: 0,
-    ...(Platform.OS === 'web' ? {
-      ':hover': {
-        backgroundColor: '#1ed760',
-        boxShadow: '0 2px 6px rgba(29, 185, 84, 0.3), 0 1px 3px rgba(29, 185, 84, 0.2)',
-      },
-    } : {}),
   },
   oauthButtonLoading: {
     opacity: 0.7,
@@ -488,8 +510,9 @@ const styles = StyleSheet.create({
     color: '#3c4043',
     fontSize: 14,
     fontWeight: '500',
-    fontFamily: Platform.OS === 'web' ? 'Roboto, sans-serif' : undefined,
+    fontFamily: Platform.OS === 'web' ? 'Roboto, "Google Sans", Arial, sans-serif' : undefined,
     letterSpacing: 0.25,
+    marginLeft: 12,
   },
   // Spotify Button Text
   spotifyButtonText: {
@@ -498,28 +521,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
-  },
-  // Google Logo (4-color square)
-  googleLogoContainer: {
-    width: 20,
-    height: 20,
-    marginRight: 0,
-  },
-  googleLogo: {
-    width: 20,
-    height: 20,
-    position: 'relative',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  googleLogoPart: {
-    position: 'absolute',
-    width: '50%',
-    height: '50%',
+    marginLeft: 12,
   },
   spotifyIcon: {
-    width: 20,
-    height: 20,
+    width: 18,
+    height: 18,
     marginRight: 0,
   },
   dividerContainer: {

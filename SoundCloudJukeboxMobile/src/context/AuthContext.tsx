@@ -14,7 +14,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     ...(Platform.OS !== 'web' ? { storage: AsyncStorage } : {}),
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false, // Disable for React Native
+    detectSessionInUrl: Platform.OS === 'web', // Enable for web to handle OAuth callbacks
     lock: processLock,
   },
 });
@@ -167,16 +167,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const hash = window.location.hash;
       const hasAuthParams = hash.includes('access_token') || hash.includes('error');
       
-      if (hasAuthParams) {
-        // Clean up URL after processing
-        const cleanUrl = window.location.pathname;
-        window.history.replaceState({}, document.title, cleanUrl);
-      }
-      
-      // Handle OAuth errors in query params
+      // Handle OAuth errors in query params or hash
       const urlParams = new URLSearchParams(window.location.search);
-      const error = urlParams.get('error');
-      const errorDescription = urlParams.get('error_description');
+      const hashParams = new URLSearchParams(hash.substring(1)); // Remove # from hash
+      const error = urlParams.get('error') || hashParams.get('error');
+      const errorDescription = urlParams.get('error_description') || hashParams.get('error_description');
       
       if (error) {
         console.error('[AuthCallback] OAuth error:', error, errorDescription);
@@ -194,6 +189,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           alert(`Authentication error: ${error}`);
         }
+      } else if (hasAuthParams) {
+        // Supabase will automatically process the hash with detectSessionInUrl: true
+        // Just clean up the URL after a brief delay to allow Supabase to process it
+        setTimeout(() => {
+          const cleanUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }, 100);
       }
     }
 
@@ -225,8 +227,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Try to get session, but don't wait forever
     // This will automatically check localStorage for persisted session
-    supabase.auth.getSession()
-      .then(({ data: { session }, error }) => {
+    // If we detected OAuth params, wait a bit longer for Supabase to process them
+    const hasOAuthParams = Platform.OS === 'web' && typeof window !== 'undefined' && 
+      (window.location.hash.includes('access_token') || window.location.search.includes('code'));
+    const sessionCheckDelay = hasOAuthParams ? 500 : 0; // Give OAuth callback time to process
+    
+    setTimeout(() => {
+      supabase.auth.getSession()
+        .then(({ data: { session }, error }) => {
         clearTimeout(sessionTimeout);
         
         if (error) {
@@ -234,7 +242,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           resolveLoading();
         } else {
           if (session) {
-            console.log('[AuthContext] Session restored from storage');
+            // Only log in development to reduce console noise
+            if (__DEV__) {
+              console.log('[AuthContext] Session restored from storage');
+            }
             setSession(session);
             setUser(session.user);
             
@@ -244,7 +255,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               console.error('[AuthContext] Error fetching profile:', err);
             });
           } else {
-            console.log('[AuthContext] No session found in storage');
+            // Only log in development to reduce console noise
+            if (__DEV__) {
+              console.log('[AuthContext] No session found in storage');
+            }
             setSession(null);
             setUser(null);
           }
@@ -260,12 +274,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
         resolveLoading();
       });
+    }, sessionCheckDelay);
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         try {
-          console.log('[AuthContext] Auth state changed:', event, session ? 'has session' : 'no session');
+          // Only log in development to reduce console noise
+          if (__DEV__) {
+            console.log('[AuthContext] Auth state changed:', event, session ? 'has session' : 'no session');
+          }
           
           setSession(session);
           setUser(session?.user ?? null);
