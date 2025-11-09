@@ -49,18 +49,47 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({
   const [purchasing, setPurchasing] = useState<string | null>(null);
 
   useEffect(() => {
-    loadBoosterPacks();
+    // Wrap in async IIFE to properly handle promise rejections
+    (async () => {
+      try {
+        await loadBoosterPacks();
+      } catch (error) {
+        // Error already handled in loadBoosterPacks, but ensure promise is caught
+        console.error('Failed to load booster packs:', error);
+      }
+    })();
   }, []);
 
   const loadBoosterPacks = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/booster-packs`);
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch(`${API_URL}/api/booster-packs`, {
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
       if (response.ok) {
         const data = await response.json();
         setBoosterPacks(data.packs || []);
+      } else {
+        console.warn('Failed to load booster packs:', response.status, response.statusText);
+        setBoosterPacks([]);
       }
-    } catch (error) {
-      console.error('Error loading booster packs:', error);
+    } catch (error: any) {
+      // Handle network errors gracefully - don't throw, just log
+      if (error.name === 'AbortError') {
+        console.warn('Booster packs request timed out');
+      } else if (error.name === 'TypeError' && (error.message.includes('fetch') || error.message.includes('NetworkError'))) {
+        console.warn('Network error loading booster packs - API may be unavailable');
+      } else {
+        console.warn('Error loading booster packs:', error.message || error);
+      }
+      // Set empty array on error so UI doesn't break
+      setBoosterPacks([]);
     } finally {
       setLoading(false);
     }
