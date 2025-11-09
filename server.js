@@ -4352,8 +4352,17 @@ app.get('/api/status', async (req, res) => {
 });
 
 // Serve Expo web build static files if available
-const webBuildPath = path.join(__dirname, 'web-build');
-if (fs.existsSync(webBuildPath)) {
+const webBuildPath = path.resolve(__dirname, 'web-build');
+const indexPath = path.join(webBuildPath, 'index.html');
+const webBuildExists = fs.existsSync(webBuildPath);
+const indexExists = fs.existsSync(indexPath);
+
+console.log(`📁 Web build path: ${webBuildPath}`);
+console.log(`📁 Web build exists: ${webBuildExists}`);
+console.log(`📄 Index.html exists: ${indexExists}`);
+
+if (webBuildExists && indexExists) {
+  console.log('✅ Serving Expo web build from:', webBuildPath);
   // Serve static assets (JS, CSS, images, etc.)
   app.use(express.static(webBuildPath, {
     maxAge: '1d', // Cache static assets for 1 day
@@ -4368,14 +4377,10 @@ if (fs.existsSync(webBuildPath)) {
     }
     
     // Serve index.html for all other routes (client-side routing)
-    const indexPath = path.join(webBuildPath, 'index.html');
-    if (fs.existsSync(indexPath)) {
-      res.sendFile(indexPath);
-    } else {
-      res.status(404).send('Expo web build not found. Please run: cd SoundCloudJukeboxMobile && npm run build:web');
-    }
+    res.sendFile(indexPath);
   });
 } else {
+  console.log('⚠️  Web build not found. Showing fallback message.');
   // If web-build doesn't exist, provide helpful message
   app.get('*', (req, res, next) => {
     // Skip API routes

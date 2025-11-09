@@ -219,11 +219,12 @@ export async function getLastReadTimestamp(
       .select('last_read_at')
       .eq('room_id', roomId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle(); // Use maybeSingle() instead of single() to handle 0 or 1 row gracefully
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        // No record found, return null
+      // Handle various error codes that might occur
+      if (error.code === 'PGRST116' || error.code === 'PGRST301' || error.status === 406) {
+        // No record found or not acceptable, return null
         return null;
       }
       console.error('Error getting last read timestamp:', error);
