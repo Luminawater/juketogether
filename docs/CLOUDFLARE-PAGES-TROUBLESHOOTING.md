@@ -109,3 +109,72 @@ If Cloudflare Pages continues to have issues, you can:
 
 This gives you more control over the build environment.
 
+## Font Loading Issues
+
+### Problem: "Failed to decode downloaded font" or "OTS parsing error: invalid sfntVersion"
+
+This error occurs when Expo vector icon fonts (like MaterialCommunityIcons.ttf) fail to load due to incorrect MIME types or missing headers.
+
+**Error message in browser console:**
+```
+Failed to decode downloaded font: https://juketogether.pages.dev/assets/node_modules/@expo/vector-icons/.../MaterialCommunityIcons.ttf
+OTS parsing error: invalid sfntVersion: 1008813135
+```
+
+### Solution: Update _headers.template
+
+The `_headers.template` file must include patterns that match fonts in nested subdirectories.
+
+**Incorrect pattern (only matches root level):**
+```
+/*.ttf
+  Content-Type: font/ttf
+```
+
+**Correct pattern (matches nested paths):**
+```
+/assets/*.ttf
+  Content-Type: font/ttf
+
+/assets/*/*.ttf
+  Content-Type: font/ttf
+
+/assets/*/*/*.ttf
+  Content-Type: font/ttf
+
+# ... continue for deeper nesting levels
+```
+
+The updated `_headers.template` now includes patterns for up to 7 levels of nesting, which covers all Expo vector icon font paths.
+
+### Why This Happens
+
+1. Expo bundles fonts into the `assets/node_modules/@expo/vector-icons/...` path (deeply nested)
+2. Cloudflare Pages' `_headers` file uses glob patterns where `*` matches only one path segment
+3. The pattern `/*.ttf` only matches `/filename.ttf`, not `/assets/path/to/filename.ttf`
+4. Without proper headers, browsers receive fonts with wrong MIME type and fail to decode them
+
+### Verification
+
+After deploying the fix:
+1. Open browser DevTools → Network tab
+2. Reload your site
+3. Look for `.ttf` file requests
+4. Check the Response Headers for `Content-Type: font/ttf`
+5. Font loading errors should be resolved
+
+### Build Command Update
+
+Make sure your Cloudflare Pages build command includes the redirects copy script:
+
+```bash
+npm run build:cloudflare
+```
+
+Or the direct command:
+```bash
+cd SoundCloudJukeboxMobile && npm install && npx --yes expo export -p web --output-dir ../web-build && cd .. && node scripts/copy-redirects.js
+```
+
+This ensures the `_headers` file is copied from the template to `web-build/_headers`.
+
