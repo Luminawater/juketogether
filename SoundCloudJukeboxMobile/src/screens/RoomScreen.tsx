@@ -211,6 +211,8 @@ const RoomScreen: React.FC = () => {
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
   const [blockedInfo, setBlockedInfo] = useState<BlockedInfo | null>(null);
   const [activeBoost, setActiveBoost] = useState<ActiveBoost | null>(null);
+  const [guestNumber, setGuestNumber] = useState<number | null>(null);
+  const [joinedViaLink, setJoinedViaLink] = useState(false);
 
   // Ad state
   const [adVisible, setAdVisible] = useState(false);
@@ -251,9 +253,12 @@ const RoomScreen: React.FC = () => {
     const handleConnect = () => {
       setConnected(true);
       console.log('Connected to room:', roomId);
-      // Join room
+      // Join room - pass viaLink option if user is not authenticated (guest)
+      // Guests can only join via link/code, so if they're not authenticated, assume viaLink
+      const isGuest = !user;
+      const viaLink = isGuest || route.params?.isShortCode;
       if (socketService.socket) {
-        socketService.socket.emit('join-room', roomId);
+        socketService.socket.emit('join-room', roomId, { viaLink: viaLink || false, viaCode: route.params?.isShortCode || false });
       }
     };
 
@@ -280,6 +285,8 @@ const RoomScreen: React.FC = () => {
         minutesRemaining: number;
         purchasedBy: string;
       } | null;
+      guestNumber?: number | null;
+      joinedViaLink?: boolean;
     }) => {
       console.log('[handleRoomState] Received room state', { 
         queueLength: state.queue?.length || 0,
@@ -326,6 +333,14 @@ const RoomScreen: React.FC = () => {
         }
       } else {
         setActiveBoost(null);
+      }
+      
+      // Update guest number and joinedViaLink
+      if (state.guestNumber !== undefined) {
+        setGuestNumber(state.guestNumber);
+      }
+      if (state.joinedViaLink !== undefined) {
+        setJoinedViaLink(state.joinedViaLink);
       }
     };
     
@@ -1766,15 +1781,24 @@ const RoomScreen: React.FC = () => {
   const headerTier = creatorTier || (profile?.subscription_tier as SubscriptionTier) || 'free';
   const headerColor = getTierHeaderColor(headerTier);
 
-  // Update navigation header color based on tier
+  // Update navigation header color and title based on tier and guest status
   useLayoutEffect(() => {
+    // Determine header title - show "Guest X" if user is a guest who joined via link
+    const showGuestTitle = !user && guestNumber !== null && joinedViaLink;
+    
     navigation.setOptions({
       headerStyle: {
         backgroundColor: headerColor,
       },
       headerTintColor: theme.colors.onSurface, // Ensure icons are visible
+      title: showGuestTitle ? `Guest ${guestNumber}` : '', // Show guest number in header title
+      headerTitleStyle: {
+        fontWeight: 'bold',
+        color: theme.colors.onSurface,
+        fontSize: 18,
+      },
     });
-  }, [navigation, headerColor, theme.colors.onSurface]);
+  }, [navigation, headerColor, theme.colors.onSurface, user, guestNumber, joinedViaLink]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>

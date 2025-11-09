@@ -671,6 +671,13 @@ io.on('connection', (socket) => {
 
     // Build users list with profiles
     const usersList = [];
+    // Track guest numbers for anonymous users (those who joined via link)
+    // Guest numbers are assigned based on join order among anonymous users
+    const anonymousUsers = Array.from(room.users).filter(roomUserId => {
+      // Check if user is anonymous (not a valid UUID)
+      return !authModule || !authModule.isValidUUID || !authModule.isValidUUID(roomUserId);
+    });
+    
     for (const roomUserId of room.users) {
       let userProfile = null;
       // Only fetch profile for valid UUIDs (authenticated users), not Socket.io session IDs
@@ -684,6 +691,21 @@ io.on('connection', (socket) => {
         isAdmin: roomAdmins.includes(roomUserId),
         volume: room.userVolumes.get(roomUserId) || 50,
       });
+    }
+
+    // Calculate guest number for current user if they're anonymous and joined via link
+    let guestNumber = null;
+    if (!socket.isAuthenticated && (viaLink || viaCode)) {
+      // Find the index of this user among anonymous users (those who joined via link)
+      // Filter to get only anonymous users (not valid UUIDs) and find this user's position
+      const anonymousUsers = Array.from(room.users).filter(roomUserId => {
+        // Check if user is anonymous (not a valid UUID)
+        return !authModule || !authModule.isValidUUID || !authModule.isValidUUID(roomUserId);
+      });
+      const userIndex = anonymousUsers.indexOf(userId);
+      if (userIndex !== -1) {
+        guestNumber = userIndex + 1; // Guest 1, Guest 2, etc. (1-based numbering)
+      }
     }
 
     // Get creator tier and tier settings for the room
@@ -717,6 +739,8 @@ io.on('connection', (socket) => {
         minutesRemaining: activeBoost.minutes_remaining,
         purchasedBy: activeBoost.purchased_by,
       } : null,
+      guestNumber: guestNumber, // Send guest number to client
+      joinedViaLink: viaLink || viaCode, // Track if joined via link/code
     });
 
     console.log(`📤 Room "${roomId}" state sent to user (synced from Supabase)`);
