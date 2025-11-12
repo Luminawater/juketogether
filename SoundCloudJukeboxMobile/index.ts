@@ -3,6 +3,26 @@ import { Platform } from 'react-native';
 import './global.css';
 import App from './App';
 
+// Ensure MaterialCommunityIcons font loads on web
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  // Inject font-face CSS immediately to ensure fonts load before React Native Web tries to use them
+  const fontStyleId = 'material-community-icons-font';
+  if (!document.getElementById(fontStyleId)) {
+    const style = document.createElement('style');
+    style.id = fontStyleId;
+    style.textContent = `
+      @font-face {
+        font-family: 'MaterialCommunityIcons';
+        src: url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@15.0.3/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
+      }
+    `;
+    document.head.insertBefore(style, document.head.firstChild);
+  }
+}
+
 // Enhanced logging to trace warning sources (throttled to prevent spam)
 if (Platform.OS === 'web') {
   const originalWarn = console.warn;
